@@ -84,14 +84,21 @@ class DbMovie(DBBaseModel):
     __tablename__ = 'movies'
 
     title = Column(String(255))
+    # TMDB id is the catalog's join key (#163): TMDB's search endpoint returns
+    # no IMDb id, so search results can only be matched to tracked rows on this.
+    tmdb = Column(Integer, unique=True, nullable=True)
     imdb = Column(String(40), unique=True)
     release_date = Column(DateTime, nullable=True)
+    # Legacy: real IMDb ratings from the OMDb era. Frozen — no longer written
+    # or displayed, since TMDB has no IMDb rating to keep it current (#163).
     rating_imdb = Column(Float, nullable=True)
+    # TMDB's own vote_average, which replaced it.
+    rating_tmdb = Column(Float, nullable=True)
     runtime = Column(Integer, nullable=True)
     language = Column(String(40), nullable=True)
     rated = Column(String(11), nullable=True)
     poster_url = Column(String(500), nullable=True)
-    # Rich detail (populated from OMDB) for the detail view + filtering.
+    # Rich detail (populated from TMDB) for the detail view + filtering.
     year = Column(Integer, nullable=True)
     genre = Column(String(255), nullable=True)
     director = Column(String(512), nullable=True)

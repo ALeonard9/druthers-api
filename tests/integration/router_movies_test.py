@@ -259,38 +259,38 @@ def test_search_movies_requires_auth(test_client: TestClient):
     assert response.status_code == 401
 
 
-@patch('app.services.movie_search.get_settings')
+@patch('app.services.tmdb.get_settings')
 def test_search_movies_not_configured(mock_settings, test_client: TestClient):
-    mock_settings.return_value = Settings(omdb_api_key=None, env='github')
+    mock_settings.return_value = Settings(tmdb_api_key=None, env='github')
     user_headers = {'Authorization': f"Bearer {test_client.first_user.token}"}
     response = test_client.get('/v1/movies/search?q=matrix', headers=user_headers)
     assert response.status_code == 503
 
 
-@patch('app.services.movie_search.get_settings')
-@patch('app.services.movie_search.requests.get')
+@patch('app.services.tmdb.get_settings')
+@patch('app.services.tmdb.requests.get')
 def test_search_movies_returns_results(
     mock_get, mock_settings, test_client: TestClient
 ):
-    mock_settings.return_value = Settings(omdb_api_key='test-key', env='github')
+    mock_settings.return_value = Settings(tmdb_api_key='test-key', env='github')
     mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.headers = {}
     mock_response.raise_for_status.return_value = None
     mock_response.json.return_value = {
-        'Response': 'True',
-        'Search': [
+        'results': [
             {
-                'Title': 'The Matrix',
-                'Year': '1999',
-                'imdbID': 'tt0133093',
-                'Type': 'movie',
-                'Poster': 'https://example.com/matrix.jpg',
+                'id': 603,
+                'title': 'The Matrix',
+                'release_date': '1999-03-30',
+                'poster_path': '/matrix.jpg',
+                'popularity': 84.1,
             },
             {
-                'Title': 'The Matrix Reloaded',
-                'Year': '2003',
-                'imdbID': 'tt0234215',
-                'Type': 'movie',
-                'Poster': 'N/A',
+                'id': 604,
+                'title': 'The Matrix Reloaded',
+                'release_date': '2003-05-15',
+                'poster_path': None,
             },
         ],
     }
@@ -301,17 +301,19 @@ def test_search_movies_returns_results(
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 2
-    assert data[0]['imdb'] == 'tt0133093'
+    assert data[0]['tmdb'] == 603
     assert data[0]['title'] == 'The Matrix'
-    assert data[0]['poster_url'] == 'https://example.com/matrix.jpg'
-    # 'N/A' posters are normalized to null.
+    assert data[0]['poster_url'] == 'https://image.tmdb.org/t/p/w500/matrix.jpg'
+    # TMDB title search carries no IMDb id.
+    assert data[0]['imdb'] is None
+    # A missing poster_path becomes null rather than a URL that would 404.
     assert data[1]['poster_url'] is None
 
 
-@patch('app.router.v1.router_movies.omdb_search_movies')
+@patch('app.router.v1.router_movies.tmdb_search_movies')
 def test_search_retries_with_spelling_fix(mock_search, test_client: TestClient):
     """An empty result retries once with a spell-corrected query."""
-    hit = [{'imdb': 'tt0107290', 'title': 'Jurassic Park', 'year': '1993'}]
+    hit = [{'tmdb': 329, 'title': 'Jurassic Park', 'year': '1993'}]
     mock_search.side_effect = [[], hit]
     headers = {'Authorization': f"Bearer {test_client.first_user.token}"}
 
@@ -322,7 +324,7 @@ def test_search_retries_with_spelling_fix(mock_search, test_client: TestClient):
     assert mock_search.call_args_list[1].args[0] == 'jurassic'
 
 
-@patch('app.router.v1.router_movies.omdb_search_movies')
+@patch('app.router.v1.router_movies.tmdb_search_movies')
 def test_search_no_retry_when_spelling_correct(mock_search, test_client: TestClient):
     mock_search.return_value = []
     headers = {'Authorization': f"Bearer {test_client.first_user.token}"}
@@ -333,15 +335,16 @@ def test_search_no_retry_when_spelling_correct(mock_search, test_client: TestCli
     assert mock_search.call_count == 1
 
 
-@patch('app.router.v1.router_movies.omdb_search_movies')
+@patch('app.router.v1.router_movies.tmdb_search_movies')
 def test_search_badges_already_ranked_result(mock_search, test_client: TestClient):
     """web#31: a search hit matching a movie the user has ranked carries
-    on_rankings + rank; an untracked hit in the same response stays false/None."""
+    on_rankings + rank; an untracked hit in the same response stays false/None.
+    Since #163 the join is on tmdb, not imdb."""
     admin_headers = {'Authorization': f"Bearer {test_client.admin_user.token}"}
     create_resp = test_client.post(
         '/v1/movies',
         headers=admin_headers,
-        json={'title': 'Inception', 'imdb': 'tt1375666'},
+        json={'title': 'Inception', 'tmdb': 27205, 'imdb': 'tt1375666'},
     )
     movie_id = create_resp.json()['id']
 
@@ -359,15 +362,16 @@ def test_search_badges_already_ranked_result(mock_search, test_client: TestClien
     )
     assert rank_resp.status_code == 200
 
+    # Title-search hits carry no imdb — the badge join has to work off tmdb alone.
     mock_search.return_value = [
-        {'imdb': 'tt1375666', 'title': 'Inception', 'year': '2010'},
-        {'imdb': 'tt0107290', 'title': 'Jurassic Park', 'year': '1993'},
+        {'tmdb': 27205, 'title': 'Inception', 'year': '2010'},
+        {'tmdb': 329, 'title': 'Jurassic Park', 'year': '1993'},
     ]
     response = test_client.get('/v1/movies/search?q=inception', headers=user_headers)
     assert response.status_code == 200
-    data = {r['imdb']: r for r in response.json()}
-    assert data['tt1375666']['on_rankings'] is True
-    assert data['tt1375666']['rank'] == 1
-    assert data['tt0107290']['on_rankings'] is False
-    assert data['tt0107290']['on_watchlist'] is False
-    assert data['tt0107290']['rank'] is None
+    data = {r['tmdb']: r for r in response.json()}
+    assert data[27205]['on_rankings'] is True
+    assert data[27205]['rank'] == 1
+    assert data[329]['on_rankings'] is False
+    assert data[329]['on_watchlist'] is False
+    assert data[329]['rank'] is None
