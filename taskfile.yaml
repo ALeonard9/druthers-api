@@ -53,6 +53,11 @@ tasks:
     cmds:
       - python -m app.migration.backfill_tmdb {{.CLI_ARGS}}
 
+  backfill:covers:
+    desc: "Re-point legacy book covers to Open Library, upgrade IGDB cover sizes"
+    cmds:
+      - python -m app.migration.backfill_covers {{.CLI_ARGS}}
+
   enrich:movies:
     desc: "Backfill TMDB detail for existing movies (throttled, resumable)"
     cmds:
