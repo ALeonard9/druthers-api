@@ -2,8 +2,15 @@ name: Deploy to Cloud Run
 
 # Prod deploys are release-driven (see druthers-infra/docs/PROMOTION.md):
 # publishing a vX.Y.Z release builds the image into Artifact Registry,
-# runs alembic migrations against Neon, and rolls the druthers-api service.
+# runs alembic migrations against Neon, backfills any data the new schema
+# needs, and rolls the druthers-api service.
 # No-ops until the GCP_* repo variables exist (set by the launch runbook).
+#
+# Order matters: backfills run *between* the migration and the Cloud Run
+# roll, so the data a release depends on is in place before the code that
+# reads it goes live. Running them after the roll would leave a window where
+# the new code queries columns the backfill hasn't filled yet — for #163 that
+# window showed every movie as "not tracked" in search.
 
 on:
   release:
@@ -38,16 +45,45 @@ jobs:
           docker push "$IMAGE"
 
       - name: Run database migrations
+        id: migrate
         env:
           DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
           ENV: prod
         run: |
           if [ -z "$DATABASE_URL" ]; then
             echo "NEON_DATABASE_URL secret not set — skipping migrations."
+            echo "ran=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           pip install -r requirements/base.txt
           alembic upgrade head
+          echo "ran=true" >> "$GITHUB_OUTPUT"
+
+      # Both backfills are idempotent and resumable: they only touch rows that
+      # still need work, so re-running on every release is a near-no-op once
+      # the catalog is keyed. That is deliberate — it makes a release
+      # self-contained instead of depending on someone remembering to run
+      # these by hand afterwards.
+      - name: Backfill catalog data
+        if: steps.migrate.outputs.ran == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          ENV: prod
+        run: |
+          set -euo pipefail
+          # A missing key is not a soft failure here: resolve_tmdb_id would
+          # return None for every row, the script would report "0 resolved"
+          # and exit 0, and the deploy would ship a catalog whose search
+          # badges are all blank. Fail loudly instead.
+          if [ -z "$TMDB_API_KEY" ]; then
+            echo "::error::TMDB_API_KEY secret is not set. backfill_tmdb cannot"
+            echo "::error::resolve any movie and the release would deploy with"
+            echo "::error::an unkeyed catalog. Add the secret and re-run."
+            exit 1
+          fi
+          python -m app.migration.backfill_tmdb
+          python -m app.migration.backfill_covers
 
       - name: Deploy to Cloud Run
         run: |
