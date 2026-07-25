@@ -33,7 +33,7 @@ def sweep_movie_releases(db: Session, user_pk: int) -> int:
     Notify about watchlist movies whose release date lands within the next
     ``RELEASE_WINDOW_DAYS`` days. Returns the number of notifications created.
     """
-    # release_date is stored tz-naive (parsed from OMDB), so compare naive.
+    # release_date is stored tz-naive (parsed from TMDB), so compare naive.
     today = datetime.now(timezone.utc).replace(
         hour=0, minute=0, second=0, microsecond=0, tzinfo=None
     )

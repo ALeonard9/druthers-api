@@ -27,7 +27,7 @@ def test_partial_match_popularity_beats_prefix_position():
 
 
 def test_partial_match_without_popularity_preserves_provider_order():
-    # No popularity data (e.g. OMDB movie search doesn't return any) —
+    # No popularity data (e.g. TVMaze and Open Library don't supply any) —
     # prefix and contains matches are treated as equally valid partial
     # matches, and the provider's own result order is the tiebreaker.
     hits = [
