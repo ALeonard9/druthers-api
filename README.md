@@ -17,7 +17,7 @@ production.
 
 - **Sign in with Google** (OAuth) or a long-lived personal **API key** (`drk_…`) for tools/scripts
 - **Track four domains** — Movies, TV (with episodes), Books, and Games — each with watched/played/read status, notes, and completion dates
-- **Search & add** from external catalogs (OMDb, TMDB, Open Library, and more) behind one API
+- **Search & add** from external catalogs (TMDB, TVmaze, Open Library, IGDB) behind one API
 - **Role-based access** — you manage your own library; admins manage shared catalog data
 - **Secure by default** — OSS security pipeline (secrets, SAST, dependencies, container) on every PR
 

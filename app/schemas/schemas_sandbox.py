@@ -78,9 +78,14 @@ class CountryRankingReorder(BaseModel):
 # --- Movies ---
 class MovieBase(BaseModel):
     title: str
-    imdb: str
+    # TMDB id is the catalog key; imdb is still stored but no longer required,
+    # since TMDB search results don't carry one until detail is fetched (#163).
+    tmdb: Optional[int] = None
+    imdb: Optional[str] = None
     release_date: Optional[datetime] = None
+    # Legacy OMDb-era values, frozen and not displayed; rating_tmdb replaces it.
     rating_imdb: Optional[float] = None
+    rating_tmdb: Optional[float] = None
     runtime: Optional[int] = None
     language: Optional[str] = None
     rated: Optional[str] = None
@@ -98,9 +103,11 @@ class MovieCreate(MovieBase):
 
 class MovieUpdate(BaseModel):
     title: Optional[str] = None
+    tmdb: Optional[int] = None
     imdb: Optional[str] = None
     release_date: Optional[datetime] = None
     rating_imdb: Optional[float] = None
+    rating_tmdb: Optional[float] = None
     runtime: Optional[int] = None
     language: Optional[str] = None
     rated: Optional[str] = None
@@ -124,9 +131,10 @@ class MovieSummary(BaseModel):
 
     id: str
     title: str
-    imdb: str
+    tmdb: Optional[int] = None
+    imdb: Optional[str] = None
     release_date: Optional[datetime] = None
-    rating_imdb: Optional[float] = None
+    rating_tmdb: Optional[float] = None
     runtime: Optional[int] = None
     rated: Optional[str] = None
     poster_url: Optional[str] = None
@@ -138,11 +146,15 @@ class MovieSummary(BaseModel):
 
 
 class MovieSearchResult(BaseModel):
-    imdb: str
+    # tmdb is what the add flow posts back; imdb only arrives on an id-shaped
+    # query, since TMDB's title search omits it (#163).
+    tmdb: int
+    imdb: Optional[str] = None
     title: str
     year: Optional[str] = None
     poster_url: Optional[str] = None
     type: Optional[str] = None
+    popularity: Optional[float] = None
     on_watchlist: bool = False
     on_rankings: bool = False
     rank: Optional[int] = None

@@ -22,7 +22,8 @@ from app.db.models_sandbox import (
 
 # domain -> (catalog model, catalog's external-id column, tracker model, tracker's FK column)
 _DOMAIN_CONFIG = {
-    'movies': (DbMovie, 'imdb', DbUserMovie, 'movie_id'),
+    # Movies join on tmdb, not imdb: TMDB search hits carry no IMDb id (#163).
+    'movies': (DbMovie, 'tmdb', DbUserMovie, 'movie_id'),
     'tv_shows': (DbTVShow, 'tvmaze', DbUserTVShow, 'tv_show_id'),
     'games': (DbVideoGame, 'igdb', DbUserVideoGame, 'game_id'),
     'books': (DbBook, 'isbn', DbUserBook, 'book_id'),
