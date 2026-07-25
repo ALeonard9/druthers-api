@@ -48,6 +48,11 @@ tasks:
     cmds:
       - alembic revision --autogenerate -m "{{.MSG}}"
 
+  backfill:covers:
+    desc: "Re-point legacy book covers to Open Library, upgrade IGDB cover sizes"
+    cmds:
+      - python -m app.migration.backfill_covers {{.CLI_ARGS}}
+
   enrich:movies:
     desc: "Backfill OMDB detail for existing movies (throttled, resumable)"
     cmds:
