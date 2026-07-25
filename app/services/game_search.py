@@ -9,7 +9,7 @@ also the enrichment source, keyed on the catalog's ``igdb`` id: release
 year, genres, platforms, summary, rating (0–100), and cover art.
 
 Raises 503 when ``TWITCH_CLIENT_ID``/``TWITCH_CLIENT_SECRET`` are not
-configured (same graceful degradation as the OMDB movie search).
+configured (same graceful degradation as the TMDB movie search).
 """
 
 import time

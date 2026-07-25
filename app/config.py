@@ -72,8 +72,7 @@ class Settings(BaseSettings):
     # --- CORS (comma-separated origins) ---
     cors_origins: str = 'http://localhost:3000'
 
-    # --- External APIs (movies search proxy) ---
-    omdb_api_key: Optional[str] = None
+    # --- External APIs (movies search proxy — TMDB) ---
     tmdb_api_key: Optional[str] = None
 
     # --- External APIs (games search proxy — IGDB via Twitch OAuth) ---

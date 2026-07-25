@@ -1,7 +1,7 @@
 """
 Spelling fallback for the search proxies.
 
-The external providers (OMDB especially) do exact-ish matching, so a typo
+The external providers do exact-ish matching, so a typo
 like "jurrasic" returns nothing. When a search comes back empty, the routers
 retry once with a spell-corrected query. Correction is per-word against an
 offline English dictionary; words it can't improve pass through unchanged,

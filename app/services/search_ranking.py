@@ -19,15 +19,18 @@ fuzzy-matching library:
        *contains* it. Prefix position alone shouldn't decide that matchup.
 
 Within the partial-match tier (and as a tiebreaker anywhere else), we sort
-by each hit's ``popularity`` field when a provider supplies one (IGDB's
-``total_rating_count``, for example) — real popularity is a much stronger
-signal than where in the title the query happens to appear. When
-``popularity`` is absent (OMDB's movie search returns none) it defaults to
-0 for every hit, which makes the sort a no-op and falls back to the
-provider's own result order — Python's ``sorted`` is stable, so that order
-is preserved automatically. The ranked list is then capped to ``limit`` per
-domain so the UI shows a short, best-first list instead of a long unranked
-one.
+by each hit's ``popularity`` field when a provider supplies one — real
+popularity is a much stronger signal than where in the title the query
+happens to appear. Games carry IGDB's ``total_rating_count`` and movies
+carry TMDB's ``popularity`` (gained in #163; OMDb supplied none, so movie
+search had no tiebreaker at all before that). TV and books still have no
+such field: TVMaze and Open Library don't publish one.
+
+Where ``popularity`` is absent it defaults to 0 for every hit, which makes
+the sort a no-op and falls back to the provider's own result order —
+Python's ``sorted`` is stable, so that order is preserved automatically.
+The ranked list is then capped to ``limit`` per domain so the UI shows a
+short, best-first list instead of a long unranked one.
 """
 
 import re
