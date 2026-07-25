@@ -45,16 +45,40 @@ jobs:
           docker push "$IMAGE"
 
       - name: Run database migrations
+        id: migrate
         env:
           DATABASE_URL: ${{ secrets.NEON_DATABASE_URL_QA }}
           ENV: qa
         run: |
           if [ -z "$DATABASE_URL" ]; then
             echo "NEON_DATABASE_URL_QA secret not set — skipping migrations."
+            echo "ran=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           pip install -r requirements/base.txt
           alembic upgrade head
+          echo "ran=true" >> "$GITHUB_OUTPUT"
+
+      # Mirrors the prod pipeline: backfills run between the migration and the
+      # roll so QA exercises the same sequence prod will. If QA skipped these,
+      # QA would show the unbackfilled state prod is specifically avoiding —
+      # which is exactly the bug QA exists to catch.
+      - name: Backfill catalog data
+        if: steps.migrate.outputs.ran == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL_QA }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          ENV: qa
+        run: |
+          set -euo pipefail
+          if [ -z "$TMDB_API_KEY" ]; then
+            echo "::error::TMDB_API_KEY secret is not set. backfill_tmdb cannot"
+            echo "::error::resolve any movie and QA would deploy with an"
+            echo "::error::unkeyed catalog. Add the secret and re-run."
+            exit 1
+          fi
+          python -m app.migration.backfill_tmdb
+          python -m app.migration.backfill_covers
 
       - name: Deploy to Cloud Run
         run: |
