@@ -51,7 +51,7 @@ def test_auth_attempts_are_rate_limited_per_ip(mock_settings, test_client: TestC
     rate_limit.reset()
 
 
-@patch('app.router.v1.router_movies.omdb_search_movies')
+@patch('app.router.v1.router_movies.tmdb_search_movies')
 @patch('app.services.rate_limit.get_settings')
 def test_search_is_rate_limited_per_user(
     mock_settings, mock_search, test_client: TestClient
@@ -63,7 +63,7 @@ def test_search_is_rate_limited_per_user(
     mock_settings.return_value = Settings(**ENABLED, rate_limit_search=2)
     mock_search.return_value = [
         {
-            'imdb': 'tt1',
+            'tmdb': 1,
             'title': 'X',
             'year': '2020',
             'poster_url': None,

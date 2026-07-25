@@ -4,7 +4,7 @@ from unittest.mock import patch
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-MOVIE_HIT = [{'imdb': 'tt0107290', 'title': 'Jurassic Park', 'year': '1993'}]
+MOVIE_HIT = [{'tmdb': 329, 'title': 'Jurassic Park', 'year': '1993'}]
 SHOW_HIT = [{'tvmaze': 22, 'title': 'Jurassic Show', 'year': '2021'}]
 
 
@@ -63,12 +63,12 @@ def test_failing_provider_does_not_break_search(
 
 
 TITANIC_HITS = [
-    {'imdb': 'tt0000001', 'title': 'Raise the Titanic', 'year': '1980'},
-    {'imdb': 'tt0000002', 'title': 'Titanic II', 'year': '2010'},
-    {'imdb': 'tt0000003', 'title': 'The Legend of the Titanic', 'year': '1999'},
-    {'imdb': 'tt0000004', 'title': 'Titanic', 'year': '1997'},
-    {'imdb': 'tt0000005', 'title': 'Titanica', 'year': '1992'},
-    {'imdb': 'tt0000006', 'title': 'Titanic: Blood and Steel', 'year': '2012'},
+    {'tmdb': 1, 'title': 'Raise the Titanic', 'year': '1980'},
+    {'tmdb': 2, 'title': 'Titanic II', 'year': '2010'},
+    {'tmdb': 3, 'title': 'The Legend of the Titanic', 'year': '1999'},
+    {'tmdb': 4, 'title': 'Titanic', 'year': '1997'},
+    {'tmdb': 5, 'title': 'Titanica', 'year': '1992'},
+    {'tmdb': 6, 'title': 'Titanic: Blood and Steel', 'year': '2012'},
 ]
 
 

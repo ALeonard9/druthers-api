@@ -6,7 +6,7 @@ This module contains the API routes for Movies.
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.db.database import get_db
@@ -32,7 +32,8 @@ from app.schemas.schemas_sandbox import (
 from app.services.movie_search import (
     apply_detail_to_movie,
     get_movie_detail,
-    search_movies as omdb_search_movies,
+    resolve_tmdb_id,
+    search_movies as tmdb_search_movies,
 )
 from app.services.search_correction import correct_query
 from app.services.tracked_status import attach_tracked_status
@@ -43,6 +44,22 @@ from app.services.tracker_query import (
 )
 
 router = APIRouter(prefix='/v1', tags=['Movies'])
+
+
+def _find_duplicate(db: Session, tmdb_id, imdb_id):
+    """
+    Existing catalog row matching either external id. Both are checked because
+    a movie added by imdb before the TMDB migration and the same movie found
+    via TMDB search must not become two rows.
+    """
+    clauses = []
+    if tmdb_id:
+        clauses.append(DbMovie.tmdb == tmdb_id)
+    if imdb_id:
+        clauses.append(DbMovie.imdb == imdb_id)
+    if not clauses:
+        return None
+    return db.query(DbMovie).filter(or_(*clauses)).first()
 
 
 # Global Entity Endpoints
@@ -61,11 +78,11 @@ def search_movies_endpoint(
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
 ):
-    results = omdb_search_movies(q)
+    results = tmdb_search_movies(q)
     if not results:
         corrected = correct_query(q)
         if corrected:
-            results = omdb_search_movies(corrected)
+            results = tmdb_search_movies(corrected)
     return attach_tracked_status(db, current_user[0].pk, results, 'movies')
 
 
@@ -83,15 +100,26 @@ def create_movie(
     # Any signed-in user may add to the shared catalog (the add-from-search
     # flow); editing and deleting catalog entries stay admin-only.
     del current_user
-    existing = db.query(DbMovie).filter(DbMovie.imdb == request.imdb).first()
-    if existing:
+    # Either id is accepted: the search flow posts a tmdb id (TMDB search
+    # returns no imdb), while the MCP tool and the IMDb CSV import (#140) are
+    # imdb-driven. Whichever is missing gets filled in by enrichment below.
+    if not request.tmdb and not request.imdb:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail='Movie imdb already exists'
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Movie requires a tmdb or imdb id',
+        )
+
+    tmdb_id = request.tmdb or resolve_tmdb_id(request.imdb)
+    if _find_duplicate(db, tmdb_id, request.imdb):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail='Movie already exists'
         )
 
     new_movie = DbMovie(**request.model_dump())
-    # Enrich from OMDB on add so detail/filtering work immediately (best effort).
-    detail = get_movie_detail(request.imdb)
+    new_movie.tmdb = tmdb_id
+    # Enrich from TMDB on add so detail/filtering work immediately (best
+    # effort). This is also where imdb gets populated for search-driven adds.
+    detail = get_movie_detail(tmdb_id)
     if detail:
         apply_detail_to_movie(new_movie, detail)
     db.add(new_movie)
@@ -106,12 +134,14 @@ def get_movie(
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
 ):
-    """Return one movie's full detail, enriching from OMDB on first view."""
+    """Return one movie's full detail, enriching from TMDB on first view."""
     del current_user
     movie = _get_movie(db, movie_id)
-    # Lazily backfill detail the first time a sparse movie is opened.
+    # Lazily backfill detail the first time a sparse movie is opened. Rows the
+    # backfill couldn't resolve have no tmdb id; get_movie_detail returns None
+    # for those and the movie is served as-is.
     if movie.plot is None and movie.director is None:
-        detail = get_movie_detail(movie.imdb)
+        detail = get_movie_detail(movie.tmdb)
         if detail:
             apply_detail_to_movie(movie, detail)
             db.commit()

@@ -48,13 +48,18 @@ tasks:
     cmds:
       - alembic revision --autogenerate -m "{{.MSG}}"
 
+  backfill:tmdb:
+    desc: "Key existing movies onto TMDB ids + re-point posters (run before enrich:movies)"
+    cmds:
+      - python -m app.migration.backfill_tmdb {{.CLI_ARGS}}
+
   backfill:covers:
     desc: "Re-point legacy book covers to Open Library, upgrade IGDB cover sizes"
     cmds:
       - python -m app.migration.backfill_covers {{.CLI_ARGS}}
 
   enrich:movies:
-    desc: "Backfill OMDB detail for existing movies (throttled, resumable)"
+    desc: "Backfill TMDB detail for existing movies (throttled, resumable)"
     cmds:
       - python -m app.migration.enrich_movies
 
