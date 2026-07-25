@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.services import watch_providers
 
 
 def test_create_movie(test_client: TestClient):
@@ -375,3 +376,99 @@ def test_search_badges_already_ranked_result(mock_search, test_client: TestClien
     assert data[329]['on_rankings'] is False
     assert data[329]['on_watchlist'] is False
     assert data[329]['rank'] is None
+
+
+# --- Watch providers (web#26) ---
+PROVIDER_PAYLOAD = {
+    'results': {
+        'US': {
+            'link': 'https://www.themoviedb.org/movie/603/watch?locale=US',
+            'flatrate': [
+                {
+                    'provider_id': 8,
+                    'provider_name': 'Netflix',
+                    'logo_path': '/netflix.jpg',
+                    'display_priority': 0,
+                }
+            ],
+            'rent': [
+                {
+                    'provider_id': 2,
+                    'provider_name': 'Apple TV',
+                    'logo_path': '/apple.jpg',
+                    'display_priority': 0,
+                }
+            ],
+        }
+    }
+}
+
+
+@patch('app.services.tmdb.try_request')
+def test_movie_watch_providers(mock_request, test_client: TestClient):
+    watch_providers.reset_cache()
+    mock_request.return_value = PROVIDER_PAYLOAD
+    headers = {'Authorization': f"Bearer {test_client.admin_user.token}"}
+    movie_id = test_client.post(
+        '/v1/movies', headers=headers, json={'title': 'The Matrix', 'tmdb': 603}
+    ).json()['id']
+
+    response = test_client.get(
+        f"/v1/movies/{movie_id}/watch-providers", headers=headers
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data['region'] == 'US'
+    assert data['attribution'] == 'JustWatch'
+    assert data['stream'] == [
+        {
+            'provider_id': 8,
+            'name': 'Netflix',
+            'logo_url': 'https://image.tmdb.org/t/p/w92/netflix.jpg',
+        }
+    ]
+    assert [p['name'] for p in data['rent']] == ['Apple TV']
+    assert data['free'] == []
+
+
+@patch('app.services.tmdb.try_request')
+def test_movie_watch_providers_accepts_a_region(mock_request, test_client: TestClient):
+    watch_providers.reset_cache()
+    mock_request.return_value = PROVIDER_PAYLOAD
+    headers = {'Authorization': f"Bearer {test_client.admin_user.token}"}
+    movie_id = test_client.post(
+        '/v1/movies', headers=headers, json={'title': 'The Matrix', 'tmdb': 603}
+    ).json()['id']
+
+    response = test_client.get(
+        f"/v1/movies/{movie_id}/watch-providers?region=GB", headers=headers
+    )
+
+    assert response.status_code == 200
+    # TMDB has no GB block in this payload — empty, not an error.
+    assert response.json() == {
+        'region': 'GB',
+        'link': None,
+        'attribution': 'JustWatch',
+        'stream': [],
+        'free': [],
+        'rent': [],
+        'buy': [],
+    }
+
+
+def test_movie_watch_providers_unknown_movie_404s(test_client: TestClient):
+    headers = {'Authorization': f"Bearer {test_client.admin_user.token}"}
+    response = test_client.get('/v1/movies/nope/watch-providers', headers=headers)
+    assert response.status_code == 404
+
+
+def test_movie_watch_providers_requires_auth(test_client: TestClient):
+    headers = {'Authorization': f"Bearer {test_client.admin_user.token}"}
+    movie_id = test_client.post(
+        '/v1/movies', headers=headers, json={'title': 'The Matrix', 'tmdb': 603}
+    ).json()['id']
+
+    response = test_client.get(f"/v1/movies/{movie_id}/watch-providers")
+    assert response.status_code == 401

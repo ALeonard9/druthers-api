@@ -4,6 +4,8 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
+from app.services import watch_providers
+
 
 def _make_show(test_client: TestClient, title='Breaking Bad', **extra) -> str:
     headers = {'Authorization': f"Bearer {test_client.admin_user.token}"}
@@ -659,3 +661,66 @@ def test_deleting_ranked_tracker_closes_the_gap(test_client: TestClient):
         if item['on_rankings']
     }
     assert remaining == {'First': 1, 'Third': 2}
+
+
+# --- Watch providers (web#26) ---
+@patch('app.services.tmdb.try_request')
+def test_tv_watch_providers_resolves_via_imdb(mock_request, test_client: TestClient):
+    watch_providers.reset_cache()
+    # Shows carry no TMDB id, so /find maps the IMDb id first.
+    mock_request.side_effect = [
+        {'tv_results': [{'id': 1396}]},
+        {
+            'results': {
+                'US': {
+                    'link': 'https://www.themoviedb.org/tv/1396/watch?locale=US',
+                    'flatrate': [
+                        {
+                            'provider_id': 8,
+                            'provider_name': 'Netflix',
+                            'logo_path': '/netflix.jpg',
+                            'display_priority': 0,
+                        }
+                    ],
+                }
+            }
+        },
+    ]
+    headers = {'Authorization': f"Bearer {test_client.admin_user.token}"}
+    show_id = _make_show(test_client, imdb='tt0903747')
+
+    response = test_client.get(
+        f"/v1/tv-shows/{show_id}/watch-providers", headers=headers
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data['attribution'] == 'JustWatch'
+    assert data['stream'] == [
+        {
+            'provider_id': 8,
+            'name': 'Netflix',
+            'logo_url': 'https://image.tmdb.org/t/p/w92/netflix.jpg',
+        }
+    ]
+
+
+@patch('app.services.tmdb.try_request')
+def test_tv_watch_providers_without_imdb_id(mock_request, test_client: TestClient):
+    watch_providers.reset_cache()
+    headers = {'Authorization': f"Bearer {test_client.admin_user.token}"}
+    show_id = _make_show(test_client, title='Unmatched Show')
+
+    response = test_client.get(
+        f"/v1/tv-shows/{show_id}/watch-providers", headers=headers
+    )
+
+    assert response.status_code == 200
+    assert response.json()['stream'] == []
+    mock_request.assert_not_called()
+
+
+def test_tv_watch_providers_unknown_show_404s(test_client: TestClient):
+    headers = {'Authorization': f"Bearer {test_client.admin_user.token}"}
+    response = test_client.get('/v1/tv-shows/nope/watch-providers', headers=headers)
+    assert response.status_code == 404

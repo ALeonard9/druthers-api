@@ -1146,7 +1146,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"string\",\n  \"imdb\": \"string\",\n  \"release_date\": \"2026-01-01T00:00:00Z\",\n  \"rating_imdb\": 0\n}",
+              "raw": "{\n  \"title\": \"string\",\n  \"tmdb\": 0,\n  \"imdb\": \"string\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1223,7 +1223,42 @@
                 }
               ]
             },
-            "description": "Return one movie's full detail, enriching from OMDB on first view."
+            "description": "Return one movie's full detail, enriching from TMDB on first view."
+          }
+        },
+        {
+          "name": "Get Movie Watch Providers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/movies/:movie_id/watch-providers?region=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "movies",
+                ":movie_id",
+                "watch-providers"
+              ],
+              "query": [
+                {
+                  "key": "region",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                }
+              ],
+              "variable": [
+                {
+                  "key": "movie_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Where this movie can be streamed, rented or bought in ``region`` (web#26).\n\nLive TMDB/JustWatch data, not catalog data, so nothing here is stored. A\nmovie with no availability \u2014 or one the backfill never keyed onto TMDB \u2014\nreturns empty buckets rather than an error; only an unknown movie 404s."
           }
         },
         {
@@ -1506,7 +1541,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"string\",\n  \"imdb\": \"string\",\n  \"release_date\": \"2026-01-01T00:00:00Z\",\n  \"rating_imdb\": 0,\n  \"runtime\": 0,\n  \"language\": \"string\",\n  \"rated\": \"string\",\n  \"poster_url\": \"string\",\n  \"year\": 0,\n  \"genre\": \"string\",\n  \"director\": \"string\",\n  \"actors\": \"string\",\n  \"plot\": \"string\"\n}",
+              "raw": "{\n  \"title\": \"string\",\n  \"tmdb\": 0,\n  \"imdb\": \"string\",\n  \"release_date\": \"2026-01-01T00:00:00Z\",\n  \"rating_imdb\": 0,\n  \"rating_tmdb\": 0,\n  \"runtime\": 0,\n  \"language\": \"string\",\n  \"rated\": \"string\",\n  \"poster_url\": \"string\",\n  \"year\": 0,\n  \"genre\": \"string\",\n  \"director\": \"string\",\n  \"actors\": \"string\",\n  \"plot\": \"string\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1963,6 +1998,41 @@
               ]
             },
             "description": "Return one show's full detail, enriching from TVMaze on first view."
+          }
+        },
+        {
+          "name": "Get Tv Watch Providers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/tv-shows/:show_id/watch-providers?region=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "tv-shows",
+                ":show_id",
+                "watch-providers"
+              ],
+              "query": [
+                {
+                  "key": "region",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                }
+              ],
+              "variable": [
+                {
+                  "key": "show_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Where this show can be streamed, rented or bought in ``region`` (web#26).\n\nKeyed on the show's IMDb id, since the catalog's TV data comes from TVMaze\nand carries no TMDB id; a show without one returns empty buckets."
           }
         },
         {

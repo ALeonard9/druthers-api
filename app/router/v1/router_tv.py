@@ -47,7 +47,9 @@ from app.schemas.schemas_sandbox import (
     UserTVShowResponse,
     UserTVShowUpdate,
     UserTVShowWithStatus,
+    WatchProviders,
 )
+from app.services.watch_providers import DEFAULT_REGION, get_tv_providers
 from app.services.tv_search import (
     apply_detail_to_show,
     get_tv_show_detail,
@@ -145,6 +147,24 @@ def get_tv_show(
             db.commit()
             db.refresh(show)
     return show
+
+
+@router.get('/tv-shows/{show_id}/watch-providers', response_model=WatchProviders)
+def get_tv_watch_providers(
+    show_id: str,
+    region: str = DEFAULT_REGION,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    """
+    Where this show can be streamed, rented or bought in ``region`` (web#26).
+
+    Keyed on the show's IMDb id, since the catalog's TV data comes from TVMaze
+    and carries no TMDB id; a show without one returns empty buckets.
+    """
+    del current_user
+    show = _get_show(db, show_id)
+    return get_tv_providers(show.imdb, region)
 
 
 @router.put('/tv-shows/{show_id}', response_model=TVShowResponse)
