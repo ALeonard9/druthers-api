@@ -13,6 +13,8 @@ Usage::
 
 import time
 
+from sqlalchemy import and_, or_
+
 from app.db.database import SessionLocal
 from app.db.models_sandbox import DbVideoGame
 from app.services.game_search import apply_detail_to_game, get_game_detail
@@ -24,19 +26,32 @@ THROTTLE_SECONDS = 0.5
 STOP_AFTER_CONSECUTIVE_MISSES = 15
 
 
+def pending_games(db):
+    """
+    Games still worth an IGDB call.
+
+    See ``enrich_movies.pending_movies``: ``summary``/``genre`` is only a
+    proxy for "never enriched", so a row that has them but no ``year`` would
+    never be retried. Select on the missing field too.
+    """
+    return (
+        db.query(DbVideoGame)
+        .filter(
+            DbVideoGame.igdb.isnot(None),
+            or_(
+                and_(DbVideoGame.summary.is_(None), DbVideoGame.genre.is_(None)),
+                DbVideoGame.year.is_(None),
+            ),
+        )
+        .all()
+    )
+
+
 def run() -> None:
     """Enrich all games still missing detail."""
     db = SessionLocal()
     try:
-        pending = (
-            db.query(DbVideoGame)
-            .filter(
-                DbVideoGame.igdb.isnot(None),
-                DbVideoGame.summary.is_(None),
-                DbVideoGame.genre.is_(None),
-            )
-            .all()
-        )
+        pending = pending_games(db)
         total = len(pending)
         print(f'{total} games to enrich')
         enriched = misses = consecutive = processed = 0

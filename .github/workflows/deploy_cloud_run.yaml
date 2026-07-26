@@ -59,16 +59,20 @@ jobs:
           alembic upgrade head
           echo "ran=true" >> "$GITHUB_OUTPUT"
 
-      # Both backfills are idempotent and resumable: they only touch rows that
+      # Every step here is idempotent and resumable: they only touch rows that
       # still need work, so re-running on every release is a near-no-op once
-      # the catalog is keyed. That is deliberate — it makes a release
-      # self-contained instead of depending on someone remembering to run
-      # these by hand afterwards.
+      # the catalog is keyed and enriched. That is deliberate — it makes a
+      # release self-contained instead of depending on someone remembering to
+      # run these by hand afterwards. The one-off scripts that were *not*
+      # wired in are exactly the ones that regressed in prod: movie ranks went
+      # back to 0-based and Top 5 rows lost their years.
       - name: Backfill catalog data
         if: steps.migrate.outputs.ran == 'true'
         env:
           DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+          TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
           ENV: prod
         run: |
           set -euo pipefail
@@ -84,6 +88,24 @@ jobs:
           fi
           python -m app.migration.backfill_tmdb
           python -m app.migration.backfill_covers
+          # Pure SQL, no upstream calls: shift any shelf still sitting on the
+          # legacy 0-based ranks onto the API's 1-based contract.
+          python -m app.migration.backfill_rank_base --all-users
+          # These fill `year` (among other detail). Throttled, so the first
+          # release after a large import is slow; every release after that
+          # has almost nothing left to do.
+          python -m app.migration.enrich_movies
+          python -m app.migration.enrich_books
+          # Unlike TMDB, Twitch creds are optional here: without them games
+          # simply keep their current detail. Warn rather than block a release
+          # on a shelf-sized gap.
+          if [ -n "$TWITCH_CLIENT_ID" ] && [ -n "$TWITCH_CLIENT_SECRET" ]; then
+            python -m app.migration.enrich_games
+          else
+            echo "::warning::TWITCH_CLIENT_ID/SECRET not set — skipping"
+            echo "::warning::enrich_games. Game years and genres will stay"
+            echo "::warning::blank until the secrets are added."
+          fi
 
       - name: Deploy to Cloud Run
         run: |

@@ -68,6 +68,8 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.NEON_DATABASE_URL_QA }}
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+          TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
           ENV: qa
         run: |
           set -euo pipefail
@@ -79,6 +81,15 @@ jobs:
           fi
           python -m app.migration.backfill_tmdb
           python -m app.migration.backfill_covers
+          python -m app.migration.backfill_rank_base --all-users
+          python -m app.migration.enrich_movies
+          python -m app.migration.enrich_books
+          if [ -n "$TWITCH_CLIENT_ID" ] && [ -n "$TWITCH_CLIENT_SECRET" ]; then
+            python -m app.migration.enrich_games
+          else
+            echo "::warning::TWITCH_CLIENT_ID/SECRET not set — skipping"
+            echo "::warning::enrich_games (see the prod workflow)."
+          fi
 
       - name: Deploy to Cloud Run
         run: |

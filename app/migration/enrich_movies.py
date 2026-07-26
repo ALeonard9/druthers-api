@@ -14,6 +14,8 @@ Usage::
 
 import time
 
+from sqlalchemy import and_, or_
+
 from app.db.database import SessionLocal
 from app.db.models_sandbox import DbMovie
 from app.services.movie_search import apply_detail_to_movie, get_movie_detail
@@ -28,19 +30,34 @@ THROTTLE_SECONDS = 0.25
 STOP_AFTER_CONSECUTIVE_MISSES = 15
 
 
+def pending_movies(db):
+    """
+    Movies still worth a TMDB call.
+
+    ``plot``/``director`` are the usual proxy for "never enriched", but a row
+    the OMDb era filled in can carry both and still have no ``year`` — the
+    Top 5 and the shelf lists print a blank year for those forever, because
+    the proxy says they are done. Selecting on the missing field itself as
+    well means a partially-filled row is retried instead of stranded.
+    """
+    return (
+        db.query(DbMovie)
+        .filter(
+            DbMovie.tmdb.isnot(None),
+            or_(
+                and_(DbMovie.plot.is_(None), DbMovie.director.is_(None)),
+                DbMovie.year.is_(None),
+            ),
+        )
+        .all()
+    )
+
+
 def run() -> None:
     """Enrich all movies still missing detail."""
     db = SessionLocal()
     try:
-        pending = (
-            db.query(DbMovie)
-            .filter(
-                DbMovie.tmdb.isnot(None),
-                DbMovie.plot.is_(None),
-                DbMovie.director.is_(None),
-            )
-            .all()
-        )
+        pending = pending_movies(db)
         total = len(pending)
         print(f'{total} movies to enrich')
         enriched = misses = consecutive = processed = 0
