@@ -28,6 +28,7 @@ from app.schemas.schemas_sandbox import (
     UserMovieCreate,
     UserMovieResponse,
     UserMovieUpdate,
+    WatchProviders,
 )
 from app.services.movie_search import (
     apply_detail_to_movie,
@@ -35,6 +36,7 @@ from app.services.movie_search import (
     resolve_tmdb_id,
     search_movies as tmdb_search_movies,
 )
+from app.services.watch_providers import DEFAULT_REGION, get_movie_providers
 from app.services.search_correction import correct_query
 from app.services.tracked_status import attach_tracked_status
 from app.services.tracker_query import (
@@ -147,6 +149,25 @@ def get_movie(
             db.commit()
             db.refresh(movie)
     return movie
+
+
+@router.get('/movies/{movie_id}/watch-providers', response_model=WatchProviders)
+def get_movie_watch_providers(
+    movie_id: str,
+    region: str = DEFAULT_REGION,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    """
+    Where this movie can be streamed, rented or bought in ``region`` (web#26).
+
+    Live TMDB/JustWatch data, not catalog data, so nothing here is stored. A
+    movie with no availability — or one the backfill never keyed onto TMDB —
+    returns empty buckets rather than an error; only an unknown movie 404s.
+    """
+    del current_user
+    movie = _get_movie(db, movie_id)
+    return get_movie_providers(movie.tmdb, region)
 
 
 @router.put('/movies/{movie_id}', response_model=MovieResponse)

@@ -4,9 +4,8 @@
     "title": "druthers.io API local",
     "description": "API for druthers.io \u2014 track and rank the movies, TV, books, and games you actually care about.",
     "contact": {
-      "name": "Adam",
-      "url": "https://www.druthers.io/",
-      "email": "aleonard9@hotmail.com"
+      "name": "Druthers",
+      "url": "https://www.druthers.io/"
     },
     "license": {
       "name": "GPL-3.0",
@@ -15,6 +14,10 @@
     "version": "0.0.1"
   },
   "servers": [
+    {
+      "url": "https://api.druthers.io",
+      "description": "Production server"
+    },
     {
       "url": "http://localhost:8000",
       "description": "Local server"
@@ -1022,7 +1025,7 @@
           "Movies"
         ],
         "summary": "Get Movie",
-        "description": "Return one movie's full detail, enriching from OMDB on first view.",
+        "description": "Return one movie's full detail, enriching from TMDB on first view.",
         "operationId": "get_movie_v1_movies__movie_id__get",
         "security": [
           {
@@ -1143,6 +1146,64 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/movies/{movie_id}/watch-providers": {
+      "get": {
+        "tags": [
+          "Movies"
+        ],
+        "summary": "Get Movie Watch Providers",
+        "description": "Where this movie can be streamed, rented or bought in ``region`` (web#26).\n\nLive TMDB/JustWatch data, not catalog data, so nothing here is stored. A\nmovie with no availability \u2014 or one the backfill never keyed onto TMDB \u2014\nreturns empty buckets rather than an error; only an unknown movie 404s.",
+        "operationId": "get_movie_watch_providers_v1_movies__movie_id__watch_providers_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "movie_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Movie Id"
+            }
+          },
+          {
+            "name": "region",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "US",
+              "title": "Region"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchProviders"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3162,6 +3223,64 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tv-shows/{show_id}/watch-providers": {
+      "get": {
+        "tags": [
+          "TV"
+        ],
+        "summary": "Get Tv Watch Providers",
+        "description": "Where this show can be streamed, rented or bought in ``region`` (web#26).\n\nKeyed on the show's IMDb id, since the catalog's TV data comes from TVMaze\nand carries no TMDB id; a show without one returns empty buckets.",
+        "operationId": "get_tv_watch_providers_v1_tv_shows__show_id__watch_providers_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "show_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Show Id"
+            }
+          },
+          {
+            "name": "region",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "US",
+              "title": "Region"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchProviders"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -6235,8 +6354,26 @@
             "type": "string",
             "title": "Title"
           },
+          "tmdb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb"
+          },
           "imdb": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Imdb"
           },
           "release_date": {
@@ -6261,6 +6398,17 @@
               }
             ],
             "title": "Rating Imdb"
+          },
+          "rating_tmdb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating Tmdb"
           },
           "runtime": {
             "anyOf": [
@@ -6364,8 +6512,7 @@
         },
         "type": "object",
         "required": [
-          "title",
-          "imdb"
+          "title"
         ],
         "title": "MovieCreate"
       },
@@ -6375,8 +6522,26 @@
             "type": "string",
             "title": "Title"
           },
+          "tmdb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb"
+          },
           "imdb": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Imdb"
           },
           "release_date": {
@@ -6401,6 +6566,17 @@
               }
             ],
             "title": "Rating Imdb"
+          },
+          "rating_tmdb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating Tmdb"
           },
           "runtime": {
             "anyOf": [
@@ -6519,7 +6695,6 @@
         "type": "object",
         "required": [
           "title",
-          "imdb",
           "id",
           "created_at",
           "updated_at"
@@ -6528,8 +6703,19 @@
       },
       "MovieSearchResult": {
         "properties": {
+          "tmdb": {
+            "type": "integer",
+            "title": "Tmdb"
+          },
           "imdb": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Imdb"
           },
           "title": {
@@ -6569,6 +6755,17 @@
             ],
             "title": "Type"
           },
+          "popularity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Popularity"
+          },
           "on_watchlist": {
             "type": "boolean",
             "title": "On Watchlist",
@@ -6593,7 +6790,7 @@
         },
         "type": "object",
         "required": [
-          "imdb",
+          "tmdb",
           "title"
         ],
         "title": "MovieSearchResult"
@@ -6608,8 +6805,26 @@
             "type": "string",
             "title": "Title"
           },
+          "tmdb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb"
+          },
           "imdb": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Imdb"
           },
           "release_date": {
@@ -6624,7 +6839,7 @@
             ],
             "title": "Release Date"
           },
-          "rating_imdb": {
+          "rating_tmdb": {
             "anyOf": [
               {
                 "type": "number"
@@ -6633,7 +6848,7 @@
                 "type": "null"
               }
             ],
-            "title": "Rating Imdb"
+            "title": "Rating Tmdb"
           },
           "runtime": {
             "anyOf": [
@@ -6716,8 +6931,7 @@
         "type": "object",
         "required": [
           "id",
-          "title",
-          "imdb"
+          "title"
         ],
         "title": "MovieSummary",
         "description": "Lightweight movie for list responses \u2014 omits the large ``plot`` field."
@@ -6734,6 +6948,17 @@
               }
             ],
             "title": "Title"
+          },
+          "tmdb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb"
           },
           "imdb": {
             "anyOf": [
@@ -6768,6 +6993,17 @@
               }
             ],
             "title": "Rating Imdb"
+          },
+          "rating_tmdb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating Tmdb"
           },
           "runtime": {
             "anyOf": [
@@ -10423,6 +10659,104 @@
         },
         "type": "object",
         "title": "VideoGameUpdate"
+      },
+      "WatchProvider": {
+        "properties": {
+          "provider_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "WatchProvider",
+        "description": "One streaming service a title is available on."
+      },
+      "WatchProviders": {
+        "properties": {
+          "region": {
+            "type": "string",
+            "title": "Region"
+          },
+          "link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link"
+          },
+          "attribution": {
+            "type": "string",
+            "title": "Attribution"
+          },
+          "stream": {
+            "items": {
+              "$ref": "#/components/schemas/WatchProvider"
+            },
+            "type": "array",
+            "title": "Stream",
+            "default": []
+          },
+          "free": {
+            "items": {
+              "$ref": "#/components/schemas/WatchProvider"
+            },
+            "type": "array",
+            "title": "Free",
+            "default": []
+          },
+          "rent": {
+            "items": {
+              "$ref": "#/components/schemas/WatchProvider"
+            },
+            "type": "array",
+            "title": "Rent",
+            "default": []
+          },
+          "buy": {
+            "items": {
+              "$ref": "#/components/schemas/WatchProvider"
+            },
+            "type": "array",
+            "title": "Buy",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "region",
+          "attribution"
+        ],
+        "title": "WatchProviders",
+        "description": "Where a title can be watched in one region (web#26).\n\nNever 404s and never errors: a title with no availability \u2014 or one TMDB\ncan't resolve \u2014 comes back with empty buckets, so the detail page renders\nthe same either way. ``attribution`` carries the credit TMDB requires\nwherever this data is displayed."
       }
     },
     "securitySchemes": {

@@ -75,6 +75,37 @@ class CountryRankingReorder(BaseModel):
     country_ids: List[str]
 
 
+# --- Watch providers (shared by Movies and TV) ---
+class WatchProvider(BaseModel):
+    """One streaming service a title is available on."""
+
+    provider_id: Optional[int] = None
+    name: str
+    logo_url: Optional[str] = None
+
+
+class WatchProviders(BaseModel):
+    """
+    Where a title can be watched in one region (web#26).
+
+    Never 404s and never errors: a title with no availability — or one TMDB
+    can't resolve — comes back with empty buckets, so the detail page renders
+    the same either way. ``attribution`` carries the credit TMDB requires
+    wherever this data is displayed.
+    """
+
+    region: str
+    # TMDB's own "watch" page for the title, JustWatch-powered; None when the
+    # title has no availability in this region.
+    link: Optional[str] = None
+    attribution: str
+    # Subscription (Netflix, Max), free/ad-supported (Tubi), and transactional.
+    stream: List[WatchProvider] = []
+    free: List[WatchProvider] = []
+    rent: List[WatchProvider] = []
+    buy: List[WatchProvider] = []
+
+
 # --- Movies ---
 class MovieBase(BaseModel):
     title: str

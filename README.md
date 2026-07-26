@@ -58,6 +58,7 @@ All endpoints are prefixed with `/v1`; protected routes require `Authorization: 
 | **Catalog** (movies · tv-shows · books · games) | `GET /v1/{domain}` · admin `POST/PUT/DELETE` |
 | **My library** | `GET /v1/users/me/{domain}` · `POST/PUT/DELETE /v1/users/me/{domain}/{id}` (mark watched/played/read, notes, dates) |
 | **TV episodes** | `…/tv-shows/{id}/episodes` · `…/users/me/episodes` |
+| **Streaming availability** | `GET /v1/movies/{id}/watch-providers` · `GET /v1/tv-shows/{id}/watch-providers` (`?region=US`, JustWatch via TMDB) |
 | **Docs** | `/docs` (Swagger) · `/redoc` · `/openapi.json` |
 
 ## Customer-facing docs
@@ -101,6 +102,7 @@ Auto-generated docs: **Swagger UI** at `/docs`, **ReDoc** at `/redoc`, raw schem
 | **Catalog** (movies · tv-shows · books · games) | `GET /v1/{domain}` · admin `POST/PUT/DELETE` |
 | **My library** | `GET /v1/users/me/{domain}` · `POST/PUT/DELETE /v1/users/me/{domain}/{id}` (mark watched/played/read, notes, dates) |
 | **TV episodes** | `…/tv-shows/{id}/episodes` · `…/users/me/episodes` |
+| **Streaming availability** | `GET /v1/movies/{id}/watch-providers` · `GET /v1/tv-shows/{id}/watch-providers` (`?region=US`, JustWatch via TMDB) |
 
 ## Security
 
