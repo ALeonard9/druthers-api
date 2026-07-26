@@ -16,9 +16,19 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     restart: unless-stopped
     env_file:
       - env/${ENV}.env
+    # Bind-mount the working tree over the image's baked-in copy so edits
+    # under app/ take effect without a rebuild (api#232). uvicorn's
+    # reload=True (enabled for ENV=dev in app/run.py) watches this mount and
+    # restarts the worker on change. Dependency changes (requirements/base.txt,
+    # apk packages) still need `task db` / `task du -- dev` (which now always
+    # rebuilds) since those are baked in at image-build time, not mounted.
+    volumes:
+      - .:/app
     ports:
       - "8000:8000"
     depends_on:

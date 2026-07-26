@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     env: str = 'local'
     lz: Optional[str] = None
     log_level: str = 'INFO'
+    # Baked in at image build time (see Dockerfile ARG/ENV GIT_SHA). Lets a
+    # running container be checked against the working tree instead of
+    # silently serving a stale build (api#232).
+    git_sha: Optional[str] = None
 
     # --- Database ---
     database_url: Optional[str] = None
