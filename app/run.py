@@ -165,6 +165,16 @@ def favicon():
     return FileResponse('app/static/favicon.ico')
 
 
+@app.get('/health', include_in_schema=False)
+def health():
+    """
+    Liveness/staleness check: carries the git SHA baked into this image at
+    build time, so a running container can be checked against the working
+    tree instead of silently serving a stale build (api#232).
+    """
+    return {'status': 'ok', 'env': settings.env, 'git_sha': settings.git_sha}
+
+
 async def generate_openapi_json():
     """
     Generate the OpenAPI schema and write it to a file upon startup.
@@ -195,6 +205,10 @@ async def start_server():
     through Alembic migrations (``alembic upgrade head``) so data is never
     dropped on restart.
     """
+    logger.info(
+        'Starting druthers API env=%s git_sha=%s', settings.env, settings.git_sha
+    )
+
     if settings.is_local or settings.is_ci:
         models.Base.metadata.create_all(engine)
         logger.info('Created all tables (local/CI)')
@@ -220,9 +234,11 @@ async def start_server():
         await generate_openapi_json()
 
     port = int(os.getenv('PORT', '8000'))
-    if settings.is_local:
+    if settings.env in ('local', 'dev'):
         # The reloader must own the process (it spawns worker subprocesses),
-        # so local dev keeps the sync entry point.
+        # so local/dev keep the sync entry point. ENV=dev is the containerized
+        # local stack (dc-dev.yml bind-mounts the working tree over it), so
+        # it gets the same edit-reload loop as ENV=local (api#232).
         uvicorn.run(
             'app.run:app',
             host='0.0.0.0',

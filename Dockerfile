@@ -4,6 +4,11 @@ FROM python:3.14.6-alpine
 # Set the working directory in the container
 WORKDIR /app
 
+# Git SHA of the commit this image was built from, so a running container
+# can be checked against the working tree (see GET /health, api#232).
+ARG GIT_SHA=unknown
+ENV GIT_SHA=${GIT_SHA}
+
 # Create a non-root user
 RUN addgroup -S adam && adduser -S adam -G adam
 

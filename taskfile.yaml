@@ -12,11 +12,11 @@ tasks:
     cmds:
       - docker compose -f dc-{{.ENV}}.yml --env-file env/{{.ENV}}.env build --no-cache
   du:
-    desc: "Launch druthers Docker environment (default: dev)"
+    desc: "Launch druthers Docker environment (default: dev). Always rebuilds the API image so it never silently serves stale code (api#232)."
     vars:
       ENV: '{{default "dev" .CLI_ARGS}}'
     cmds:
-      - docker compose -f dc-{{.ENV}}.yml --env-file env/{{.ENV}}.env up -d
+      - GIT_SHA=$(git rev-parse HEAD) docker compose -f dc-{{.ENV}}.yml --env-file env/{{.ENV}}.env up -d --build
 
   dd:
     desc: "Stop druthers Docker environment"
