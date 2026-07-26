@@ -48,28 +48,47 @@ task import:orion
 
 Requires the dev dependency `PyMySQL` (in `requirements/dev.txt`).
 
-## seed_fake.py
+## seed_dev.py
 
-Populates the **local dev** Postgres with a realistic volume of synthetic
-catalog + tracker data using `Faker` (already a dependency via
-`requirements/test.txt`, pulled into `dev.txt`). Unlike `orion_import.py`,
-this is not sourced from anywhere real — it exists purely to give local
-testing enough data volume to catch pagination/list-rendering/N+1-class bugs
-that are invisible against a single seed-admin-only database.
+Populates the **local dev** Postgres with a realistic volume of catalog +
+tracker data, sourced from the checked-in fixtures
+`app/migration/fixtures/seed_*.json` — real movies/shows/books/games
+captured from TMDB/TVMaze/Open Library/IGDB, the same providers
+`orion_import.py` and the `enrich_*`/`backfill_*` scripts use (#228). Unlike
+the old Faker-based seeder it replaced, what's synthesized here is
+*selection and tracker state* — which titles get seeded, which list they
+land on, rank order, completion dates — not the content itself.
 
-- All generated rows use collision-proof identifiers (`imdb`/`tvmaze`/`igdb`/
-  `googleid` in reserved fake ranges) so they can never be mistaken for real
-  catalog data at the DB level, even though titles are plausible
-  Faker-generated text rather than obviously-fake gibberish.
+- Catalog rows are upserted on their natural key (`tmdb`/`imdb`/`tvmaze`/
+  `isbn`/`igdb`), so a re-run — or a fixture title that happens to already
+  exist from an `orion_import` run — never produces a duplicate movie/show/
+  book/game.
+- Only the *tracker* rows this script creates are marked
+  (`is_seed_data=True`); catalog rows are left alone by `--wipe` either way,
+  since once a title is real there's no such thing as a "fake" catalog row
+  to clean up — see `DbUserMovie.is_seed_data`'s docstring.
 - **Refuses to run against anything but the local dev Postgres** (checks
-  `ENV`/`POSTGRES_HOST`) — this script performs destructive
-  delete-then-recreate writes and must never be able to reach QA or prod.
-- Re-runnable: each run deletes and recreates the fake rows it owns.
-  `--wipe` clears them without reseeding. `--count N` controls volume
-  (default ~300–500 catalog rows).
+  `ENV`/`POSTGRES_HOST`) — this script performs bulk writes and must never
+  be able to reach QA or prod.
+- Re-runnable: each run wipes the tracker rows it previously created for the
+  target user, then reseeds. `--wipe` clears them without reseeding.
+  `--count N` controls movie volume (default 270); TV/books/games scale off
+  it at roughly prod's real proportions, capped to what the fixture holds.
 
 ```bash
-task seed:fake                 # populate/refresh
-task seed:fake -- --count 1000 # more volume
-task seed:fake -- --wipe       # clear only
+task seed:dev                 # populate/refresh
+task seed:dev -- --count 150  # less volume
+task seed:dev -- --wipe       # clear only
+```
+
+### build_seed_fixtures.py
+
+Regenerates `app/migration/fixtures/seed_*.json` from the live providers.
+Not run automatically by anything — a maintenance tool for when the fixture
+should pick up newer titles. Needs `TMDB_API_KEY` and
+`TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET`; Open Library and TVMaze need no
+key. Takes a few minutes (throttled to be polite to each provider).
+
+```bash
+task fixtures:build
 ```
