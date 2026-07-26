@@ -11,6 +11,8 @@ Usage::
 
 import time
 
+from sqlalchemy import and_, or_
+
 from app.db.database import SessionLocal
 from app.db.models_sandbox import DbBook
 from app.services.book_search import apply_detail_to_book, get_book_detail
@@ -22,19 +24,32 @@ THROTTLE_SECONDS = 1.0
 STOP_AFTER_CONSECUTIVE_MISSES = 15
 
 
+def pending_books(db):
+    """
+    Books still worth an Open Library call.
+
+    See ``enrich_movies.pending_movies``: ``description``/``authors`` is only
+    a proxy for "never enriched", so a row that has them but no ``year``
+    would never be retried. Select on the missing field too.
+    """
+    return (
+        db.query(DbBook)
+        .filter(
+            DbBook.isbn.isnot(None),
+            or_(
+                and_(DbBook.description.is_(None), DbBook.authors.is_(None)),
+                DbBook.year.is_(None),
+            ),
+        )
+        .all()
+    )
+
+
 def run() -> None:
     """Enrich all books still missing detail."""
     db = SessionLocal()
     try:
-        pending = (
-            db.query(DbBook)
-            .filter(
-                DbBook.isbn.isnot(None),
-                DbBook.description.is_(None),
-                DbBook.authors.is_(None),
-            )
-            .all()
-        )
+        pending = pending_books(db)
         total = len(pending)
         print(f'{total} books to enrich')
         enriched = misses = consecutive = processed = 0
