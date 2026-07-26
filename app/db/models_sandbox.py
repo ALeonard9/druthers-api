@@ -128,6 +128,10 @@ class DbUserMovie(DBBaseModel):
     # When the user finished it (#159): defaults to the day it entered
     # Rankings, editable on the detail page.
     completed_at = Column(Date, nullable=True)
+    # Set by app.migration.seed_dev -- marks a tracker row (not the catalog
+    # row it points at, which may well be real) as seeded rather than
+    # user-created, so a targeted wipe can find it again.
+    is_seed_data = Column(Boolean, nullable=False, default=False)
 
     movie = relationship('DbMovie', back_populates='user_movies')
     user = relationship('DbUser', backref='user_movies')
@@ -175,6 +179,8 @@ class DbUserTVShow(DBBaseModel):
     completed_at = Column(Date, nullable=True)
     status = Column(String(254), nullable=True)
     freeze = Column(Integer, default=0)
+    # See DbUserMovie.is_seed_data.
+    is_seed_data = Column(Boolean, nullable=False, default=False)
 
     tv_show = relationship('DbTVShow', back_populates='user_tv_shows')
     user = relationship('DbUser', backref='user_tv_shows')
@@ -251,6 +257,8 @@ class DbUserVideoGame(DBBaseModel):
     # Rankings, editable on the detail page.
     completed_at = Column(Date, nullable=True)
     is_100_percent = Column(Boolean, default=False)
+    # See DbUserMovie.is_seed_data.
+    is_seed_data = Column(Boolean, nullable=False, default=False)
 
     game = relationship('DbVideoGame', back_populates='user_games')
     user = relationship('DbUser', backref='user_video_games')
@@ -295,6 +303,8 @@ class DbUserBook(DBBaseModel):
     # When the user finished it (#159): defaults to the day it entered
     # Rankings, editable on the detail page.
     completed_at = Column(Date, nullable=True)
+    # See DbUserMovie.is_seed_data.
+    is_seed_data = Column(Boolean, nullable=False, default=False)
 
     book = relationship('DbBook', back_populates='user_books')
     user = relationship('DbUser', backref='user_books')

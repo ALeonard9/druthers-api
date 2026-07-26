@@ -88,10 +88,15 @@ tasks:
     cmds:
       - python -m app.migration.orion_import {{.CLI_ARGS}}
 
-  seed:fake:
-    desc: "Populate local dev Postgres with fake catalog + tracker data (Faker). Usage: task seed:fake -- --count 500 | --wipe"
+  seed:dev:
+    desc: "Populate local dev Postgres with real catalog data + randomized tracker state. Usage: task seed:dev -- --count 500 | --wipe"
     cmds:
-      - python -m app.migration.seed_fake {{.CLI_ARGS}}
+      - python -m app.migration.seed_dev {{.CLI_ARGS}}
+
+  fixtures:build:
+    desc: "Refresh app/migration/fixtures/seed_*.json from TMDB/TVMaze/Open Library/IGDB (needs API keys)"
+    cmds:
+      - python -m app.migration.build_seed_fixtures
 
   gh:
     desc: "Open project repository in GitHub"

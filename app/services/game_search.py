@@ -246,6 +246,30 @@ def apply_detail_to_game(game, detail: dict) -> None:
         setattr(game, key, value)
 
 
+def _detail_from_game(game: dict) -> dict:
+    """Map one raw IGDB game record (``_DETAIL_FIELDS`` shape) to catalog fields."""
+    release = _release(game)
+    rating = game.get('total_rating')
+    updated = game.get('updated_at')
+    return {
+        'title': game.get('name'),
+        'igdb': game.get('id'),
+        'slug': game.get('slug'),
+        'release_date': release,
+        'year': release.year if release else None,
+        'genre': _names(game, 'genres'),
+        'platforms': _names(game, 'platforms', 'abbreviation'),
+        'summary': game.get('summary'),
+        'rating': round(rating, 1) if rating else None,
+        'poster_url': _cover(game),
+        'igdb_last_update': (
+            datetime.fromtimestamp(updated, tz=timezone.utc).replace(tzinfo=None)
+            if updated
+            else None
+        ),
+    }
+
+
 def get_game_detail(igdb_id: Optional[int]) -> Optional[dict]:
     """
     Fetch full detail for a game by IGDB id and map it to the fields the
@@ -267,25 +291,24 @@ def get_game_detail(igdb_id: Optional[int]) -> Optional[dict]:
         return None
     if not payload:
         return None
+    return _detail_from_game(payload[0])
 
-    game = payload[0]
-    release = _release(game)
-    rating = game.get('total_rating')
-    updated = game.get('updated_at')
-    return {
-        'title': game.get('name'),
-        'igdb': game.get('id'),
-        'slug': game.get('slug'),
-        'release_date': release,
-        'year': release.year if release else None,
-        'genre': _names(game, 'genres'),
-        'platforms': _names(game, 'platforms', 'abbreviation'),
-        'summary': game.get('summary'),
-        'rating': round(rating, 1) if rating else None,
-        'poster_url': _cover(game),
-        'igdb_last_update': (
-            datetime.fromtimestamp(updated, tz=timezone.utc).replace(tzinfo=None)
-            if updated
-            else None
-        ),
-    }
+
+def list_popular_games(limit: int = 500) -> List[dict]:
+    """
+    The ``limit`` highest-rated-by-volume games, in full catalog-field shape
+    (one request — ``_DETAIL_FIELDS`` already carries everything
+    :func:`get_game_detail` would need a second call for).
+
+    IGDB has no free-text "popular" concept; ``total_rating_count`` — how
+    many people rated it — is the closest proxy and, unlike
+    ``total_rating`` alone, isn't dominated by obscure games with one 10/10
+    vote. Used to build the real-catalog dev seed fixture (#228), not by any
+    request-serving path.
+    """
+    payload = _igdb_query(
+        'games',
+        f'fields {_DETAIL_FIELDS}; sort total_rating_count desc; '
+        f'where total_rating_count > 10; limit {int(limit)};',
+    )
+    return [_detail_from_game(game) for game in payload]
