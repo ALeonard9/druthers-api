@@ -54,7 +54,10 @@ class DbCountry(DBBaseModel):
     flag_emoji = Column(String(8), nullable=True)
     flag_url = Column(String(500), nullable=True)
 
-    user_countries = relationship('DbUserCountry', back_populates='country')
+    # See DbTVShow.user_tv_shows for why this cascades (#227).
+    user_countries = relationship(
+        'DbUserCountry', back_populates='country', cascade='all, delete-orphan'
+    )
 
 
 class DbUserCountry(DBBaseModel):
@@ -105,7 +108,10 @@ class DbMovie(DBBaseModel):
     actors = Column(Text, nullable=True)
     plot = Column(Text, nullable=True)
 
-    user_movies = relationship('DbUserMovie', back_populates='movie')
+    # See DbTVShow.user_tv_shows for why this cascades (#227).
+    user_movies = relationship(
+        'DbUserMovie', back_populates='movie', cascade='all, delete-orphan'
+    )
 
 
 class DbUserMovie(DBBaseModel):
@@ -155,8 +161,15 @@ class DbTVShow(DBBaseModel):
     rating = Column(Float, nullable=True)
     summary = Column(Text, nullable=True)
 
-    user_tv_shows = relationship('DbUserTVShow', back_populates='tv_show')
-    episodes = relationship('DbTVEpisode', back_populates='tv_show')
+    # Cascade, not the SQLAlchemy default: every child FK below is
+    # nullable=False, so the default "disassociate" behaviour issues
+    # UPDATE ... SET tv_show_id = NULL and the delete fails (#227).
+    user_tv_shows = relationship(
+        'DbUserTVShow', back_populates='tv_show', cascade='all, delete-orphan'
+    )
+    episodes = relationship(
+        'DbTVEpisode', back_populates='tv_show', cascade='all, delete-orphan'
+    )
 
 
 class DbUserTVShow(DBBaseModel):
@@ -198,7 +211,11 @@ class DbTVEpisode(DBBaseModel):
     season_number = Column(Integer, nullable=True)
 
     tv_show = relationship('DbTVShow', back_populates='episodes')
-    user_episodes = relationship('DbUserTVEpisode', back_populates='episode')
+    # Second level: deleting a show cascades to its episodes, and each episode
+    # must in turn take its per-user watch marks with it (#227).
+    user_episodes = relationship(
+        'DbUserTVEpisode', back_populates='episode', cascade='all, delete-orphan'
+    )
 
 
 class DbUserTVEpisode(DBBaseModel):
@@ -233,7 +250,10 @@ class DbVideoGame(DBBaseModel):
     platforms = Column(String(254), nullable=True)
     summary = Column(Text, nullable=True)
 
-    user_games = relationship('DbUserVideoGame', back_populates='game')
+    # See DbTVShow.user_tv_shows for why this cascades (#227).
+    user_games = relationship(
+        'DbUserVideoGame', back_populates='game', cascade='all, delete-orphan'
+    )
 
 
 class DbUserVideoGame(DBBaseModel):
@@ -280,7 +300,10 @@ class DbBook(DBBaseModel):
     rating = Column(Float, nullable=True)
     language = Column(String(40), nullable=True)
 
-    user_books = relationship('DbUserBook', back_populates='book')
+    # See DbTVShow.user_tv_shows for why this cascades (#227).
+    user_books = relationship(
+        'DbUserBook', back_populates='book', cascade='all, delete-orphan'
+    )
 
 
 class DbUserBook(DBBaseModel):
