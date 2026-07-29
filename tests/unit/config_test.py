@@ -25,3 +25,39 @@ def test_oauth_allowlist_emails_parses_and_normalizes():
     assert settings.oauth_allowlist_emails == frozenset(
         {'adam@example.com', 'second@example.com'}
     )
+
+
+def test_google_client_ids_empty_when_unset():
+    """No client ids configured means Google sign-in is off."""
+    settings = Settings(google_client_id=None, google_additional_client_ids=None)
+    assert not settings.google_client_ids
+
+
+def test_google_client_ids_falls_back_to_single_setting():
+    """A deployment setting only GOOGLE_CLIENT_ID keeps working unchanged."""
+    settings = Settings(google_client_id='web-123')
+    assert settings.google_client_ids == ['web-123']
+
+
+def test_google_client_ids_appends_additional_clients():
+    """Native clients are added alongside the web one, primary first."""
+    settings = Settings(
+        google_client_id='web-123',
+        google_additional_client_ids=' ios-456 , android-789 ,',
+    )
+    assert settings.google_client_ids == ['web-123', 'ios-456', 'android-789']
+
+
+def test_google_client_ids_deduplicates():
+    """A client id named in both settings is only sent once."""
+    settings = Settings(
+        google_client_id='web-123',
+        google_additional_client_ids='web-123,ios-456',
+    )
+    assert settings.google_client_ids == ['web-123', 'ios-456']
+
+
+def test_google_client_ids_without_primary():
+    """Additional ids work even if the primary was never set."""
+    settings = Settings(google_client_id=None, google_additional_client_ids='ios-456')
+    assert settings.google_client_ids == ['ios-456']

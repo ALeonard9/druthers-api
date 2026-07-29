@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     jwt_secret_key: Optional[str] = None
     access_token_expire_minutes: int = 30
     google_client_id: Optional[str] = None
+    # Additional OAuth client ids accepted at sign-in, comma-separated. Native
+    # clients need their own client id (an iOS client is keyed to the bundle
+    # id and cannot share the web one), and the id token they mint carries
+    # that id as its audience. Additive: deployments setting only
+    # GOOGLE_CLIENT_ID are unaffected.
+    google_additional_client_ids: Optional[str] = None
 
     # --- Abuse resistance (#148, threat model H1/H2) ---
     # Kill switch for /v1/auth/token: prod is Google + API keys only.
@@ -132,6 +138,28 @@ class Settings(BaseSettings):
             if email.strip()
         )
         return emails or None
+
+    @property
+    def google_client_ids(self) -> List[str]:
+        """
+        Every OAuth client id whose tokens we accept, primary first.
+
+        ``google-auth`` takes a list for ``audience`` and requires the token's
+        ``aud`` to match one entry, so widening this list adds accepted issuing
+        clients without weakening verification of any of them. Empty list means
+        Google sign-in is not configured.
+        """
+        ids = []
+        for raw in (self.google_client_id, self.google_additional_client_ids):
+            if not raw:
+                continue
+            for client_id in raw.split(','):
+                client_id = client_id.strip()
+                # Preserve order and drop duplicates: a client id listed in
+                # both settings should not be sent twice.
+                if client_id and client_id not in ids:
+                    ids.append(client_id)
+        return ids
 
 
 @lru_cache
