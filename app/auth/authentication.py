@@ -87,16 +87,20 @@ def google_login(request: GoogleAuthRequest, db: Session = Depends(get_db)):
     the password flow.
     """
     settings = get_settings()
-    if not settings.google_client_id:
+    client_ids = settings.google_client_ids
+    if not client_ids:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail='Google sign-in is not configured',
         )
     try:
+        # google-auth accepts a list here and requires the token's ``aud`` to
+        # match one entry, so the web and native clients can both sign in
+        # without loosening verification for either.
         info = google_id_token.verify_oauth2_token(
             request.credential,
             google_requests.Request(),
-            settings.google_client_id,
+            client_ids,
         )
     except ValueError as exc:
         raise HTTPException(
