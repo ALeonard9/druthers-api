@@ -39,6 +39,19 @@ RUN pip install --no-cache-dir --upgrade "pip>=26.1.2" && \
 # Copy the rest of the application with correct ownership
 COPY --chown=adam:adam . .
 
+# pip (every release, including latest) vendors its own old copies of
+# msgpack/setuptools internally (pip/_vendor/vendor.txt) carrying known CVEs
+# (GHSA-6v7p-g79w-8964, CVE-2025-47273) — a lag in pip's own vendoring, not
+# something fixable by bumping our requirements. The app never invokes pip
+# at runtime (CMD only runs the server), so drop pip — and the base image's
+# dormant ensurepip bootstrap wheel, which vendors the same old versions for
+# the same reason — from the final image rather than ship known CVEs for a
+# tool that's dead weight past the build step.
+USER root
+RUN find / -xdev -depth \( -path '*/site-packages/pip' -o -name 'pip-*.dist-info' \) -exec rm -rf {} + && \
+    find /usr -path '*/ensurepip/_bundled/*.whl' -delete
+USER adam
+
 # Make port 8000 available
 EXPOSE 8000
 
