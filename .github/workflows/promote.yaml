@@ -33,7 +33,7 @@ jobs:
     environment: ${{ inputs.target }}
     steps:
       - name: Log in to GHCR
-        uses: docker/login-action@03c851098f316948386b8ff87f424ddf8c01536e
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
