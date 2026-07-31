@@ -64,8 +64,11 @@ jobs:
       # the catalog is keyed and enriched. That is deliberate — it makes a
       # release self-contained instead of depending on someone remembering to
       # run these by hand afterwards. The one-off scripts that were *not*
-      # wired in are exactly the ones that regressed in prod: movie ranks went
-      # back to 0-based and Top 5 rows lost their years.
+      # wired in are exactly the ones that regressed in prod: Top 5 rows lost
+      # their years. Note the limit of this pattern — a repair that has to be
+      # remembered in a workflow step is still a repair, and the 0-based ranks
+      # it was also meant to catch only stopped coming back once they became a
+      # CHECK constraint (migration d3b81f4a9c67).
       - name: Backfill catalog data
         if: steps.migrate.outputs.ran == 'true'
         env:
@@ -88,9 +91,11 @@ jobs:
           fi
           python -m app.migration.backfill_tmdb
           python -m app.migration.backfill_covers
-          # Pure SQL, no upstream calls: shift any shelf still sitting on the
-          # legacy 0-based ranks onto the API's 1-based contract.
-          python -m app.migration.backfill_rank_base --all-users
+          # Rank re-basing is deliberately NOT here. It lived in this step and
+          # kept not sticking, so 0-based ranks came back to the Top 5 board
+          # again and again; it is now a CHECK constraint plus a one-time
+          # repair in migration d3b81f4a9c67, which `alembic upgrade head`
+          # above runs unconditionally on every release.
           # These fill `year` (among other detail). Throttled, so the first
           # release after a large import is slow; every release after that
           # has almost nothing left to do.
