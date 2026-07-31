@@ -81,7 +81,6 @@ jobs:
           fi
           python -m app.migration.backfill_tmdb
           python -m app.migration.backfill_covers
-          python -m app.migration.backfill_rank_base --all-users
           python -m app.migration.enrich_movies
           python -m app.migration.enrich_books
           if [ -n "$TWITCH_CLIENT_ID" ] && [ -n "$TWITCH_CLIENT_SECRET" ]; then

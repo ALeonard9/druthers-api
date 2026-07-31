@@ -5,6 +5,7 @@ This module defines the database models for the Sandbox entities.
 # pylint: disable=missing-class-docstring
 
 from sqlalchemy import (
+    CheckConstraint,
     Column,
     Integer,
     String,
@@ -18,6 +19,25 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from app.db.models import DBBaseModel
+
+
+def rank_is_1_based(table_name: str) -> tuple:
+    """
+    ``__table_args__`` asserting this tracker's rank is a 1-based position.
+
+    A rank is either NULL (not placed) or >= 1. Rank 0 kept coming back to
+    prod — the legacy site stored ranks 0-based, and every fix was a *repair*
+    script bolted onto the deploy pipeline, so any release where it didn't run
+    left "0" printed at the top of the Top 5. A CHECK makes the bad state
+    unrepresentable instead of periodically swept up: whatever writes a 0 now
+    fails loudly at the write, in tests (SQLite enforces CHECK too) rather
+    than on the home page weeks later. See migration d3b81f4a9c67.
+    """
+    return (
+        CheckConstraint(
+            'rank IS NULL OR rank >= 1', name=f'ck_{table_name}_rank_1_based'
+        ),
+    )
 
 
 class DbNotification(DBBaseModel):
@@ -62,6 +82,7 @@ class DbCountry(DBBaseModel):
 
 class DbUserCountry(DBBaseModel):
     __tablename__ = 'user_countries'
+    __table_args__ = rank_is_1_based(__tablename__)
 
     country_id = Column(Integer, ForeignKey('countries.pk'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.pk'), nullable=False)
@@ -116,6 +137,7 @@ class DbMovie(DBBaseModel):
 
 class DbUserMovie(DBBaseModel):
     __tablename__ = 'user_movies'
+    __table_args__ = rank_is_1_based(__tablename__)
 
     movie_id = Column(Integer, ForeignKey('movies.pk'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.pk'), nullable=False)
@@ -174,6 +196,7 @@ class DbTVShow(DBBaseModel):
 
 class DbUserTVShow(DBBaseModel):
     __tablename__ = 'user_tv_shows'
+    __table_args__ = rank_is_1_based(__tablename__)
 
     tv_show_id = Column(Integer, ForeignKey('tv_shows.pk'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.pk'), nullable=False)
@@ -258,6 +281,7 @@ class DbVideoGame(DBBaseModel):
 
 class DbUserVideoGame(DBBaseModel):
     __tablename__ = 'user_video_games'
+    __table_args__ = rank_is_1_based(__tablename__)
 
     game_id = Column(Integer, ForeignKey('video_games.pk'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.pk'), nullable=False)
@@ -308,6 +332,7 @@ class DbBook(DBBaseModel):
 
 class DbUserBook(DBBaseModel):
     __tablename__ = 'user_books'
+    __table_args__ = rank_is_1_based(__tablename__)
 
     book_id = Column(Integer, ForeignKey('books.pk'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.pk'), nullable=False)

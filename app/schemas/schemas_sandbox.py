@@ -5,9 +5,16 @@ This module contains Pydantic schemas for Sandbox entities.
 # pylint: disable=missing-class-docstring
 
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+# A 1-based position in a ranked list (None when the item is tracked but not
+# placed). The bound is the API half of the ck_<table>_rank_1_based CHECK: a
+# client PUTting rank 0 gets a 422 naming the field, rather than a row the
+# database will reject — or, before the CHECK existed, a silently stored 0
+# that showed up as "0" at the top of the Top 5 board.
+RankPosition = Annotated[int, Field(ge=1)]
 
 
 # --- Countries ---
@@ -47,7 +54,7 @@ class CountryResponse(CountryBase):
 class UserCountryBase(BaseModel):
     on_watchlist: Optional[bool] = None
     on_rankings: Optional[bool] = None
-    rank: Optional[int] = None
+    rank: Optional[RankPosition] = None
     completed: Optional[int] = None
     notes: Optional[str] = None
     first_visited: Optional[datetime] = None
@@ -188,13 +195,13 @@ class MovieSearchResult(BaseModel):
     popularity: Optional[float] = None
     on_watchlist: bool = False
     on_rankings: bool = False
-    rank: Optional[int] = None
+    rank: Optional[RankPosition] = None
 
 
 class UserMovieBase(BaseModel):
     on_watchlist: Optional[bool] = None
     on_rankings: Optional[bool] = None
-    rank: Optional[int] = None
+    rank: Optional[RankPosition] = None
     completed: Optional[int] = None
     notes: Optional[str] = None
     completed_at: Optional[date] = None
@@ -225,7 +232,7 @@ class RankingReorder(BaseModel):
 class RankPlacement(BaseModel):
     """Target 1-based position at which to place a movie in the ranked list."""
 
-    position: int
+    position: RankPosition
 
 
 # --- TV Shows ---
@@ -299,13 +306,13 @@ class TVShowSearchResult(BaseModel):
     poster_url: Optional[str] = None
     on_watchlist: bool = False
     on_rankings: bool = False
-    rank: Optional[int] = None
+    rank: Optional[RankPosition] = None
 
 
 class UserTVShowBase(BaseModel):
     on_watchlist: Optional[bool] = None
     on_rankings: Optional[bool] = None
-    rank: Optional[int] = None
+    rank: Optional[RankPosition] = None
     notes: Optional[str] = None
     completed_at: Optional[date] = None
     status: Optional[str] = None
@@ -484,13 +491,13 @@ class GameSearchResult(BaseModel):
     poster_url: Optional[str] = None
     on_watchlist: bool = False
     on_rankings: bool = False
-    rank: Optional[int] = None
+    rank: Optional[RankPosition] = None
 
 
 class UserVideoGameBase(BaseModel):
     on_watchlist: Optional[bool] = None
     on_rankings: Optional[bool] = None
-    rank: Optional[int] = None
+    rank: Optional[RankPosition] = None
     completed: Optional[int] = None
     notes: Optional[str] = None
     completed_at: Optional[date] = None
@@ -583,13 +590,13 @@ class BookSearchResult(BaseModel):
     poster_url: Optional[str] = None
     on_watchlist: bool = False
     on_rankings: bool = False
-    rank: Optional[int] = None
+    rank: Optional[RankPosition] = None
 
 
 class UserBookBase(BaseModel):
     on_watchlist: Optional[bool] = None
     on_rankings: Optional[bool] = None
-    rank: Optional[int] = None
+    rank: Optional[RankPosition] = None
     completed: Optional[int] = None
     notes: Optional[str] = None
     completed_at: Optional[date] = None
@@ -665,7 +672,7 @@ class ActivityItem(BaseModel):
     subtitle: Optional[str] = None
     entity_id: str  # catalog id to link to (the show id, for episodes)
     poster_url: Optional[str] = None
-    rank: Optional[int] = None
+    rank: Optional[RankPosition] = None
     occurred_at: datetime
 
 
