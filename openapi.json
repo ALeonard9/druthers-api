@@ -30,7 +30,7 @@
           "authentication"
         ],
         "summary": "Get Token",
-        "description": "Retrieves a JWT token if username (email) and password match\n\nArgs:\n    username: The email of the user\n    password: The password of the user\n\nReturns:\n    Access token",
+        "description": "Retrieves a JWT token if username (email) and password match\n\nArgs:\n    username: The email of the user\n    password: The password of the user\n\nReturns:\n    Access token, plus the refresh token that renews it",
         "operationId": "get_token_v1_auth_token_post",
         "requestBody": {
           "content": {
@@ -47,7 +47,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OutToken"
+                }
               }
             }
           },
@@ -87,9 +89,88 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OutToken"
+                }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "authentication"
+        ],
+        "summary": "Refresh",
+        "description": "Trade a refresh token for a new access token, and a new refresh token.\n\nThe presented token is spent: rotation means a stolen copy is only good\nuntil the legitimate client next refreshes, at which point the replay is\ndetected and the whole session dies. Every failure is a flat 401 so the\ncaller's only move is to send the user back to sign-in.",
+        "operationId": "refresh_v1_auth_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InRefreshToken"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutToken"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "authentication"
+        ],
+        "summary": "Logout",
+        "description": "Sign out server-side: the refresh token and its family stop working.\n\nDeliberately 204 whether or not the token was recognised \u2014 sign-out must\nnot depend on the client still holding a valid credential, and the status\nshouldn't reveal whether a guessed token existed.",
+        "operationId": "logout_v1_auth_logout_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InRefreshToken"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -5007,7 +5088,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -5448,7 +5530,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -6147,7 +6230,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -6261,6 +6345,21 @@
         ],
         "title": "InApiKeyCreate",
         "description": "Request body for minting an API key."
+      },
+      "InRefreshToken": {
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Refresh Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "refresh_token"
+        ],
+        "title": "InRefreshToken",
+        "description": "Request body for the refresh and sign-out endpoints (#246)."
       },
       "InUserBase": {
         "properties": {
@@ -6779,7 +6878,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -7472,6 +7572,55 @@
         "title": "OutSummaryShelf",
         "description": "One domain's headline numbers plus its best-ranked entries."
       },
+      "OutToken": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "expires_in": {
+            "type": "integer",
+            "title": "Expires In"
+          },
+          "refresh_expires_in": {
+            "type": "integer",
+            "title": "Refresh Expires In"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "user_group": {
+            "type": "string",
+            "title": "User Group"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "refresh_token",
+          "expires_in",
+          "refresh_expires_in",
+          "user_id",
+          "user_group",
+          "email"
+        ],
+        "title": "OutToken",
+        "description": "What every sign-in and refresh returns.\n\nBoth lifetimes are reported in seconds so a client can size its cookies\noff the response instead of hardcoding guesses that drift from\n``ACCESS_TOKEN_EXPIRE_MINUTES`` and ``REFRESH_TOKEN_EXPIRE_DAYS`` \u2014 which\nis exactly how the web session cookie ended up outliving its token."
+      },
       "OutUserDisplay": {
         "properties": {
           "id": {
@@ -7584,6 +7733,7 @@
         "properties": {
           "position": {
             "type": "integer",
+            "minimum": 1.0,
             "title": "Position"
           }
         },
@@ -8336,7 +8486,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -8659,7 +8810,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -8732,7 +8884,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -8828,7 +8981,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -8901,7 +9055,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -8974,7 +9129,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -9070,7 +9226,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -9143,7 +9300,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -9216,7 +9374,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -9312,7 +9471,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -9438,7 +9598,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -9522,7 +9683,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -9629,7 +9791,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -9713,7 +9876,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -9836,7 +10000,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -9920,7 +10085,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -10027,7 +10193,8 @@
           "rank": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"

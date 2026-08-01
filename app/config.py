@@ -47,6 +47,17 @@ class Settings(BaseSettings):
     # --- Auth ---
     jwt_secret_key: Optional[str] = None
     access_token_expire_minutes: int = 30
+    # Refresh tokens (#246) keep the access token short-lived without making
+    # people re-authenticate with Google. Expiry slides on every rotation, so
+    # a user who opens the app at least once a month never signs in again;
+    # one who disappears for longer does.
+    refresh_token_expire_days: int = 30
+    # Grace window in which re-presenting a just-rotated token is treated as
+    # two requests racing, not as a replay. A page render fans out several
+    # calls at once; without this, the second one to arrive after expiry
+    # would look like theft and sign the user out. Beyond the window, reuse
+    # still burns the whole session down.
+    refresh_token_reuse_leeway_seconds: int = 30
     google_client_id: Optional[str] = None
     # Additional OAuth client ids accepted at sign-in, comma-separated. Native
     # clients need their own client id (an iOS client is keyed to the bundle
@@ -61,6 +72,11 @@ class Settings(BaseSettings):
     # None = enforce in dev/prod, skip in local/CI; set explicitly to override.
     rate_limits_enabled: Optional[bool] = None
     rate_limit_auth: int = 10  # sign-in attempts per IP per 5 minutes
+    # Refresh is keyed per user, not per IP: the web BFF calls the API
+    # server-to-server, so every browser shares one source IP and an IP bucket
+    # would throttle the whole site. A signed-in user needs ~2 refreshes an
+    # hour, so this only catches a client stuck in a loop.
+    rate_limit_refresh: int = 60  # refreshes per user per 5 minutes
     rate_limit_search: int = 60  # search-proxy calls per user per minute
     catalog_add_daily_cap: int = 200  # catalog creations per user per day
 
