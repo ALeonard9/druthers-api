@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref, relationship
 
 from app.db.database import Base
 
@@ -67,6 +67,43 @@ class DbApiKey(DBBaseModel):
     last_used_at = Column(DateTime, nullable=True)
 
     user = relationship('DbUser', backref='api_keys')
+
+
+class DbRefreshToken(DBBaseModel):
+    """
+    Long-lived, revocable browser-session credential (#246).
+
+    Opaque and random rather than a JWT: the point of choosing a refresh flow
+    over a longer-lived access token was individual revocation, which needs
+    server-side state. Only the SHA-256 hash is stored, so a database leak
+    doesn't hand over usable sessions.
+
+    ``family_id`` ties every token minted by rotating an earlier one back to
+    the original sign-in. Presenting an already-rotated token means it leaked
+    (or was replayed), and the whole family dies with it.
+    """
+
+    __tablename__ = 'refresh_tokens'
+    user_id = Column(
+        Integer,
+        ForeignKey('users.pk', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    token_hash = Column(String(length=64), unique=True, index=True, nullable=False)
+    family_id = Column(String, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    # Set together on rotation; kept apart so a revoked-but-unused token
+    # (sign-out) is distinguishable from one that was spent.
+    revoked_at = Column(DateTime, nullable=True)
+    used_at = Column(DateTime, nullable=True)
+
+    # Sessions are meaningless without their owner, so deleting a user takes
+    # their tokens with them rather than orphaning rows on a NOT NULL column.
+    user = relationship(
+        'DbUser',
+        backref=backref('refresh_tokens', cascade='all, delete-orphan'),
+    )
 
 
 # Import sandbox models to ensure they are registered with the Base metadata

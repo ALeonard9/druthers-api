@@ -99,6 +99,34 @@ class OutApiKeyCreated(OutApiKey):
     key: str
 
 
+class InRefreshToken(BaseModel):
+    """
+    Request body for the refresh and sign-out endpoints (#246).
+    """
+
+    refresh_token: str = Field(min_length=1)
+
+
+class OutToken(BaseModel):
+    """
+    What every sign-in and refresh returns.
+
+    Both lifetimes are reported in seconds so a client can size its cookies
+    off the response instead of hardcoding guesses that drift from
+    ``ACCESS_TOKEN_EXPIRE_MINUTES`` and ``REFRESH_TOKEN_EXPIRE_DAYS`` — which
+    is exactly how the web session cookie ended up outliving its token.
+    """
+
+    access_token: str
+    refresh_token: str
+    token_type: str = 'bearer'
+    expires_in: int
+    refresh_expires_in: int
+    user_id: str
+    user_group: str
+    email: str
+
+
 class InVisibilityUpdate(BaseModel):
     """
     Request body for visibility settings. Only sent fields change; a null

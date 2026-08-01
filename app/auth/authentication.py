@@ -12,12 +12,13 @@ from google.oauth2 import id_token as google_id_token
 from pydantic import BaseModel
 from sqlalchemy.orm.session import Session
 
-from app.auth import oauth2
-from app.services.rate_limit import auth_rate_limit
+from app.auth import oauth2, refresh_tokens
+from app.services.rate_limit import auth_rate_limit, refresh_rate_limit
 from app.config import get_settings
 from app.db import models
 from app.db.database import get_db
 from app.db.hash import Hash
+from app.schemas.model_schemas import InRefreshToken, OutToken
 
 router = APIRouter(tags=['authentication'])
 
@@ -28,19 +29,27 @@ class GoogleAuthRequest(BaseModel):
     credential: str
 
 
-def _token_response(user: models.DbUser) -> dict:
+def _token_response(user: models.DbUser, refresh_token: str) -> dict:
     """Build the standard token response for a user."""
     access_token = oauth2.create_access_token(data={'sub': user.id})
     return {
         'access_token': access_token,
+        'refresh_token': refresh_token,
         'token_type': 'bearer',
+        'expires_in': oauth2.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        'refresh_expires_in': get_settings().refresh_token_expire_days * 86400,
         'user_id': user.id,
         'user_group': user.user_group,
         'email': user.email,
     }
 
 
-@router.post('/token', dependencies=[Depends(auth_rate_limit)])
+def _sign_in_response(user: models.DbUser, db: Session) -> dict:
+    """Token response for a fresh sign-in — starts a new rotation family."""
+    return _token_response(user, refresh_tokens.issue_refresh_token(db, user))
+
+
+@router.post('/token', response_model=OutToken, dependencies=[Depends(auth_rate_limit)])
 def get_token(
     request: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
@@ -52,7 +61,7 @@ def get_token(
         password: The password of the user
 
     Returns:
-        Access token
+        Access token, plus the refresh token that renews it
     """
     if get_settings().disable_password_login:
         raise HTTPException(
@@ -74,10 +83,12 @@ def get_token(
             status_code=status.HTTP_404_NOT_FOUND, detail='Invalid credentials'
         )
 
-    return _token_response(user)
+    return _sign_in_response(user, db)
 
 
-@router.post('/google', dependencies=[Depends(auth_rate_limit)])
+@router.post(
+    '/google', response_model=OutToken, dependencies=[Depends(auth_rate_limit)]
+)
 def google_login(request: GoogleAuthRequest, db: Session = Depends(get_db)):
     """
     Sign in with a Google Identity Services ID token.
@@ -142,4 +153,46 @@ def google_login(request: GoogleAuthRequest, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(user)
 
-    return _token_response(user)
+    return _sign_in_response(user, db)
+
+
+@router.post('/refresh', response_model=OutToken)
+def refresh(request: InRefreshToken, db: Session = Depends(get_db)):
+    """
+    Trade a refresh token for a new access token, and a new refresh token.
+
+    The presented token is spent: rotation means a stolen copy is only good
+    until the legitimate client next refreshes, at which point the replay is
+    detected and the whole session dies. Every failure is a flat 401 so the
+    caller's only move is to send the user back to sign-in.
+    """
+    # Rate limit before rotating: throttling a rotation that already spent the
+    # token would kill the very session the cap exists to protect.
+    owner = refresh_tokens.peek_user(db, request.refresh_token)
+    if owner is not None:
+        refresh_rate_limit(owner)
+
+    try:
+        user, new_refresh_token = refresh_tokens.rotate_refresh_token(
+            db, request.refresh_token
+        )
+    except refresh_tokens.RefreshTokenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid or expired refresh token',
+            headers={'WWW-Authenticate': 'Bearer'},
+        ) from exc
+
+    return _token_response(user, new_refresh_token)
+
+
+@router.post('/logout', status_code=status.HTTP_204_NO_CONTENT)
+def logout(request: InRefreshToken, db: Session = Depends(get_db)):
+    """
+    Sign out server-side: the refresh token and its family stop working.
+
+    Deliberately 204 whether or not the token was recognised — sign-out must
+    not depend on the client still holding a valid credential, and the status
+    shouldn't reveal whether a guessed token existed.
+    """
+    refresh_tokens.revoke_refresh_token(db, request.refresh_token)

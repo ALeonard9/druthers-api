@@ -79,6 +79,22 @@ def auth_rate_limit(request: Request) -> None:
         _reject('sign-in attempts', AUTH_WINDOW_SECONDS)
 
 
+def refresh_rate_limit(user) -> None:
+    """
+    Per-user cap on token refreshes (#246).
+
+    Called from inside the endpoint rather than as a dependency: the user is
+    only known once the refresh token resolves. Keying on the user instead of
+    the IP matters here — the web BFF refreshes server-to-server, so an IP
+    bucket would be shared by every browser on the site.
+    """
+    if not _enforced():
+        return
+    limit = get_settings().rate_limit_refresh
+    if not _allow(f'refresh:{user.pk}', limit, AUTH_WINDOW_SECONDS):
+        _reject('token refreshes', AUTH_WINDOW_SECONDS)
+
+
 def search_rate_limit(current_user: list = Depends(get_current_user)) -> None:
     """Per-user cap on external search-proxy calls (they burn API quotas)."""
     if not _enforced():
