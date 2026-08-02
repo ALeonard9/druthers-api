@@ -41,7 +41,7 @@ jobs:
       - name: Build and push image
         run: |
           gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
-          docker build -t "$IMAGE" .
+          docker build --build-arg GIT_SHA="${{ github.sha }}" -t "$IMAGE" .
           docker push "$IMAGE"
 
       - name: Run database migrations
