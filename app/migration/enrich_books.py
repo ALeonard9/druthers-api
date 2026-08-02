@@ -16,6 +16,7 @@ import time
 
 from sqlalchemy import and_, or_
 
+from app.config import get_settings
 from app.db.database import SessionLocal
 from app.db.models_sandbox import DbBook
 from app.services.book_search import (
@@ -66,6 +67,18 @@ def run() -> None:
         pending = pending_books(db)
         total = len(pending)
         print(f'{total} books to enrich')
+        # Without the key the Google fallback returns None, which is
+        # indistinguishable from "no source has this book" in the totals. Say
+        # so once, up front, rather than leaving an operator to read a wall of
+        # misses as a data problem when it is a config one.
+        needs_google = sum(1 for b in pending if b.googleid)
+        if needs_google and not get_settings().google_books_api_key:
+            print(
+                f'  WARNING: GOOGLE_BOOKS_API_KEY is not set, so the Google '
+                f'fallback is disabled. {needs_google} of these books carry a '
+                f'googleid and most will be counted as misses. Set the key and '
+                f're-run to enrich them.'
+            )
         enriched = misses = errors = consecutive = processed = 0
         for book in pending:
             processed += 1
