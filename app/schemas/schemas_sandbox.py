@@ -385,6 +385,8 @@ class TVEpisodeResponse(TVEpisodeBase):
 class UserTVEpisodeBase(BaseModel):
     watched: Optional[int] = 0
     watched_at: Optional[datetime] = None
+    favorited: Optional[bool] = False
+    favorited_at: Optional[datetime] = None
 
 
 class UserTVEpisodeResponse(UserTVEpisodeBase):
