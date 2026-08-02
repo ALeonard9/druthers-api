@@ -23,13 +23,37 @@ def _rank_a_movie(test_client: TestClient, token: str, title='Heat', imdb='tt011
     )
 
 
+def _watchlist_a_movie(
+    test_client: TestClient, token: str, title='Sicario', imdb='tt3397884'
+):
+    admin = _auth(test_client.admin_user.token)
+    movie_id = test_client.post(
+        '/v1/movies', headers=admin, json={'title': title, 'imdb': imdb, 'year': 2015}
+    ).json()['id']
+    test_client.post(
+        f'/v1/users/me/movies/{movie_id}',
+        headers=_auth(token),
+        json={'on_watchlist': True, 'notes': 'private note!'},
+    )
+
+
 def test_defaults_are_fully_private(test_client: TestClient):
     body = test_client.get(
         '/v1/users/me/visibility', headers=_auth(test_client.first_user.token)
     ).json()
     assert body['handle'] is None
     assert not any(
-        body[f] for f in ('public_movies', 'public_tv', 'public_books', 'public_games')
+        body[f]
+        for f in (
+            'public_movies',
+            'public_tv',
+            'public_books',
+            'public_games',
+            'public_watchlist_movies',
+            'public_watchlist_tv',
+            'public_watchlist_books',
+            'public_watchlist_games',
+        )
     )
 
 
@@ -126,3 +150,48 @@ def test_toggling_a_category_off_removes_it(test_client: TestClient):
         '/v1/users/me/visibility', headers=_auth(token), json={'public_movies': False}
     )
     assert test_client.get('/v1/public/avery').status_code == 404
+
+
+def test_watchlist_flag_alone_exposes_nothing(test_client: TestClient):
+    # Watchlist visibility (#236) is independent of the ranked-list flag to
+    # set, but only takes effect once the ranked-list flag is also on.
+    token = test_client.first_user.token
+    _rank_a_movie(test_client, token)
+    _watchlist_a_movie(test_client, token)
+    test_client.put(
+        '/v1/users/me/visibility',
+        headers=_auth(token),
+        json={'handle': 'avery', 'public_watchlist_movies': True},
+    )
+
+    assert test_client.get('/v1/public/avery').status_code == 404
+
+
+def test_watchlist_shown_only_when_both_flags_set(test_client: TestClient):
+    token = test_client.first_user.token
+    _rank_a_movie(test_client, token)
+    _watchlist_a_movie(test_client, token)
+    test_client.put(
+        '/v1/users/me/visibility',
+        headers=_auth(token),
+        json={'handle': 'avery', 'public_movies': True},
+    )
+
+    # Ranked-list flag alone: no watchlist key at all.
+    shelf = test_client.get('/v1/public/avery').json()['shelves'][0]
+    assert 'watchlist' not in shelf
+
+    test_client.put(
+        '/v1/users/me/visibility',
+        headers=_auth(token),
+        json={'public_watchlist_movies': True},
+    )
+
+    shelf = test_client.get('/v1/public/avery').json()['shelves'][0]
+    assert shelf['watchlist'] == [
+        {'title': 'Sicario', 'year': 2015, 'poster_url': None}
+    ]
+    # Redacted the same way ranked items are: no notes, no watch state.
+    flat = str(shelf['watchlist'])
+    assert 'private note!' not in flat
+    assert 'on_watchlist' not in flat

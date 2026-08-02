@@ -31,6 +31,9 @@ class Shelf(NamedTuple):
     label: str
     # Attribute on DbUser holding this shelf's public opt-in flag.
     visibility_flag: str
+    # Attribute on DbUser holding this shelf's opt-in *watchlist* visibility
+    # flag (#236) — only takes effect when visibility_flag is also set.
+    watchlist_visibility_flag: str
     tracker_model: Type
     catalog_model: Type
     # Tracker column joining to ``catalog_model.pk``.
@@ -38,13 +41,38 @@ class Shelf(NamedTuple):
 
 
 SHELVES: Tuple[Shelf, ...] = (
-    Shelf('movies', 'Movies', 'public_movies', DbUserMovie, DbMovie, 'movie_id'),
-    Shelf('tv', 'TV', 'public_tv', DbUserTVShow, DbTVShow, 'tv_show_id'),
-    Shelf('books', 'Books', 'public_books', DbUserBook, DbBook, 'book_id'),
+    Shelf(
+        'movies',
+        'Movies',
+        'public_movies',
+        'public_watchlist_movies',
+        DbUserMovie,
+        DbMovie,
+        'movie_id',
+    ),
+    Shelf(
+        'tv',
+        'TV',
+        'public_tv',
+        'public_watchlist_tv',
+        DbUserTVShow,
+        DbTVShow,
+        'tv_show_id',
+    ),
+    Shelf(
+        'books',
+        'Books',
+        'public_books',
+        'public_watchlist_books',
+        DbUserBook,
+        DbBook,
+        'book_id',
+    ),
     Shelf(
         'games',
         'Video Games',
         'public_games',
+        'public_watchlist_games',
         DbUserVideoGame,
         DbVideoGame,
         'game_id',

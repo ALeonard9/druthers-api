@@ -49,6 +49,14 @@ class DbUser(DBBaseModel):
     public_books = Column(Boolean, nullable=True, default=False)
     public_games = Column(Boolean, nullable=True, default=False)
 
+    # Opt-in watchlist visibility (#236): independent of the ranked-list
+    # flags above. The public endpoint only serves a category's watchlist
+    # when both this flag AND the matching public_* flag are set.
+    public_watchlist_movies = Column(Boolean, nullable=True, default=False)
+    public_watchlist_tv = Column(Boolean, nullable=True, default=False)
+    public_watchlist_books = Column(Boolean, nullable=True, default=False)
+    public_watchlist_games = Column(Boolean, nullable=True, default=False)
+
 
 class DbApiKey(DBBaseModel):
     """
