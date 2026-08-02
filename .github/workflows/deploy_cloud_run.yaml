@@ -76,6 +76,13 @@ jobs:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
           TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+          # Books whose edition-specific ISBN Open Library does not index are
+          # reachable only through their Google volume id. Without this,
+          # enrich_books below leaves every one of them unenriched and reports
+          # them as ordinary misses — which is exactly what a QA deploy did.
+          # Optional, like the Twitch creds: enrich_books says so itself and
+          # keeps going rather than blocking a release.
+          GOOGLE_BOOKS_API_KEY: ${{ secrets.GOOGLE_BOOKS_API_KEY }}
           ENV: prod
         run: |
           set -euo pipefail
