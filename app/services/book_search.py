@@ -637,7 +637,9 @@ def _google_books_detail(googleid: str) -> Optional[dict]:
     """
     api_key = get_settings().google_books_api_key
     if not api_key:
-        logger.info('GOOGLE_BOOKS_API_KEY unset; skipping %s', googleid)
+        # Once per book would be a wall of noise on a bulk run; enrich_books
+        # reports the disabled fallback once, up front.
+        logger.debug('GOOGLE_BOOKS_API_KEY unset; skipping %s', googleid)
         return None
     try:
         response = requests.get(
