@@ -138,6 +138,10 @@ class InVisibilityUpdate(BaseModel):
     public_tv: Optional[bool] = None
     public_books: Optional[bool] = None
     public_games: Optional[bool] = None
+    public_watchlist_movies: Optional[bool] = None
+    public_watchlist_tv: Optional[bool] = None
+    public_watchlist_books: Optional[bool] = None
+    public_watchlist_games: Optional[bool] = None
 
 
 class OutVisibility(BaseModel):
@@ -150,6 +154,10 @@ class OutVisibility(BaseModel):
     public_tv: Optional[bool] = False
     public_books: Optional[bool] = False
     public_games: Optional[bool] = False
+    public_watchlist_movies: Optional[bool] = False
+    public_watchlist_tv: Optional[bool] = False
+    public_watchlist_books: Optional[bool] = False
+    public_watchlist_games: Optional[bool] = False
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -87,12 +87,14 @@ def update_visibility(
         user.handle = handle
 
     for shelf in SHELVES:
-        flag = shelf.visibility_flag
-        if flag in data and data[flag] is not None:
-            setattr(user, flag, bool(data[flag]))
+        for flag in (shelf.visibility_flag, shelf.watchlist_visibility_flag):
+            if flag in data and data[flag] is not None:
+                setattr(user, flag, bool(data[flag]))
 
     if not user.handle and any(
-        getattr(user, shelf.visibility_flag) for shelf in SHELVES
+        getattr(user, shelf.visibility_flag)
+        or getattr(user, shelf.watchlist_visibility_flag)
+        for shelf in SHELVES
     ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -148,21 +150,52 @@ def public_profile(handle: str, db: Session = Depends(get_db)):
             .limit(PROFILE_SHELF_LIMIT)
             .all()
         )
-        shelves.append(
-            {
-                'category': shelf.label,
-                'ranked_count': ranked_count,
-                'items': [
-                    {
-                        'rank': rank,
-                        'title': item.title,
-                        'year': item.year,
-                        'poster_url': item.poster_url,
-                    }
-                    for rank, item in rows
-                ],
-            }
-        )
+        shelf_out = {
+            'category': shelf.label,
+            # Stable URL segment for a per-shelf profile page (#93), distinct
+            # from the display label above.
+            'slug': shelf.category,
+            'ranked_count': ranked_count,
+            'items': [
+                {
+                    'rank': rank,
+                    'title': item.title,
+                    'year': item.year,
+                    'poster_url': item.poster_url,
+                }
+                for rank, item in rows
+            ],
+        }
+
+        # Watchlist visibility (#236) rides on top of the ranked-list opt-in
+        # above: a category's watchlist is only public when both flags are
+        # set, so there's no way to expose a watchlist without also having
+        # opted the ranked list in.
+        if getattr(user, shelf.watchlist_visibility_flag):
+            watchlist_rows = (
+                db.query(catalog_model)
+                .join(
+                    tracker_model,
+                    getattr(tracker_model, shelf.join_col) == catalog_model.pk,
+                )
+                .filter(
+                    tracker_model.user_id == user.pk,
+                    tracker_model.on_watchlist.is_(True),
+                )
+                .order_by(tracker_model.created_at.desc())
+                .limit(PROFILE_SHELF_LIMIT)
+                .all()
+            )
+            shelf_out['watchlist'] = [
+                {
+                    'title': item.title,
+                    'year': item.year,
+                    'poster_url': item.poster_url,
+                }
+                for item in watchlist_rows
+            ]
+
+        shelves.append(shelf_out)
 
     if not shelves:
         raise not_found
