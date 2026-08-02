@@ -47,6 +47,13 @@ DEFAULT_THROTTLE_SECONDS = 0.25
 
 # Hosts that mean "this cover predates the Open Library switch".
 _LEGACY_BOOK_HOSTS = ('books.google.com', 'books.googleusercontent.com')
+
+# Two different "can't fix this" reasons, deliberately not conflated (#259):
+# a missing/malformed isbn is a data gap worth someone's attention, while a
+# valid isbn Open Library simply has no cover for is the *expected*, correct
+# post-#251 state for a book that's on Google Books for exactly that reason.
+_REASON_NO_ISBN = 'no usable ISBN'
+_REASON_NO_COVER = 'no Open Library cover'
 # ``default=false`` is load-bearing — see the module docstring.
 _OPENLIBRARY_COVER = 'https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg'
 _VERIFY_SUFFIX = '?default=false'
@@ -110,21 +117,30 @@ def _cover_exists(url: str) -> bool:
 
 
 def backfill_books(db, throttle: float, dry_run: bool) -> tuple:
-    """Re-point Google Books covers at Open Library. Returns (fixed, skipped)."""
+    """
+    Re-point Google Books covers at Open Library. Returns ``(fixed, actionable,
+    expected)``: ``actionable`` is a list of ``(title, reason)`` worth a look;
+    ``expected`` is a count of rows correctly left on Google Books because
+    Open Library has no cover for their (perfectly valid) ISBN -- the normal
+    post-#251 state, not a problem (#259).
+    """
     rows = db.query(DbBook).all()
     pending = [b for b in rows if _is_legacy_book_cover(b.poster_url)]
     print(f'{len(pending)} book covers still on Google Books')
 
     fixed = 0
-    skipped = []
+    actionable = []
+    expected = 0
     for book in pending:
         candidate = openlibrary_cover_url(book.isbn)
         if not candidate:
-            skipped.append((book.title, 'no usable ISBN'))
+            actionable.append((book.title, _REASON_NO_ISBN))
             continue
         if not _cover_exists(candidate):
-            # Leaving the Google cover in place beats a blank placeholder.
-            skipped.append((book.title, 'no Open Library cover'))
+            # Leaving the Google cover in place beats a blank placeholder --
+            # and is correct, not outstanding: this ISBN just isn't one Open
+            # Library has a cover for.
+            expected += 1
             time.sleep(throttle)
             continue
         if not dry_run:
@@ -133,7 +149,7 @@ def backfill_books(db, throttle: float, dry_run: bool) -> tuple:
         fixed += 1
         time.sleep(throttle)
 
-    return fixed, skipped
+    return fixed, actionable, expected
 
 
 def backfill_games(db, dry_run: bool) -> int:
@@ -159,15 +175,22 @@ def run(throttle: float = DEFAULT_THROTTLE_SECONDS, dry_run: bool = False) -> No
     try:
         if dry_run:
             print('(dry run — no writes)')
-        books_fixed, books_skipped = backfill_books(db, throttle, dry_run)
+        books_fixed, books_actionable, books_expected = backfill_books(
+            db, throttle, dry_run
+        )
         games_fixed = backfill_games(db, dry_run)
         print(
             f'\nDone: {books_fixed} book covers re-pointed, '
             f'{games_fixed} game covers upgraded'
         )
-        if books_skipped:
-            print(f'\n{len(books_skipped)} books left on Google Books:')
-            for title, reason in books_skipped:
+        if books_expected:
+            print(
+                f'{books_expected} books correctly stay on Google Books '
+                f'(Open Library has no cover for their ISBN — expected, not a problem)'
+            )
+        if books_actionable:
+            print(f'\n{len(books_actionable)} books need attention:')
+            for title, reason in books_actionable:
                 print(f'  {title[:60]:<60} {reason}')
     finally:
         db.close()
