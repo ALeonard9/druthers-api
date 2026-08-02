@@ -251,6 +251,9 @@ class DbUserTVEpisode(DBBaseModel):
     # When the episode was actually watched (#160): stamped on mark, restored
     # from orion's g_first for pre-cutover history. Activity orders by this.
     watched_at = Column(DateTime, nullable=True)
+    # Independent of watched (#262): a standout episode, not a watch mark.
+    favorited = Column(Boolean, nullable=False, default=False)
+    favorited_at = Column(DateTime, nullable=True)
 
     episode = relationship('DbTVEpisode', back_populates='user_episodes')
     user = relationship('DbUser', backref='user_tv_episodes')

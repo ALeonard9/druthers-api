@@ -865,6 +865,85 @@ def unmark_episode_watched(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail='Episode not marked'
         )
-    db.delete(tracker)
+    # A favorited episode keeps its row (and the favorite) even once
+    # unwatched (#262) — only drop the row entirely once nothing's left on it.
+    if tracker.favorited:
+        tracker.watched = 0
+        tracker.watched_at = None
+        db.commit()
+    else:
+        db.delete(tracker)
+        db.commit()
+    return None
+
+
+@router.post(
+    '/users/me/episodes/{episode_id}/favorite',
+    response_model=UserTVEpisodeResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def mark_episode_favorited(
+    episode_id: str,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    """Favorite an episode, independent of watched status (idempotent)."""
+    user_pk = current_user[0].pk
+    episode = _get_episode(db, episode_id)
+
+    tracker = (
+        db.query(DbUserTVEpisode)
+        .filter(
+            DbUserTVEpisode.user_id == user_pk,
+            DbUserTVEpisode.episode_id == episode.pk,
+        )
+        .first()
+    )
+    if tracker is None:
+        tracker = DbUserTVEpisode(
+            user_id=user_pk,
+            episode_id=episode.pk,
+            favorited=True,
+            favorited_at=utc_now(),
+        )
+        db.add(tracker)
+    else:
+        tracker.favorited = True
+        if tracker.favorited_at is None:
+            tracker.favorited_at = utc_now()
     db.commit()
+    db.refresh(tracker)
+    return tracker
+
+
+@router.delete(
+    '/users/me/episodes/{episode_id}/favorite', status_code=status.HTTP_204_NO_CONTENT
+)
+def unmark_episode_favorited(
+    episode_id: str,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    user_pk = current_user[0].pk
+    episode = _get_episode(db, episode_id)
+    tracker = (
+        db.query(DbUserTVEpisode)
+        .filter(
+            DbUserTVEpisode.user_id == user_pk,
+            DbUserTVEpisode.episode_id == episode.pk,
+        )
+        .first()
+    )
+    if not tracker or not tracker.favorited:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail='Episode not favorited'
+        )
+    # Mirror unmark_episode_watched: only drop the row once nothing's left on it.
+    if tracker.watched:
+        tracker.favorited = False
+        tracker.favorited_at = None
+        db.commit()
+    else:
+        db.delete(tracker)
+        db.commit()
     return None
