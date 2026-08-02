@@ -229,6 +229,74 @@ def test_search_books_restricts_to_english(mock_get):
     assert mock_get.call_args.kwargs['params']['language'] == 'eng'
 
 
+def test_canonical_score_prefers_a_complete_non_edition_hit():
+    # #260: 'The Scorch Trials' -> a movie tie-in hit must not outrank the
+    # novel's own hit just because Open Library returned it first.
+    novel = {
+        'title': 'The Scorch Trials',
+        'cover_i': 1,
+        'number_of_pages_median': 360,
+        'first_publish_year': 2010,
+        'readinglog_count': 5000,
+        'ratings_count': 4000,
+    }
+    movie_tie_in = {
+        'title': 'The Scorch Trials Movie Tie-in Edition',
+        'cover_i': 2,
+        'number_of_pages_median': 360,
+        'first_publish_year': 2015,
+        'readinglog_count': 50,
+        'ratings_count': 10,
+    }
+    assert book_search._canonical_score(novel) > book_search._canonical_score(
+        movie_tie_in
+    )
+
+
+def test_canonical_score_prefers_hits_with_more_metadata():
+    complete = {'cover_i': 1, 'number_of_pages_median': 300, 'first_publish_year': 2000}
+    sparse = {'title': 'Some Obscure Printing'}
+    assert book_search._canonical_score(complete) > book_search._canonical_score(sparse)
+
+
+def test_canonical_score_breaks_ties_on_popularity():
+    popular = {'readinglog_count': 5000, 'ratings_count': 4000}
+    obscure = {'readinglog_count': 10, 'ratings_count': 5}
+    assert book_search._canonical_score(popular) > book_search._canonical_score(obscure)
+
+
+@patch('app.services.book_search.requests.get')
+def test_search_books_reorders_a_movie_tie_in_below_the_novel(mock_get):
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    # Open Library hands the movie tie-in back first; search_books must not
+    # just pass that order through.
+    resp.json.return_value = {
+        'docs': [
+            {
+                'title': 'The Scorch Trials Movie Tie-in Edition',
+                'isbn': ['9780553538410'],
+                'readinglog_count': 50,
+                'ratings_count': 10,
+            },
+            {
+                'title': 'The Scorch Trials',
+                'isbn': ['9780062287642'],
+                'cover_i': 1,
+                'number_of_pages_median': 360,
+                'first_publish_year': 2010,
+                'readinglog_count': 5000,
+                'ratings_count': 4000,
+            },
+        ]
+    }
+    mock_get.return_value = resp
+
+    results = book_search.search_books('The Scorch Trials')
+
+    assert [r['isbn'] for r in results] == ['9780062287642', '9780553538410']
+
+
 def test_language_never_guesses_a_translation():
     # A work listing many editions must not assert one of them at random:
     # element 0 tagged The Stand 'rus' and The Da Vinci Code 'mal'.

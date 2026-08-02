@@ -43,7 +43,8 @@ class UpstreamUnavailable(Exception):
 
 _SEARCH_FIELDS = (
     'key,title,author_name,first_publish_year,isbn,cover_i,'
-    'number_of_pages_median,subject,ratings_average,language'
+    'number_of_pages_median,subject,ratings_average,ratings_count,'
+    'readinglog_count,language'
 )
 
 # ISBN-10 (last check digit may be 'X') or ISBN-13, after stripping any
@@ -342,6 +343,26 @@ def _search_by_isbn(isbn: str) -> List[dict]:
     ]
 
 
+def _canonical_score(doc: dict) -> tuple:
+    """
+    How much a search hit looks like the edition a person means, highest
+    first (#260). ``search_books`` sorts on this so a movie tie-in or a
+    work-level hit missing the basics (no cover, no page count, no year)
+    doesn't outrank the book someone actually searched for. Not a format
+    preference -- ``physical_format`` is missing on most editions and
+    wouldn't have caught the cases this was written for.
+    """
+    title = doc.get('title') or ''
+    return (
+        doc.get('cover_i') is not None,
+        doc.get('number_of_pages_median') is not None,
+        doc.get('first_publish_year') is not None,
+        not _EDITION_SUFFIX_RE.search(title),
+        doc.get('readinglog_count') or 0,
+        doc.get('ratings_count') or 0,
+    )
+
+
 def search_books(query: str) -> List[dict]:
     """
     Search Open Library for books matching ``query``.
@@ -388,8 +409,9 @@ def search_books(query: str) -> List[dict]:
             detail='Upstream book search failed',
         ) from exc
 
+    docs = sorted(payload.get('docs') or [], key=_canonical_score, reverse=True)
     results = []
-    for doc in payload.get('docs') or []:
+    for doc in docs:
         year = doc.get('first_publish_year')
         results.append(
             {
