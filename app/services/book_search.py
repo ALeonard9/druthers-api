@@ -498,7 +498,12 @@ def _openlibrary_detail(isbn: str) -> Optional[dict]:
         'year': year,
         'genre': _genre(doc),
         'description': _work_description(doc.get('key')),
-        'page_count': edition.get('page_count') or doc.get('number_of_pages_median'),
+        # Median across editions, not the English edition's own count. Unlike
+        # the cover and title there is no language dimension here, and picking
+        # one edition is a lottery between abridgements and omnibuses: The
+        # Phoenix Project resolved to a 104-page edition of a 345-page book,
+        # Robinson Crusoe to a 93-page one. The median resists both.
+        'page_count': doc.get('number_of_pages_median') or edition.get('page_count'),
         'rating': round(rating, 2) if rating else None,
         'language': 'eng' if edition else _language(doc),
         'poster_url': _cover(edition.get('cover_i') or doc.get('cover_i')),
