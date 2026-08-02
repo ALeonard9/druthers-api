@@ -105,6 +105,12 @@ class Settings(BaseSettings):
     twitch_client_id: Optional[str] = None
     twitch_client_secret: Optional[str] = None
 
+    # --- External APIs (book enrichment fallback — Google Books) ---
+    # Open Library is the primary book source and needs no key. This is only
+    # used to enrich rows Open Library cannot resolve by ISBN but which carry
+    # a legacy ``googleid``; enrichment simply skips them when unset.
+    google_books_api_key: Optional[str] = None
+
     @property
     def sqlalchemy_database_url(self) -> str:
         """
