@@ -68,8 +68,9 @@ land on, rank order, completion dates — not the content itself.
   since once a title is real there's no such thing as a "fake" catalog row
   to clean up — see `DbUserMovie.is_seed_data`'s docstring.
 - **Refuses to run against anything but the local dev Postgres** (checks
-  `ENV`/`POSTGRES_HOST`) — this script performs bulk writes and must never
-  be able to reach QA or prod.
+  `ENV` and the *resolved* connection host — `DATABASE_URL` when set, not
+  just `POSTGRES_HOST`, see #257) — this script performs bulk writes and
+  must never be able to reach QA or prod.
 - Re-runnable: each run wipes the tracker rows it previously created for the
   target user, then reseeds. `--wipe` clears them without reseeding.
   `--count N` controls movie volume (default 270); TV/books/games scale off

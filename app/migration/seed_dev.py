@@ -19,8 +19,10 @@ testing). Only the *tracker* rows this script creates are marked
 real either way and a wipe leaves them alone.
 
 **Refuses to run against anything but the local dev Postgres** (checks
-``ENV``/``POSTGRES_HOST``) -- same guard the old Faker-based seeder used,
-since this script performs bulk writes and must never reach QA or prod.
+``ENV`` and the *resolved* connection host, i.e. ``DATABASE_URL`` when set,
+not just ``POSTGRES_HOST`` -- see #257) -- same guard the old Faker-based
+seeder used, since this script performs bulk writes and must never reach
+QA or prod.
 
 Usage::
 
@@ -39,6 +41,7 @@ import random
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from sqlalchemy.orm import Session
 
@@ -82,15 +85,21 @@ _LEGACY_FAKE_ID_BASE = 900_000
 def _assert_local_dev() -> None:
     """Refuse to run against anything but the local dev Postgres."""
     settings = get_settings()
-    host = (settings.postgres_host or '').lower()
-    is_safe_host = host in ('localhost', '127.0.0.1') or host.endswith('_dev')
+    # Validate the host actually being connected to (settings.sqlalchemy_database_url
+    # prefers DATABASE_URL over the discrete POSTGRES_* parts), not a variable that
+    # may not be in play (#257).
+    url = settings.sqlalchemy_database_url
+    host = (urlsplit(url).hostname or '').lower()
+    is_safe_host = (
+        host in ('localhost', '127.0.0.1') or host.endswith('_dev')
+    ) and 'neon.tech' not in host
     if settings.env != 'dev' or not is_safe_host:
         logger.error(
-            'seed_dev refuses to run: ENV=%s POSTGRES_HOST=%s does not look '
+            'seed_dev refuses to run: ENV=%s resolved host=%s does not look '
             'like the local dev Postgres. This script performs bulk writes '
             'and must never touch QA or prod.',
             settings.env,
-            settings.postgres_host,
+            host,
         )
         sys.exit(2)
 

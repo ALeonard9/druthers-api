@@ -1,4 +1,7 @@
 # pylint: disable=missing-module-docstring, missing-function-docstring, protected-access
+import pytest
+
+from app.config import Settings
 from app.db.models_sandbox import DbMovie, DbTVShow, DbUserMovie, DbUserTVShow
 from app.migration import seed_dev
 
@@ -208,3 +211,45 @@ def test_run_seed_wipe_only_does_not_reseed(test_client, monkeypatch):
     assert (
         session.query(DbUserMovie).filter(DbUserMovie.user_id == user.pk).count() == 0
     )
+
+
+def test_assert_local_dev_refuses_when_database_url_overrides_safe_postgres_host(
+    monkeypatch,
+):
+    # #257: POSTGRES_HOST=localhost looked safe, but sqlalchemy_database_url
+    # prefers DATABASE_URL whenever it is set -- the guard must validate the
+    # host actually being connected to, not a variable that may not be in play.
+    settings = Settings(
+        env='dev',
+        postgres_host='localhost',
+        database_url='postgresql://user:pw@ep-prod-db.us-east-2.aws.neon.tech/druthers',
+    )
+    monkeypatch.setattr(seed_dev, 'get_settings', lambda: settings)
+
+    with pytest.raises(SystemExit):
+        seed_dev._assert_local_dev()
+
+
+def test_assert_local_dev_allows_local_postgres_host_with_no_database_url(monkeypatch):
+    settings = Settings(env='dev', postgres_host='localhost', database_url=None)
+    monkeypatch.setattr(seed_dev, 'get_settings', lambda: settings)
+
+    seed_dev._assert_local_dev()  # does not raise
+
+
+def test_assert_local_dev_allows_dev_suffixed_docker_host_via_database_url(monkeypatch):
+    settings = Settings(
+        env='dev',
+        database_url='postgresql://user:pw@m3_druthers_db_dev:5432/druthers',
+    )
+    monkeypatch.setattr(seed_dev, 'get_settings', lambda: settings)
+
+    seed_dev._assert_local_dev()  # does not raise
+
+
+def test_assert_local_dev_refuses_non_dev_env_even_with_safe_host(monkeypatch):
+    settings = Settings(env='prod', postgres_host='localhost')
+    monkeypatch.setattr(seed_dev, 'get_settings', lambda: settings)
+
+    with pytest.raises(SystemExit):
+        seed_dev._assert_local_dev()
