@@ -176,3 +176,7 @@ database/data/*
 
 # pytest-testmon (pre-push changed-tests DB)
 .testmondata
+
+# Local Claude Code artifacts (not checked in for this repo)
+CLAUDE.md
+graphify-out/
