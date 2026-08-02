@@ -127,7 +127,10 @@ celerybeat.pid
 env/*
 !env/*.env.template
 venv/
-ENV/
+# ENV/ removed (#256): on macOS's case-insensitive filesystem it also matched
+# env/, re-ignoring the whole directory and silencing the !env/*.env.template
+# negation above -- so no env template ever made it into the repo. .venv/ and
+# venv/ above already cover Python virtualenvs; nothing here used an ENV/ dir.
 env.bak/
 venv.bak/
 
