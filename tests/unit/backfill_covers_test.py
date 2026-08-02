@@ -2,6 +2,7 @@
 # pylint: disable=protected-access
 from unittest.mock import MagicMock, patch
 
+from app.db.models_sandbox import DbBook
 from app.migration import backfill_covers
 
 
@@ -96,3 +97,72 @@ def test_network_failure_leaves_cover_alone(mock_head):
     assert not backfill_covers._cover_exists(
         'https://covers.openlibrary.org/b/isbn/9780441013593-L.jpg'
     )
+
+
+@patch('app.migration.backfill_covers._cover_exists', return_value=True)
+def test_backfill_books_repoints_when_openlibrary_has_a_cover(
+    _mock_exists, test_client
+):
+    session = test_client.test_db_session
+    book = DbBook(
+        title='Has a cover',
+        isbn='9780441013593',
+        poster_url='http://books.google.com/books/content?id=x',
+    )
+    session.add(book)
+    session.commit()
+
+    fixed, actionable, expected = backfill_covers.backfill_books(
+        session, throttle=0, dry_run=False
+    )
+
+    assert fixed == 1
+    assert not actionable
+    assert expected == 0
+    assert (
+        book.poster_url == 'https://covers.openlibrary.org/b/isbn/9780441013593-L.jpg'
+    )
+
+
+@patch('app.migration.backfill_covers._cover_exists', return_value=False)
+def test_backfill_books_treats_no_openlibrary_cover_as_expected_not_actionable(
+    _mock_exists, test_client
+):
+    # #259: a valid ISBN Open Library simply has no cover for is the correct,
+    # expected post-#251 state -- not something to flag for a look.
+    session = test_client.test_db_session
+    book = DbBook(
+        title='Valid ISBN, no OL cover',
+        isbn='9780441013593',
+        poster_url='http://books.google.com/books/content?id=x',
+    )
+    session.add(book)
+    session.commit()
+
+    fixed, actionable, expected = backfill_covers.backfill_books(
+        session, throttle=0, dry_run=False
+    )
+
+    assert fixed == 0
+    assert not actionable
+    assert expected == 1
+    assert book.poster_url == 'http://books.google.com/books/content?id=x'
+
+
+def test_backfill_books_flags_unusable_isbn_as_actionable(test_client):
+    session = test_client.test_db_session
+    book = DbBook(
+        title='No usable ISBN',
+        isbn='HARVARD:HWB4C3',
+        poster_url='http://books.google.com/books/content?id=x',
+    )
+    session.add(book)
+    session.commit()
+
+    fixed, actionable, expected = backfill_covers.backfill_books(
+        session, throttle=0, dry_run=False
+    )
+
+    assert fixed == 0
+    assert expected == 0
+    assert actionable == [('No usable ISBN', backfill_covers._REASON_NO_ISBN)]

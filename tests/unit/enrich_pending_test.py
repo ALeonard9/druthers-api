@@ -7,10 +7,13 @@ half the years on the home Top 5. These pin the missing field itself as a
 selection criterion.
 """
 
+from datetime import timedelta
+
 from app.db.models_sandbox import DbBook, DbMovie, DbVideoGame
-from app.migration.enrich_books import pending_books
+from app.migration.enrich_books import RETRY_AFTER, pending_books
 from app.migration.enrich_games import pending_games
 from app.migration.enrich_movies import pending_movies
+from app.services.tracker_rules import utc_now
 
 
 def _titles(rows):
@@ -79,6 +82,43 @@ def test_book_with_detail_but_no_year_is_still_pending(test_client):
     session.commit()
 
     assert _titles(pending_books(session)) == ['The Name of the Wind']
+
+
+def test_book_resolved_recently_but_still_incomplete_is_not_re_pending(test_client):
+    # #258: The Power of Habit's Google volume is live and answered, but
+    # publishedDate is null -- that's a real, permanent answer, not "never
+    # enriched", so a recent attempt should suppress re-selection.
+    session = test_client.test_db_session
+    session.add(
+        DbBook(
+            title='The Power of Habit',
+            googleid='abc123',
+            authors='Charles Duhigg',
+            description='Habits explained.',
+            year=None,
+            enrichment_attempted_at=utc_now(),
+        )
+    )
+    session.commit()
+
+    assert pending_books(session) == []
+
+
+def test_book_incomplete_and_attempted_long_ago_is_pending_again(test_client):
+    session = test_client.test_db_session
+    session.add(
+        DbBook(
+            title='The Power of Habit',
+            googleid='abc123',
+            authors='Charles Duhigg',
+            description='Habits explained.',
+            year=None,
+            enrichment_attempted_at=utc_now() - RETRY_AFTER - timedelta(days=1),
+        )
+    )
+    session.commit()
+
+    assert _titles(pending_books(session)) == ['The Power of Habit']
 
 
 def test_game_with_detail_but_no_year_is_still_pending(test_client):

@@ -13,6 +13,7 @@ Usage::
 """
 
 import time
+from datetime import timedelta
 
 from sqlalchemy import and_, or_
 
@@ -24,6 +25,7 @@ from app.services.book_search import (
     apply_detail_to_book,
     resolve_book_detail,
 )
+from app.services.tracker_rules import utc_now
 
 # Be polite to Open Library (they ask for gentle, identifiable traffic).
 THROTTLE_SECONDS = 1.0
@@ -32,6 +34,10 @@ THROTTLE_SECONDS = 1.0
 # would stall the run on an unresolvable row and, because the pending set
 # comes back in the same order, never get past it on a re-run either.
 STOP_AFTER_CONSECUTIVE_ERRORS = 15
+# A resolved-but-still-incomplete row (e.g. no upstream publishedDate, #258)
+# isn't "never enriched" -- it's a permanent answer. Retry on an interval
+# instead of every run, in case the missing field ever does show up upstream.
+RETRY_AFTER = timedelta(days=30)
 
 
 def pending_books(db):
@@ -41,6 +47,11 @@ def pending_books(db):
     See ``enrich_movies.pending_movies``: ``description``/``authors`` is only
     a proxy for "never enriched", so a row that has them but no ``year``
     would never be retried. Select on the missing field too.
+
+    That alone re-selects a row forever once it's been resolved and is still
+    missing a field no source has (#258, e.g. an upstream ``publishedDate`` of
+    ``null``) -- a resolve attempt is a real answer, not a no-op, so gate
+    re-selection on ``enrichment_attempted_at`` too.
 
     A row needs *some* usable key. ``googleid`` counts: Google Books is the
     fallback source, and rows imported from it may have no isbn at all.
@@ -53,6 +64,10 @@ def pending_books(db):
             or_(
                 and_(DbBook.description.is_(None), DbBook.authors.is_(None)),
                 DbBook.year.is_(None),
+            ),
+            or_(
+                DbBook.enrichment_attempted_at.is_(None),
+                DbBook.enrichment_attempted_at < utc_now() - RETRY_AFTER,
             ),
         )
         .order_by(DbBook.id)
@@ -89,15 +104,21 @@ def run() -> None:
                 consecutive += 1
             else:
                 consecutive = 0
+                # Record the attempt regardless of outcome (#258): a miss, or
+                # a hit that still leaves a field null, is a real answer from
+                # the source, not "never enriched" -- pending_books uses this
+                # to wait RETRY_AFTER before asking again instead of re-fetching
+                # the same unresolvable field every run forever.
+                book.enrichment_attempted_at = utc_now()
                 if detail:
                     # The one place titles are rewritten: these are legacy
                     # imported rows, not editions anyone chose. Adds and
                     # detail views keep the title the user picked.
                     apply_detail_to_book(book, detail, overwrite_title=True)
-                    db.commit()
                     enriched += 1
                 else:
                     misses += 1
+                db.commit()
             if processed % 25 == 0:
                 print(
                     f'  {processed}/{total} (enriched {enriched}, '

@@ -326,6 +326,11 @@ class DbBook(DBBaseModel):
     page_count = Column(Integer, nullable=True)
     rating = Column(Float, nullable=True)
     language = Column(String(40), nullable=True)
+    # When enrich_books last resolved this row, hit or miss (#258). A missing
+    # field (e.g. no upstream publishedDate) is a real, permanent answer, not
+    # "never enriched" -- pending_books uses this to retry on an interval
+    # instead of re-fetching the same unresolvable field every run forever.
+    enrichment_attempted_at = Column(DateTime, nullable=True)
 
     # See DbTVShow.user_tv_shows for why this cascades (#227).
     user_books = relationship(
