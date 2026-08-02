@@ -299,6 +299,7 @@ def test_get_book_detail_maps_fields(mock_get, mock_desc):
     assert detail['year'] == 1965
     assert detail['genre'] == 'Science fiction, Deserts'
     assert detail['description'] == 'A desert planet.'
+    # The work-level median, not an arbitrary edition's own count.
     assert detail['page_count'] == 592
     assert detail['rating'] == 4.23
     assert detail['language'] == 'eng'
