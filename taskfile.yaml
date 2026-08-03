@@ -83,6 +83,11 @@ tasks:
     cmds:
       - python -m app.migration.enrich_games
 
+  backfill:time_to_beat:
+    desc: "Backfill IGDB time-to-beat for existing games (needs TWITCH_CLIENT_ID/SECRET)"
+    cmds:
+      - python -m app.migration.backfill_time_to_beat
+
   import:orion:
     desc: "Import legacy orion (MySQL) data into druthers. Usage: task import:orion -- --dry-run"
     cmds:
