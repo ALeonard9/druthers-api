@@ -40,8 +40,8 @@ def _make_movie(test_client: TestClient, imdb='tt1375666', title='Inception') ->
     return resp.json()['id']
 
 
-def test_mark_movie_to_rankings_is_unplaced(test_client: TestClient):
-    """Adding to Rankings leaves the movie unplaced (rank None) until positioned."""
+def test_mark_first_movie_to_rankings_auto_places_at_one(test_client: TestClient):
+    """First movie into an empty ranked list auto-places at #1 (#289)."""
     movie_id = _make_movie(test_client)
     user_headers = {'Authorization': f"Bearer {test_client.first_user.token}"}
 
@@ -54,8 +54,30 @@ def test_mark_movie_to_rankings_is_unplaced(test_client: TestClient):
     data = response.json()
     assert data['on_rankings'] is True
     assert data['on_watchlist'] is False
-    assert data['rank'] is None
+    assert data['rank'] == 1
     assert data['notes'] == 'Mind-bending!'
+
+
+def test_mark_second_movie_to_rankings_is_unplaced(test_client: TestClient):
+    """Once a movie is already ranked, the next one lands unplaced pending a duel."""
+    first_id = _make_movie(test_client)
+    second_id = _make_movie(test_client, imdb='tt7996', title='Also Ranked')
+    user_headers = {'Authorization': f"Bearer {test_client.first_user.token}"}
+
+    test_client.post(
+        f"/v1/users/me/movies/{first_id}",
+        headers=user_headers,
+        json={'on_rankings': True},
+    )
+    response = test_client.post(
+        f"/v1/users/me/movies/{second_id}",
+        headers=user_headers,
+        json={'on_rankings': True},
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data['on_rankings'] is True
+    assert data['rank'] is None
 
 
 def test_set_movie_rank_inserts_and_shifts(test_client: TestClient):
@@ -115,7 +137,8 @@ def test_lists_are_exclusive(test_client: TestClient):
     assert r.json()['on_watchlist'] is True
     assert r.json()['on_rankings'] is False
 
-    # Promote to rankings -> leaves the watchlist (unplaced until positioned).
+    # Promote to rankings -> leaves the watchlist. It's the only ranked movie,
+    # so it auto-places at #1 (#289).
     r = test_client.post(
         f"/v1/users/me/movies/{movie_id}",
         headers=headers,
@@ -123,7 +146,7 @@ def test_lists_are_exclusive(test_client: TestClient):
     )
     assert r.json()['on_rankings'] is True
     assert r.json()['on_watchlist'] is False
-    assert r.json()['rank'] is None
+    assert r.json()['rank'] == 1
 
     # Leave rankings -> on neither list, so the tracker is dropped entirely.
     test_client.put(
@@ -137,14 +160,19 @@ def test_lists_are_exclusive(test_client: TestClient):
 
 def test_reentering_rankings_starts_unplaced(test_client: TestClient):
     """Re-adding a movie to Rankings ignores any leftover rank (starts unplaced)."""
+    other_id = _make_movie(test_client, imdb='tt7995', title='Stays Ranked')
     movie_id = _make_movie(test_client)
     h = {'Authorization': f"Bearer {test_client.first_user.token}"}
-    # place it at #1
+    # rank `other` first so the list isn't empty when `movie_id` re-enters below.
+    test_client.post(
+        f"/v1/users/me/movies/{other_id}", headers=h, json={'on_rankings': True}
+    )
+    # place it at #2
     test_client.post(
         f"/v1/users/me/movies/{movie_id}", headers=h, json={'on_rankings': True}
     )
     test_client.put(
-        f"/v1/users/me/movies/{movie_id}/rank", headers=h, json={'position': 1}
+        f"/v1/users/me/movies/{movie_id}/rank", headers=h, json={'position': 2}
     )
     # remove from rankings, then re-add -> must be unplaced again, not at its old rank
     test_client.put(

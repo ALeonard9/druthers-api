@@ -160,7 +160,8 @@ def test_search_tv_shows_returns_results(mock_get, test_client: TestClient):
 
 
 # --- Show trackers (Movies-parity lists) ---
-def test_mark_show_to_rankings_is_unplaced(test_client: TestClient):
+def test_mark_first_show_to_rankings_auto_places_at_one(test_client: TestClient):
+    """First show into an empty ranked list auto-places at #1 (#289)."""
     show_id = _make_show(test_client)
     headers = {'Authorization': f"Bearer {test_client.first_user.token}"}
     response = test_client.post(
@@ -172,8 +173,30 @@ def test_mark_show_to_rankings_is_unplaced(test_client: TestClient):
     data = response.json()
     assert data['on_rankings'] is True
     assert data['on_watchlist'] is False
-    assert data['rank'] is None
+    assert data['rank'] == 1
     assert data['notes'] == 'Peak TV'
+
+
+def test_mark_second_show_to_rankings_is_unplaced(test_client: TestClient):
+    """Once a show is already ranked, the next one lands unplaced pending a duel."""
+    first_id = _make_show(test_client)
+    second_id = _make_show(test_client, title='Also Ranked')
+    headers = {'Authorization': f"Bearer {test_client.first_user.token}"}
+
+    test_client.post(
+        f"/v1/users/me/tv-shows/{first_id}",
+        headers=headers,
+        json={'on_rankings': True},
+    )
+    response = test_client.post(
+        f"/v1/users/me/tv-shows/{second_id}",
+        headers=headers,
+        json={'on_rankings': True},
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data['on_rankings'] is True
+    assert data['rank'] is None
 
 
 def test_lists_are_exclusive(test_client: TestClient):
@@ -190,7 +213,8 @@ def test_lists_are_exclusive(test_client: TestClient):
     assert r.json()['on_watchlist'] is True
     assert r.json()['on_rankings'] is False
 
-    # Promote to rankings -> leaves the watchlist (unplaced until positioned).
+    # Promote to rankings -> leaves the watchlist. It's the only ranked show,
+    # so it auto-places at #1 (#289).
     r = test_client.post(
         f"/v1/users/me/tv-shows/{show_id}",
         headers=headers,
@@ -198,7 +222,7 @@ def test_lists_are_exclusive(test_client: TestClient):
     )
     assert r.json()['on_rankings'] is True
     assert r.json()['on_watchlist'] is False
-    assert r.json()['rank'] is None
+    assert r.json()['rank'] == 1
 
     # Leave rankings -> on neither list, so the tracker is dropped entirely.
     test_client.put(
@@ -274,13 +298,19 @@ def test_reorder_rankings(test_client: TestClient):
 
 
 def test_reentering_rankings_starts_unplaced(test_client: TestClient):
+    """Re-adding a show to Rankings ignores any leftover rank (starts unplaced)."""
+    other_id = _make_show(test_client, title='Stays Ranked')
     show_id = _make_show(test_client)
     headers = {'Authorization': f"Bearer {test_client.first_user.token}"}
+    # rank `other` first so the list isn't empty when `show_id` re-enters below.
+    test_client.post(
+        f"/v1/users/me/tv-shows/{other_id}", headers=headers, json={'on_rankings': True}
+    )
     test_client.post(
         f"/v1/users/me/tv-shows/{show_id}", headers=headers, json={'on_rankings': True}
     )
     test_client.put(
-        f"/v1/users/me/tv-shows/{show_id}/rank", headers=headers, json={'position': 1}
+        f"/v1/users/me/tv-shows/{show_id}/rank", headers=headers, json={'position': 2}
     )
     test_client.put(
         f"/v1/users/me/tv-shows/{show_id}",
