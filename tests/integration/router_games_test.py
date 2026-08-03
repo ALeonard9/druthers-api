@@ -105,7 +105,8 @@ def test_search_games_returns_results(mock_search, test_client: TestClient):
 
 
 # --- Trackers (Movies-parity lists + 100% flag) ---
-def test_mark_game_to_rankings_is_unplaced(test_client: TestClient):
+def test_mark_first_game_to_rankings_auto_places_at_one(test_client: TestClient):
+    """First game into an empty ranked list auto-places at #1 (#289)."""
     game_id = _make_game(test_client)
     headers = {'Authorization': f"Bearer {test_client.first_user.token}"}
     response = test_client.post(
@@ -117,8 +118,26 @@ def test_mark_game_to_rankings_is_unplaced(test_client: TestClient):
     data = response.json()
     assert data['on_rankings'] is True
     assert data['on_watchlist'] is False
-    assert data['rank'] is None
+    assert data['rank'] == 1
     assert data['is_100_percent'] is False
+
+
+def test_mark_second_game_to_rankings_is_unplaced(test_client: TestClient):
+    """Once a game is already ranked, the next one lands unplaced pending a duel."""
+    first_id = _make_game(test_client)
+    second_id = _make_game(test_client, title='Also Ranked')
+    headers = {'Authorization': f"Bearer {test_client.first_user.token}"}
+
+    test_client.post(
+        f"/v1/users/me/games/{first_id}", headers=headers, json={'on_rankings': True}
+    )
+    response = test_client.post(
+        f"/v1/users/me/games/{second_id}", headers=headers, json={'on_rankings': True}
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data['on_rankings'] is True
+    assert data['rank'] is None
 
 
 def test_hundred_percent_flag(test_client: TestClient):
@@ -150,7 +169,8 @@ def test_lists_are_exclusive(test_client: TestClient):
     assert r.json()['on_watchlist'] is True
     assert r.json()['on_rankings'] is False
 
-    # Promote to rankings -> leaves the watchlist (unplaced until positioned).
+    # Promote to rankings -> leaves the watchlist. It's the only ranked game,
+    # so it auto-places at #1 (#289).
     r = test_client.post(
         f"/v1/users/me/games/{game_id}",
         headers=headers,
@@ -158,7 +178,7 @@ def test_lists_are_exclusive(test_client: TestClient):
     )
     assert r.json()['on_rankings'] is True
     assert r.json()['on_watchlist'] is False
-    assert r.json()['rank'] is None
+    assert r.json()['rank'] == 1
 
     # Leave rankings -> on neither list, so the tracker is dropped entirely.
     test_client.put(

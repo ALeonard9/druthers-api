@@ -360,10 +360,15 @@ def mark_book(
 
     # A book only holds a rank while it's on the ranked list AND was already
     # placed. Entering Rankings (or leaving it) resets to unplaced so it lands
-    # in the "to rank" bucket rather than at a stale/leftover position.
+    # in the "to rank" bucket rather than at a stale/leftover position —
+    # unless it's the first ranked book, which auto-places at #1 (#289).
     enforce_single_home(tracker, data)
     default_completed_at(tracker, was_on_rankings)
-    if not tracker.on_rankings or not was_on_rankings:
+    entering_rankings = tracker.on_rankings and not was_on_rankings
+    if entering_rankings and _placed_count(db, user_pk) == 0:
+        tracker.rank = 1
+        tracker.ranked_at = utc_now()
+    elif not tracker.on_rankings or not was_on_rankings:
         tracker.rank = None
         tracker.ranked_at = None
     if old_rank is not None and tracker.rank is None:
