@@ -294,6 +294,32 @@ def get_game_detail(igdb_id: Optional[int]) -> Optional[dict]:
     return _detail_from_game(payload[0])
 
 
+def get_time_to_beat(igdb_id: Optional[int]) -> Optional[int]:
+    """
+    Fetch the "normally" (main story) completion time for a game by IGDB
+    id, in whole hours. IGDB reports this on a separate endpoint from game
+    detail, keyed by the same id, in seconds. Returns None when unavailable
+    (no community data, unconfigured, or upstream failure) so callers can
+    leave the column null rather than treating a miss as zero.
+    """
+    if not igdb_id:
+        return None
+    try:
+        payload = _igdb_query(
+            'game_time_to_beats',
+            f'fields normally; where game_id = {int(igdb_id)};',
+        )
+    except HTTPException:
+        return None
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning('IGDB time-to-beat failed for %s: %s', igdb_id, exc)
+        return None
+    if not payload:
+        return None
+    seconds = payload[0].get('normally')
+    return round(seconds / 3600) if seconds else None
+
+
 def list_popular_games(limit: int = 500) -> List[dict]:
     """
     The ``limit`` highest-rated-by-volume games, in full catalog-field shape

@@ -68,6 +68,16 @@ def test_get_game_detail_unconfigured_returns_none(mock_settings):
 
 
 @patch('app.services.game_search.get_settings')
+def test_get_time_to_beat_unconfigured_returns_none(mock_settings):
+    _reset_token_cache()
+    mock_settings.return_value = Settings(
+        twitch_client_id=None, twitch_client_secret=None, env='github'
+    )
+    assert game_search.get_time_to_beat(1234) is None
+    assert game_search.get_time_to_beat(None) is None
+
+
+@patch('app.services.game_search.get_settings')
 @patch('app.services.game_search.requests.post')
 def test_search_games_returns_results(mock_post, mock_settings):
     _reset_token_cache()
@@ -227,4 +237,44 @@ def test_get_game_detail_maps_fields_and_caches_token(mock_post, mock_settings):
     # Second call reuses the cached token (no extra OAuth POST).
     assert game_search.get_game_detail(9999) is None
     assert mock_post.call_count == 3  # 1 token + 2 queries
+    _reset_token_cache()
+
+
+@patch('app.services.game_search.get_settings')
+@patch('app.services.game_search.requests.post')
+def test_get_time_to_beat_converts_seconds_to_hours(mock_post, mock_settings):
+    _reset_token_cache()
+    mock_settings.return_value = Settings(
+        twitch_client_id='cid', twitch_client_secret='secret', env='github'
+    )
+    token_resp = MagicMock()
+    token_resp.raise_for_status.return_value = None
+    token_resp.json.return_value = {'access_token': 'tok', 'expires_in': 5000000}
+    ttb_resp = MagicMock()
+    ttb_resp.raise_for_status.return_value = None
+    ttb_resp.json.return_value = [{'game_id': 1234, 'normally': 61200}]  # 17h
+    mock_post.side_effect = [token_resp, ttb_resp]
+
+    assert game_search.get_time_to_beat(1234) == 17
+    query_call = mock_post.call_args_list[1]
+    assert 'where game_id = 1234' in query_call.kwargs['data']
+    _reset_token_cache()
+
+
+@patch('app.services.game_search.get_settings')
+@patch('app.services.game_search.requests.post')
+def test_get_time_to_beat_no_community_data_returns_none(mock_post, mock_settings):
+    _reset_token_cache()
+    mock_settings.return_value = Settings(
+        twitch_client_id='cid', twitch_client_secret='secret', env='github'
+    )
+    token_resp = MagicMock()
+    token_resp.raise_for_status.return_value = None
+    token_resp.json.return_value = {'access_token': 'tok', 'expires_in': 5000000}
+    ttb_resp = MagicMock()
+    ttb_resp.raise_for_status.return_value = None
+    ttb_resp.json.return_value = []
+    mock_post.side_effect = [token_resp, ttb_resp]
+
+    assert game_search.get_time_to_beat(1234) is None
     _reset_token_cache()
