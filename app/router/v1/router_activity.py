@@ -4,7 +4,7 @@ Cross-domain Activity Log and "I'm bored" recommendation.
 
 Neither concept is owned by a single tracker domain, so unlike Schedule (which
 lives in router_tv.py because it's purely TV data), this is its own router
-that reads across Movies/TV/Games/Books/Countries.
+that reads across Movies/TV/Games/Books.
 """
 
 import random
@@ -18,7 +18,6 @@ from app.db.database import get_db
 from app.db.models_sandbox import (
     DbTVEpisode,
     DbUserBook,
-    DbUserCountry,
     DbUserMovie,
     DbUserTVEpisode,
     DbUserTVShow,
@@ -228,47 +227,6 @@ def _book_activity(db: Session, user_pk: int) -> List[ActivityItem]:
     return items
 
 
-def _country_activity(db: Session, user_pk: int) -> List[ActivityItem]:
-    # Countries don't use _tracker_occurred_at (occurred_at is always
-    # first_visited/updated_at here, regardless of action) — bound separately.
-    trackers = (
-        db.query(DbUserCountry)
-        .options(joinedload(DbUserCountry.country))
-        .filter(
-            DbUserCountry.user_id == user_pk,
-            (DbUserCountry.on_rankings.is_(True))
-            | (DbUserCountry.on_watchlist.is_(True)),
-        )
-        .order_by(
-            func.coalesce(DbUserCountry.first_visited, DbUserCountry.updated_at).desc()
-        )
-        .limit(MAX_FEED)
-        .all()
-    )
-    items = []
-    for t in trackers:
-        if t.on_rankings and t.rank is not None:
-            action = 'ranked'
-        elif t.on_rankings:
-            action = 'marked_done'
-        elif t.on_watchlist:
-            action = 'watchlist_added'
-        else:
-            continue
-        items.append(
-            ActivityItem(
-                category='country',
-                action=action,
-                title=t.country.title,
-                entity_id=t.country.id,
-                poster_url=t.country.flag_url,
-                rank=t.rank if action == 'ranked' else None,
-                occurred_at=t.first_visited or t.updated_at,
-            )
-        )
-    return items
-
-
 @router.get('/users/me/activity', response_model=List[ActivityItem])
 def get_activity(
     db: Session = Depends(get_db),
@@ -284,7 +242,6 @@ def get_activity(
         + _episode_activity(db, user_pk)
         + _game_activity(db, user_pk)
         + _book_activity(db, user_pk)
-        + _country_activity(db, user_pk)
     )
     if category:
         items = [i for i in items if i.category == category]
@@ -368,25 +325,6 @@ def _book_pool(db: Session, user_pk: int) -> List[BoredItem]:
     ]
 
 
-def _country_pool(db: Session, user_pk: int) -> List[BoredItem]:
-    trackers = (
-        db.query(DbUserCountry)
-        .options(joinedload(DbUserCountry.country))
-        .filter(DbUserCountry.user_id == user_pk, DbUserCountry.on_watchlist.is_(True))
-        .all()
-    )
-    return [
-        BoredItem(
-            category='country',
-            title=t.country.title,
-            subtitle=t.country.region,
-            entity_id=t.country.id,
-            poster_url=t.country.flag_url,
-        )
-        for t in trackers
-    ]
-
-
 @router.get('/users/me/bored', response_model=BoredResponse)
 def get_bored_pick(
     db: Session = Depends(get_db),
@@ -404,7 +342,6 @@ def get_bored_pick(
         + _tv_show_pool(db, user_pk)
         + _game_pool(db, user_pk)
         + _book_pool(db, user_pk)
-        + _country_pool(db, user_pk)
     )
     if not pool:
         raise HTTPException(

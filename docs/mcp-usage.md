@@ -89,7 +89,7 @@ Restart Claude Desktop. You should see a small MCP/plug icon indicating
 ## What the tools do
 
 The server exposes a consistent set of verbs across every domain it tracks —
-**movies, TV, books, games** (plus a legacy countries/travel tracker):
+**movies, TV, books, games**:
 
 | Verb pattern | Example | What it does |
 |---|---|---|
@@ -112,8 +112,6 @@ Full tool list by domain:
   `set_book_note`, `set_book_completed_date`
 - **Games:** `search_games`, `list_my_games`, `game_detail`, `add_game`,
   `set_game_note`, `mark_game_100_percent`, `set_game_completed_date`
-- **Countries** (legacy travel tracker, not part of the current product
-  focus): `list_my_countries`, `mark_country`, `set_country_note`
 
 Every tool acts on **your** account — the API key you configured is the
 authorization for all of it, so there's no separate per-request login step.

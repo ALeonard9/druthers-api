@@ -61,49 +61,6 @@ class DbNotification(DBBaseModel):
     user = relationship('DbUser', backref='notifications')
 
 
-class DbCountry(DBBaseModel):
-    __tablename__ = 'countries'
-
-    title = Column(String(255))
-    country_code = Column(String(4), unique=True)
-    # Rich detail (populated from REST Countries) for the detail view.
-    region = Column(String(100), nullable=True)
-    subregion = Column(String(100), nullable=True)
-    capital = Column(String(255), nullable=True)
-    population = Column(Integer, nullable=True)
-    flag_emoji = Column(String(8), nullable=True)
-    flag_url = Column(String(500), nullable=True)
-
-    # See DbTVShow.user_tv_shows for why this cascades (#227).
-    user_countries = relationship(
-        'DbUserCountry', back_populates='country', cascade='all, delete-orphan'
-    )
-
-
-class DbUserCountry(DBBaseModel):
-    __tablename__ = 'user_countries'
-    __table_args__ = rank_is_1_based(__tablename__)
-
-    country_id = Column(Integer, ForeignKey('countries.pk'), nullable=False)
-    user_id = Column(Integer, ForeignKey('users.pk'), nullable=False)
-
-    # Two independent lists, mirroring the Movies tracker: on_watchlist is the
-    # travel bucket list, on_rankings is the visited-and-ranked list.
-    # `completed` is retained from the legacy import but no longer drives the UI.
-    on_watchlist = Column(Boolean, nullable=False, default=False)
-    on_rankings = Column(Boolean, nullable=False, default=False)
-    rank = Column(Integer, nullable=True)
-    # When the current rank was assigned — drives Activity, so notes edits
-    # and other tracker updates never re-date a ranking (#141).
-    ranked_at = Column(DateTime, nullable=True)
-    completed = Column(Integer, nullable=True)
-    notes = Column(Text, nullable=True)
-    first_visited = Column(DateTime, nullable=True)
-
-    country = relationship('DbCountry', back_populates='user_countries')
-    user = relationship('DbUser', backref='user_countries')
-
-
 class DbMovie(DBBaseModel):
     __tablename__ = 'movies'
 

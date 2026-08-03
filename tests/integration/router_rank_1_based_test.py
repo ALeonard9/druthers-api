@@ -16,7 +16,6 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.models_sandbox import (
     DbUserBook,
-    DbUserCountry,
     DbUserMovie,
     DbUserTVShow,
     DbUserVideoGame,
@@ -27,7 +26,6 @@ TRACKERS = (
     (DbUserTVShow, 'tv_show_id'),
     (DbUserBook, 'book_id'),
     (DbUserVideoGame, 'game_id'),
-    (DbUserCountry, 'country_id'),
 )
 
 

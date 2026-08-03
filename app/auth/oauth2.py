@@ -20,6 +20,12 @@ from app.log.logging_config import logger
 settings = get_settings()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='v1/auth/token')
+# Same scheme, but a missing Authorization header yields None instead of a
+# 401 — the endpoints that serve anonymous and signed-in callers alike
+# (#277's public profile) need to know *whether* somebody is signed in.
+optional_oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl='v1/auth/token', auto_error=False
+)
 
 
 def _resolve_secret_key() -> str:
@@ -123,6 +129,46 @@ def get_current_user(
     if user is None:
         raise credentials_exception
     return user
+
+
+def get_optional_current_user(
+    token: Optional[str] = Depends(optional_oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+    """
+    The current user when the caller is signed in, ``None`` when they are not.
+
+    For endpoints that serve everybody but serve signed-in callers more
+    (#277). Two deliberate choices:
+
+    *Absent is anonymous; invalid is an error.* No bearer credentials at all —
+    no header, another scheme, or an empty ``Bearer`` — means an anonymous
+    viewer, because there is nothing there to reject. Credentials present but
+    bad — expired,
+    forged, revoked API key, or a token for a user who no longer exists — are
+    a 401 with the usual ``WWW-Authenticate`` challenge, never a silent
+    downgrade to the anonymous view. Downgrading would show a friend the
+    stranger's version of a profile the moment their token expired, which
+    reads as "they unfriended me" rather than "sign in again", and would let a
+    client ship a broken token forever without noticing.
+
+    *Every credential failure answers the same way.* The 404 lookup inside
+    :func:`get_current_user` becomes the same 401 as everything else, so an
+    expired token and a token for a deleted account are indistinguishable.
+
+    Unlike :func:`get_current_user`, this returns the ``DbUser`` itself (or
+    ``None``) rather than a one-element list — there is nothing to unwrap.
+    """
+    if not token:
+        return None
+    try:
+        return get_current_user(token, db)[0]
+    except HTTPException as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Could not validate credentials',
+            headers={'WWW-Authenticate': 'Bearer'},
+        ) from exc
 
 
 def require_admin(current_user: list = Depends(get_current_user)) -> list:

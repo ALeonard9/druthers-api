@@ -17,71 +17,6 @@ from pydantic import BaseModel, ConfigDict, Field
 RankPosition = Annotated[int, Field(ge=1)]
 
 
-# --- Countries ---
-class CountryBase(BaseModel):
-    title: str
-    country_code: str
-    region: Optional[str] = None
-    subregion: Optional[str] = None
-    capital: Optional[str] = None
-    population: Optional[int] = None
-    flag_emoji: Optional[str] = None
-    flag_url: Optional[str] = None
-
-
-class CountryCreate(CountryBase):
-    pass
-
-
-class CountryUpdate(BaseModel):
-    title: Optional[str] = None
-    country_code: Optional[str] = None
-    region: Optional[str] = None
-    subregion: Optional[str] = None
-    capital: Optional[str] = None
-    population: Optional[int] = None
-    flag_emoji: Optional[str] = None
-    flag_url: Optional[str] = None
-
-
-class CountryResponse(CountryBase):
-    id: str
-    created_at: datetime
-    updated_at: datetime
-    model_config = ConfigDict(from_attributes=True)
-
-
-class UserCountryBase(BaseModel):
-    on_watchlist: Optional[bool] = None
-    on_rankings: Optional[bool] = None
-    rank: Optional[RankPosition] = None
-    completed: Optional[int] = None
-    notes: Optional[str] = None
-    first_visited: Optional[datetime] = None
-
-
-class UserCountryCreate(UserCountryBase):
-    pass
-
-
-class UserCountryUpdate(UserCountryBase):
-    pass
-
-
-class UserCountryResponse(UserCountryBase):
-    id: str
-    country: CountryResponse
-    created_at: datetime
-    updated_at: datetime
-    model_config = ConfigDict(from_attributes=True)
-
-
-class CountryRankingReorder(BaseModel):
-    """Ordered list of country (catalog) ids defining the new ranking order."""
-
-    country_ids: List[str]
-
-
 # --- Watch providers (shared by Movies and TV) ---
 class WatchProvider(BaseModel):
     """One streaming service a title is available on."""
@@ -659,7 +594,7 @@ class UnreadCountResponse(BaseModel):
 # --- Activity & Recommendations ---
 class ActivityItem(BaseModel):
     """
-    One inferred user action, unified across all five tracker domains. Most
+    One inferred user action, unified across all four tracker domains. Most
     trackers only carry their latest touch (created_at/updated_at) rather
     than a full history, so one tracker row = one entry here, dated by its
     last update and with its action inferred from current list state.
@@ -668,7 +603,7 @@ class ActivityItem(BaseModel):
     its show's row.
     """
 
-    category: str  # movie | tv_show | tv_episode | game | book | country
+    category: str  # movie | tv_show | tv_episode | game | book
     action: str  # watchlist_added | ranked | marked_done | watched_episode
     title: str
     subtitle: Optional[str] = None
@@ -681,7 +616,7 @@ class ActivityItem(BaseModel):
 class BoredItem(BaseModel):
     """One candidate pulled from a to-be-consumed (watchlist/bucket) list."""
 
-    category: str  # movie | tv_show | game | book | country
+    category: str  # movie | tv_show | game | book
     title: str
     subtitle: Optional[str] = None
     entity_id: str
