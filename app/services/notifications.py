@@ -13,7 +13,9 @@ from typing import List
 
 from sqlalchemy.orm import Session
 
+from app.db.db_friendship import list_with_other_party
 from app.db.models_sandbox import DbMovie, DbNotification, DbUserMovie
+from app.services.friendships import FriendshipStatus
 
 RELEASE_WINDOW_DAYS = 7
 
@@ -79,9 +81,104 @@ def sweep_movie_releases(db: Session, user_pk: int) -> int:
     return created
 
 
-def sweep_all(db: Session, user_pk: int) -> int:
-    """Run every generator for one user. Commits if anything was created."""
-    created = sweep_movie_releases(db, user_pk)
-    if created:
-        db.commit()
+def _raise_friend_notifications(db: Session, user_pk: int, spec: dict, rows) -> int:
+    """
+    Upsert one notification per (friendship, other-user) row, by dedupe_key.
+
+    ``spec`` carries ``type``, ``title``, and ``body_for(other_user)`` — a
+    dict rather than three parameters so the two call sites in
+    :func:`sweep_friend_requests` read as one shape apiece.
+    """
+    if not rows:
+        return 0
+    notif_type = spec['type']
+    keys = [f'{notif_type}:{friendship.id}' for friendship, _ in rows]
+    existing = _existing_keys(db, user_pk, keys)
+    created = 0
+    for friendship, other in rows:
+        key = f'{notif_type}:{friendship.id}'
+        if key in existing:
+            continue
+        db.add(
+            DbNotification(
+                user_id=user_pk,
+                type=notif_type,
+                title=spec['title'],
+                body=spec['body_for'](other),
+                category='friend_request',
+                entity_id=friendship.id,
+                dedupe_key=key,
+            )
+        )
+        created += 1
     return created
+
+
+def sweep_friend_requests(db: Session, user_pk: int) -> int:
+    """
+    Friend-request notifications (#282): an incoming request notifies the
+    recipient; acceptance notifies the original sender. Declining or
+    cancelling notifies nobody.
+
+    #275 deletes the friendship row outright on decline or cancel rather than
+    recording a terminal status — there is nothing to sweep a "declined"
+    event from. That also means a pending-request notification can outlive
+    the request it points at (declined/cancelled, or simply accepted by the
+    recipient themselves). Rather than let it deep-link into nothing, this
+    sweep deletes any pending notification whose friendship is no longer in
+    the live incoming set *before* raising anything new. Returns the number
+    of notifications created or removed, so the caller knows to commit.
+    """
+    incoming = list_with_other_party(
+        db, user_pk, FriendshipStatus.PENDING, requested_by_me=False
+    )
+    live_keys = {f'friend_request:{friendship.id}' for friendship, _ in incoming}
+
+    stale_filters = [
+        DbNotification.user_id == user_pk,
+        DbNotification.type == 'friend_request',
+    ]
+    if live_keys:
+        stale_filters.append(DbNotification.dedupe_key.notin_(live_keys))
+    removed = 0
+    for notification in db.query(DbNotification).filter(*stale_filters):
+        db.delete(notification)
+        removed += 1
+
+    def _name(user):
+        return user.display_name or user.handle or 'Someone'
+
+    created = _raise_friend_notifications(
+        db,
+        user_pk,
+        {
+            'type': 'friend_request',
+            'title': 'New friend request',
+            'body_for': lambda sender: f'{_name(sender)} wants to be friends.',
+        },
+        incoming,
+    )
+
+    accepted = list_with_other_party(
+        db, user_pk, FriendshipStatus.ACCEPTED, requested_by_me=True
+    )
+    created += _raise_friend_notifications(
+        db,
+        user_pk,
+        {
+            'type': 'friend_request_accepted',
+            'title': 'Friend request accepted',
+            'body_for': lambda other: f'{_name(other)} accepted your friend request.',
+        },
+        accepted,
+    )
+
+    return removed + created
+
+
+def sweep_all(db: Session, user_pk: int) -> int:
+    """Run every generator for one user. Commits if anything changed."""
+    changed = sweep_movie_releases(db, user_pk) + sweep_friend_requests(db, user_pk)
+    if changed:
+        db.commit()
+    return changed
