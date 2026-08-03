@@ -105,6 +105,57 @@ def test_catalog_adds_have_a_daily_cap(mock_settings, test_client: TestClient):
     rate_limit.reset()
 
 
+@patch('app.services.rate_limit.get_settings')
+def test_friend_requests_are_rate_limited_per_user(
+    mock_settings, test_client: TestClient
+):
+    """
+    Friend requests are the only write that names another user's handle, so
+    the cap is also the brake on probing for who exists (#275). Attempts are
+    counted before the lookup — a request to a handle nobody has costs the
+    caller exactly as much as one that lands.
+    """
+    rate_limit.reset()
+    mock_settings.return_value = Settings(**ENABLED, rate_limit_friend_requests=2)
+    for _ in range(2):
+        response = test_client.post(
+            '/v1/users/me/friends/requests',
+            headers=_auth(test_client),
+            json={'handle': 'nobody-at-all'},
+        )
+        assert response.status_code == 202
+    response = test_client.post(
+        '/v1/users/me/friends/requests',
+        headers=_auth(test_client),
+        json={'handle': 'nobody-at-all'},
+    )
+    assert response.status_code == 429
+    assert response.headers['retry-after'] == '3600'
+    rate_limit.reset()
+
+
+@patch('app.services.rate_limit.get_settings')
+def test_follows_are_rate_limited_per_user(mock_settings, test_client: TestClient):
+    """
+    Following (#276) targets only already-public profiles, so this cap is
+    purely a spam brake rather than a probing defense — but it still counts
+    attempts before the lookup, same as the friend-request cap does.
+    """
+    rate_limit.reset()
+    mock_settings.return_value = Settings(**ENABLED, rate_limit_follows=2)
+    for _ in range(2):
+        response = test_client.put(
+            '/v1/users/me/following/nobody-at-all', headers=_auth(test_client)
+        )
+        assert response.status_code == 404
+    response = test_client.put(
+        '/v1/users/me/following/nobody-at-all', headers=_auth(test_client)
+    )
+    assert response.status_code == 429
+    assert response.headers['retry-after'] == '3600'
+    rate_limit.reset()
+
+
 def test_limits_are_off_in_ci_by_default(test_client: TestClient):
     """
     Without the explicit enable, CI/local traffic is never throttled — the

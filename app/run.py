@@ -19,14 +19,14 @@ from .auth import authentication
 from .config import get_settings
 from .db import db_user, models
 from .db.database import engine, get_db
-from .db.models_sandbox import DbCountry
 from .log.logging_config import logger
 from .router.v1 import (
     user,
     router_activity,
     router_api_keys,
-    router_countries,
     router_export,
+    router_follows,
+    router_friends,
     router_import,
     router_notifications,
     router_search,
@@ -38,7 +38,6 @@ from .router.v1 import (
     router_tv,
 )
 from .schemas.model_schemas import OutResponseBaseModel
-from .services.country_data import seed_countries
 from .utils.exceptions import (
     generic_exception_handler,
     http_exception_handler,
@@ -71,12 +70,19 @@ app = FastAPI(
         {'name': 'TV', 'description': 'TV shows, episodes, and per-user tracker'},
         {'name': 'Games', 'description': 'Video game catalog and per-user tracker'},
         {'name': 'Books', 'description': 'Book catalog and per-user tracker'},
-        {'name': 'Countries', 'description': 'Country catalog and per-user tracker'},
         {
             'name': 'Activity',
             'description': 'Cross-domain activity log and "I\'m bored" recommendation',
         },
         {'name': 'Notifications', 'description': 'Per-user notification feed'},
+        {
+            'name': 'Friends',
+            'description': 'Mutual friend requests, friends list, and unfriend',
+        },
+        {
+            'name': 'Follows',
+            'description': 'Asymmetric, unapproved follows — grants no extra visibility',
+        },
         {'name': 'Search', 'description': 'Cross-domain global search'},
         {
             'name': 'Summary',
@@ -126,7 +132,6 @@ async def log_request_latency(request, call_next):
 
 app.include_router(authentication.router, prefix='/v1/auth')
 app.include_router(user.router, prefix='/v1/users')
-app.include_router(router_countries.router)
 app.include_router(router_movies.router)
 app.include_router(router_games.router)
 app.include_router(router_books.router)
@@ -138,6 +143,8 @@ app.include_router(router_api_keys.router)
 app.include_router(router_export.router)
 app.include_router(router_import.router)
 app.include_router(router_visibility.router)
+app.include_router(router_friends.router)
+app.include_router(router_follows.router)
 app.include_router(router_summary.router)
 
 # Serve static files
@@ -218,12 +225,6 @@ async def start_server():
     try:
         db = next(get_db())
         db_user.create_admin_user(db)
-        # The Countries catalog has no search proxy (it's the finite world
-        # list) — seed it once so "add a country" has anything to pick from.
-        if db.query(DbCountry).count() == 0:
-            created = seed_countries(db)
-            db.commit()
-            logger.info('Seeded countries catalog: %d created', created)
     except Exception as e:  # pylint: disable=broad-exception-caught
         # Startup seeding is best-effort: a misconfigured admin seed or an
         # unreachable database must never stop the server from listening

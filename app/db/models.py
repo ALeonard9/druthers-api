@@ -5,10 +5,47 @@ This module defines the database models.
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import backref, relationship
 
 from app.db.database import Base
+from app.services.friendships import DEFAULT_STATUS, FriendshipStatus
+from app.services.visibility import DEFAULT_TIER, VisibilityTier
+
+
+def tier_column(name: str) -> Column:
+    """
+    One ``private | friends | public`` column on ``users``.
+
+    Stored as a VARCHAR with its own CHECK constraint rather than an integer
+    or a native PG enum: a stray value fails loudly at write time, and a
+    rollback of the owning migration doesn't leave an orphaned type behind.
+    The constraint is named per column because Postgres scopes CHECK names to
+    the table, so nine columns cannot share one name.
+    """
+    return Column(
+        name,
+        Enum(
+            VisibilityTier,
+            name=f'ck_users_{name}',
+            native_enum=False,
+            create_constraint=True,
+            length=16,
+            values_callable=lambda members: [member.value for member in members],
+        ),
+        nullable=False,
+        default=DEFAULT_TIER,
+        server_default=DEFAULT_TIER.value,
+    )
 
 
 class DBBaseModel(Base):
@@ -40,22 +77,30 @@ class DbUser(DBBaseModel):
     user_group = Column(String, default='user')
     password = Column(String)
 
-    # --- Visibility (#143): everything is private by default. A public
-    # profile needs a handle (druthers.io/u/<handle>) plus at least one
-    # category switched on; only ranked lists are ever exposed.
-    handle = Column(String(length=30), unique=True, index=True, nullable=True)
-    public_movies = Column(Boolean, nullable=True, default=False)
-    public_tv = Column(Boolean, nullable=True, default=False)
-    public_books = Column(Boolean, nullable=True, default=False)
-    public_games = Column(Boolean, nullable=True, default=False)
+    # --- Visibility (#143, tiered in #274): everything is private by
+    # default. Anything non-private needs a handle (druthers.io/u/<handle>);
+    # only ranked lists and opted-in watchlists are ever exposed.
 
-    # Opt-in watchlist visibility (#236): independent of the ranked-list
-    # flags above. The public endpoint only serves a category's watchlist
-    # when both this flag AND the matching public_* flag are set.
-    public_watchlist_movies = Column(Boolean, nullable=True, default=False)
-    public_watchlist_tv = Column(Boolean, nullable=True, default=False)
-    public_watchlist_books = Column(Boolean, nullable=True, default=False)
-    public_watchlist_games = Column(Boolean, nullable=True, default=False)
+    handle = Column(String(length=30), unique=True, index=True, nullable=True)
+
+    # The ninth setting: the profile page itself. Invariant enforced in
+    # router_visibility — this is always at least as open as the most-open
+    # shelf below, so no shelf can be reachable through a profile that is
+    # more closed than the shelf.
+    visibility_profile = tier_column('visibility_profile')
+
+    visibility_movies = tier_column('visibility_movies')
+    visibility_tv = tier_column('visibility_tv')
+    visibility_books = tier_column('visibility_books')
+    visibility_games = tier_column('visibility_games')
+
+    # Watchlist visibility (#236): independent of the ranked-list tiers
+    # above. A category's watchlist is only served when this tier AND the
+    # matching ranked-list tier both admit the viewer.
+    visibility_watchlist_movies = tier_column('visibility_watchlist_movies')
+    visibility_watchlist_tv = tier_column('visibility_watchlist_tv')
+    visibility_watchlist_books = tier_column('visibility_watchlist_books')
+    visibility_watchlist_games = tier_column('visibility_watchlist_games')
 
 
 class DbApiKey(DBBaseModel):
@@ -111,6 +156,128 @@ class DbRefreshToken(DBBaseModel):
     user = relationship(
         'DbUser',
         backref=backref('refresh_tokens', cascade='all, delete-orphan'),
+    )
+
+
+class DbFriendship(DBBaseModel):
+    """
+    One mutual friendship — or the request that may become one (#275).
+
+    **One row per relationship, not two.** The pair is stored in canonical
+    order (``user_low_id < user_high_id``, enforced by a CHECK) with a
+    ``UNIQUE`` across the two columns, so a pair can hold at most one row and
+    "are these two friends" is one indexed lookup rather than an OR over two
+    mirrored rows that could drift apart. ``requested_by_id`` is what the
+    second row would otherwise have carried: it says which side asked, which
+    is all the direction the model needs.
+
+    ``responded_at`` is NULL exactly while ``status`` is ``pending``. A
+    decline or a cancel deletes the row rather than recording a terminal
+    status — see :class:`~app.services.friendships.FriendshipStatus`.
+
+    Rows are meaningless without both parties, so deleting a user takes their
+    friendships with them.
+    """
+
+    __tablename__ = 'friendships'
+    __table_args__ = (
+        UniqueConstraint('user_low_id', 'user_high_id', name='uq_friendships_pair'),
+        # The canonical ordering is the whole reason one row can stand in for
+        # two directions, so the database — not just the service layer —
+        # refuses a row that breaks it.
+        CheckConstraint(
+            'user_low_id < user_high_id', name='ck_friendships_canonical_order'
+        ),
+    )
+
+    user_low_id = Column(
+        Integer,
+        ForeignKey('users.pk', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    user_high_id = Column(
+        Integer,
+        ForeignKey('users.pk', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    # Which of the two above sent the request. Not a third party: a CHECK
+    # can't express "one of these two columns" portably, so the service layer
+    # is what guarantees it.
+    requested_by_id = Column(
+        Integer,
+        ForeignKey('users.pk', ondelete='CASCADE'),
+        nullable=False,
+    )
+    status = Column(
+        Enum(
+            FriendshipStatus,
+            name='ck_friendships_status',
+            native_enum=False,
+            create_constraint=True,
+            length=16,
+            values_callable=lambda members: [member.value for member in members],
+        ),
+        nullable=False,
+        default=DEFAULT_STATUS,
+        server_default=DEFAULT_STATUS.value,
+    )
+    # Kept explicitly rather than leaning on created_at/updated_at: those are
+    # row bookkeeping and would be rewritten by any future column touch,
+    # whereas these two are the facts a user is shown.
+    requested_at = Column(
+        DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    responded_at = Column(DateTime, nullable=True)
+
+
+class DbFollow(DBBaseModel):
+    """
+    One asymmetric follow (#276): a follower opted into someone else's public
+    profile, unapproved and revocable by the follower alone.
+
+    Deliberately not shaped like :class:`DbFriendship`. There is exactly one
+    row per *direction* — ``follower_id``, ``followee_id`` — with no
+    canonical ordering to enforce, because A following B and B following A
+    are two unrelated facts, not two views of the same relationship. The
+    ``UNIQUE`` pair just keeps a follower from accumulating duplicate rows
+    for the same target.
+
+    **Following grants no additional visibility.** Nothing in
+    :mod:`app.services.visibility` reads this table — a follower resolves to
+    the exact same tier ceiling as an anonymous visitor. If the followee's
+    profile later drops out of the ``public`` tier, this row is not deleted;
+    it simply stops admitting anything, same as any other stale grant that
+    was never wired into the ceiling in the first place.
+
+    Rows are meaningless without both parties, so deleting a user takes both
+    their outgoing and incoming follows with them.
+    """
+
+    __tablename__ = 'follows'
+    __table_args__ = (
+        UniqueConstraint('follower_id', 'followee_id', name='uq_follows_pair'),
+        CheckConstraint('follower_id != followee_id', name='ck_follows_not_self'),
+    )
+
+    follower_id = Column(
+        Integer,
+        ForeignKey('users.pk', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    followee_id = Column(
+        Integer,
+        ForeignKey('users.pk', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    # Explicit rather than created_at/updated_at: those are row bookkeeping
+    # and could be rewritten by a future column touch, whereas this is the
+    # one fact a user is shown ("following since").
+    followed_at = Column(
+        DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
     )
 
 

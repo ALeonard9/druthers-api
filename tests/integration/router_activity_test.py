@@ -1,6 +1,4 @@
 # pylint: disable=missing-module-docstring, missing-function-docstring
-from unittest.mock import patch
-
 from fastapi.testclient import TestClient
 
 
@@ -47,18 +45,6 @@ def _make_book(test_client: TestClient, title='Dune', **extra) -> str:
     resp = test_client.post(
         '/v1/books', headers=headers, json={'title': title, **extra}
     )
-    assert resp.status_code == 201
-    return resp.json()['id']
-
-
-def _make_country(test_client: TestClient, title='Japan', code='jp') -> str:
-    headers = {'Authorization': f"Bearer {test_client.admin_user.token}"}
-    with patch('app.router.v1.router_countries.get_country_detail', return_value=None):
-        resp = test_client.post(
-            '/v1/countries',
-            headers=headers,
-            json={'title': title, 'country_code': code},
-        )
     assert resp.status_code == 201
     return resp.json()['id']
 

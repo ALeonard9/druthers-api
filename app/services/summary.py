@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import DbUser
 from app.services.shelves import SHELVES, Shelf
+from app.services.visibility import is_public
 
 # Ranked entries returned per shelf. Five is the product ("your Top 5"), not
 # an arbitrary page size — callers may ask for fewer but not more, so this
@@ -85,7 +86,12 @@ def build_summary(db: Session, user: DbUser, top_n: int = TOP_N) -> dict:
                 'label': shelf.label,
                 'ranked_count': counts.ranked,
                 'queued_count': counts.queued,
-                'public': bool(getattr(user, shelf.visibility_flag)),
+                # Boolean on purpose: the share card only cares whether an
+                # *anonymous* visitor would see this shelf, which is still a
+                # question about ``public`` alone now that the profile itself
+                # is viewer-aware (#277). A friends-only shelf is false here
+                # and still reaches friends on the profile.
+                'public': is_public(getattr(user, shelf.visibility_tier)),
                 'top': _top(db, shelf, user.pk, limit),
             }
         )
@@ -93,10 +99,13 @@ def build_summary(db: Session, user: DbUser, top_n: int = TOP_N) -> dict:
     return {
         'handle': user.handle,
         'display_name': user.display_name,
-        # A profile only resolves once a handle exists AND a shelf is opted in
-        # (see router_visibility.public_profile, which 404s otherwise). The web
-        # reads this instead of re-deriving the rule.
-        'profile_public': bool(user.handle) and any(s['public'] for s in shelves),
+        # A profile only resolves once a handle exists, the profile tier is
+        # public, AND a shelf is opted in (see router_visibility.
+        # public_profile, which 404s otherwise). The web reads this instead
+        # of re-deriving the rule.
+        'profile_public': bool(user.handle)
+        and is_public(user.visibility_profile)
+        and any(s['public'] for s in shelves),
         'shelves': shelves,
         'total_ranked': sum(s['ranked_count'] for s in shelves),
     }

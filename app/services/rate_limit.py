@@ -24,6 +24,8 @@ _events: dict = defaultdict(deque)
 AUTH_WINDOW_SECONDS = 300
 SEARCH_WINDOW_SECONDS = 60
 CATALOG_WINDOW_SECONDS = 86400
+FRIEND_WINDOW_SECONDS = 3600
+FOLLOW_WINDOW_SECONDS = 3600
 
 
 def reset() -> None:
@@ -111,3 +113,37 @@ def catalog_add_cap(current_user: list = Depends(get_current_user)) -> None:
     limit = get_settings().catalog_add_daily_cap
     if not _allow(f'catalog:{current_user[0].pk}', limit, CATALOG_WINDOW_SECONDS):
         _reject('catalog additions for today', CATALOG_WINDOW_SECONDS)
+
+
+def friend_request_rate_limit(current_user: list = Depends(get_current_user)) -> None:
+    """
+    Per-user cap on outgoing friend requests (#275).
+
+    Doubles as the brake on handle probing. Sending a request answers
+    identically whether or not the handle exists, so the only way to learn
+    anything from the endpoint is volume — and this counts *attempts*, before
+    the handle is looked up, so a miss costs an attacker exactly as much as a
+    hit. Keyed per user (not per IP) because the web BFF calls the API
+    server-to-server and every browser would otherwise share one bucket.
+    """
+    if not _enforced():
+        return
+    limit = get_settings().rate_limit_friend_requests
+    if not _allow(f'friend:{current_user[0].pk}', limit, FRIEND_WINDOW_SECONDS):
+        _reject('friend requests', FRIEND_WINDOW_SECONDS)
+
+
+def follow_rate_limit(current_user: list = Depends(get_current_user)) -> None:
+    """
+    Per-user cap on follow actions (#276).
+
+    Unlike friend requests, following carries no probing concern — a follow
+    only ever targets a profile that is already public. This cap exists
+    purely to stop a mass-follow script, so it is looser than the friend
+    request one.
+    """
+    if not _enforced():
+        return
+    limit = get_settings().rate_limit_follows
+    if not _allow(f'follow:{current_user[0].pk}', limit, FOLLOW_WINDOW_SECONDS):
+        _reject('follows', FOLLOW_WINDOW_SECONDS)

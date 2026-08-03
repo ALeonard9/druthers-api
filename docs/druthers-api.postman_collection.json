@@ -624,412 +624,6 @@
       ]
     },
     {
-      "name": "Countries",
-      "description": "Country catalog and per-user tracker",
-      "item": [
-        {
-          "name": "Create Country",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/v1/countries",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "countries"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"title\": \"string\",\n  \"country_code\": \"string\",\n  \"region\": \"string\",\n  \"subregion\": \"string\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Create Country"
-          }
-        },
-        {
-          "name": "Delete Country",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/v1/countries/:country_id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "countries",
-                ":country_id"
-              ],
-              "variable": [
-                {
-                  "key": "country_id",
-                  "value": "",
-                  "description": ""
-                }
-              ]
-            },
-            "description": "Delete Country"
-          }
-        },
-        {
-          "name": "Get All Countries",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/v1/countries",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "countries"
-              ]
-            },
-            "description": "Get All Countries"
-          }
-        },
-        {
-          "name": "Get Country",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/v1/countries/:country_id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "countries",
-                ":country_id"
-              ],
-              "variable": [
-                {
-                  "key": "country_id",
-                  "value": "",
-                  "description": ""
-                }
-              ]
-            },
-            "description": "Return one country's detail, enriching from REST Countries on first view."
-          }
-        },
-        {
-          "name": "Get User Countries",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/v1/users/me/countries",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "users",
-                "me",
-                "countries"
-              ]
-            },
-            "description": "Get User Countries"
-          }
-        },
-        {
-          "name": "Get User Country",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/v1/users/me/countries/:country_id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "users",
-                "me",
-                "countries",
-                ":country_id"
-              ],
-              "variable": [
-                {
-                  "key": "country_id",
-                  "value": "",
-                  "description": ""
-                }
-              ]
-            },
-            "description": "Return the current user's tracker for one country (404 if not tracked)."
-          }
-        },
-        {
-          "name": "Mark Country",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/v1/users/me/countries/:country_id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "users",
-                "me",
-                "countries",
-                ":country_id"
-              ],
-              "variable": [
-                {
-                  "key": "country_id",
-                  "value": "",
-                  "description": ""
-                }
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"on_watchlist\": true,\n  \"on_rankings\": true,\n  \"rank\": 0,\n  \"completed\": 0,\n  \"notes\": \"string\",\n  \"first_visited\": \"2026-01-01T00:00:00Z\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Add a country to the user's lists (idempotent \u2014 merges list membership)."
-          }
-        },
-        {
-          "name": "Reorder Rankings",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/v1/users/me/countries/rankings/order",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "users",
-                "me",
-                "countries",
-                "rankings",
-                "order"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"country_ids\": [\n    \"string\"\n  ]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Persist a new ranking order (drag-and-drop). Rank = position in the list."
-          }
-        },
-        {
-          "name": "Set Country Rank",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/v1/users/me/countries/:country_id/rank",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "users",
-                "me",
-                "countries",
-                ":country_id",
-                "rank"
-              ],
-              "variable": [
-                {
-                  "key": "country_id",
-                  "value": "",
-                  "description": ""
-                }
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"position\": 0\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Place a country at an exact 1-based position in the visited ranking,\nshifting the countries at and below that position down by one."
-          }
-        },
-        {
-          "name": "Sync Countries",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/v1/countries/sync",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "countries",
-                "sync"
-              ]
-            },
-            "description": "Seed/refresh the full world catalog from REST Countries."
-          }
-        },
-        {
-          "name": "Unmark Country",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/v1/users/me/countries/:country_id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "users",
-                "me",
-                "countries",
-                ":country_id"
-              ],
-              "variable": [
-                {
-                  "key": "country_id",
-                  "value": "",
-                  "description": ""
-                }
-              ]
-            },
-            "description": "Unmark Country"
-          }
-        },
-        {
-          "name": "Update Country",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/v1/countries/:country_id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "countries",
-                ":country_id"
-              ],
-              "variable": [
-                {
-                  "key": "country_id",
-                  "value": "",
-                  "description": ""
-                }
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"title\": \"string\",\n  \"country_code\": \"string\",\n  \"region\": \"string\",\n  \"subregion\": \"string\",\n  \"capital\": \"string\",\n  \"population\": 0,\n  \"flag_emoji\": \"string\",\n  \"flag_url\": \"string\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Update Country"
-          }
-        },
-        {
-          "name": "Update User Country",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/v1/users/me/countries/:country_id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "users",
-                "me",
-                "countries",
-                ":country_id"
-              ],
-              "variable": [
-                {
-                  "key": "country_id",
-                  "value": "",
-                  "description": ""
-                }
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"on_watchlist\": true,\n  \"on_rankings\": true,\n  \"rank\": 0,\n  \"completed\": 0,\n  \"notes\": \"string\",\n  \"first_visited\": \"2026-01-01T00:00:00Z\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Update list membership, rank, notes, or first-visited for a country."
-          }
-        }
-      ]
-    },
-    {
       "name": "Export",
       "description": "",
       "item": [
@@ -1079,6 +673,307 @@
               ]
             },
             "description": "Full-fidelity JSON export of every domain, using the same schemas the\nAPI serves \u2014 anything the UI can show is in here."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Follows",
+      "description": "Asymmetric, unapproved follows \u2014 grants no extra visibility",
+      "item": [
+        {
+          "name": "Follow User",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/following/:handle",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "following",
+                ":handle"
+              ],
+              "variable": [
+                {
+                  "key": "handle",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Follow a public profile. Idempotent: following twice just returns the\nexisting row rather than erroring, since there is no second state for a\nrepeat call to conflict with."
+          }
+        },
+        {
+          "name": "List Followers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/followers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "followers"
+              ]
+            },
+            "description": "Everyone following the caller."
+          }
+        },
+        {
+          "name": "List Following",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/following",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "following"
+              ]
+            },
+            "description": "Everyone the caller follows."
+          }
+        },
+        {
+          "name": "Unfollow User",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/following/:handle",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "following",
+                ":handle"
+              ],
+              "variable": [
+                {
+                  "key": "handle",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Stop following someone.\n\nDeliberately does not require the target to still be public \u2014 a follow\npersists through a followee tightening their profile (that's the whole\npoint of #276's \"grants nothing, persists anyway\" rule), and the follower\nmust still be able to unfollow after that happens."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Friends",
+      "description": "Mutual friend requests, friends list, and unfriend",
+      "item": [
+        {
+          "name": "Accept Friend Request",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/friends/requests/:request_id/accept",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "friends",
+                "requests",
+                ":request_id",
+                "accept"
+              ],
+              "variable": [
+                {
+                  "key": "request_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Accept an incoming request; from here both sides count as friends."
+          }
+        },
+        {
+          "name": "Cancel Friend Request",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/friends/requests/:request_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "friends",
+                "requests",
+                ":request_id"
+              ],
+              "variable": [
+                {
+                  "key": "request_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Withdraw a request the caller sent, before it is answered."
+          }
+        },
+        {
+          "name": "Decline Friend Request",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/friends/requests/:request_id/decline",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "friends",
+                "requests",
+                ":request_id",
+                "decline"
+              ],
+              "variable": [
+                {
+                  "key": "request_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Decline an incoming request.\n\nDeletes the row instead of recording a refusal: nobody should be able to\nread a standing \"no\" off the graph, and the pair can try again later."
+          }
+        },
+        {
+          "name": "List Friend Requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/friends/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "friends",
+                "requests"
+              ]
+            },
+            "description": "List Friend Requests"
+          }
+        },
+        {
+          "name": "List Friends",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/friends",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "friends"
+              ]
+            },
+            "description": "List Friends"
+          }
+        },
+        {
+          "name": "Send Friend Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/friends/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "friends",
+                "requests"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"handle\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Send a friend request to an exact handle.\n\nAlways 202 unless the caller is already a party to the relationship (or\nis the target) \u2014 see the module docstring for why the shape of the\nnon-answers matters as much as the answer."
+          }
+        },
+        {
+          "name": "Unfriend",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/friends/:friendship_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "friends",
+                ":friendship_id"
+              ],
+              "variable": [
+                {
+                  "key": "friendship_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "End a friendship. Symmetric: either side may do this, and one row going\naway ends it for both \u2014 there is no second row to leave behind."
           }
         }
       ]
@@ -2177,6 +2072,35 @@
           }
         },
         {
+          "name": "Mark Episode Favorited",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/episodes/:episode_id/favorite",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "episodes",
+                ":episode_id",
+                "favorite"
+              ],
+              "variable": [
+                {
+                  "key": "episode_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Favorite an episode, independent of watched status (idempotent)."
+          }
+        },
+        {
           "name": "Mark Episode Watched",
           "request": {
             "method": "POST",
@@ -2378,6 +2302,35 @@
               ]
             },
             "description": "Refresh the episode list from TVMaze (for ongoing shows)."
+          }
+        },
+        {
+          "name": "Unmark Episode Favorited",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/episodes/:episode_id/favorite",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "episodes",
+                ":episode_id",
+                "favorite"
+              ],
+              "variable": [
+                {
+                  "key": "episode_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Unmark Episode Favorited"
           }
         },
         {
@@ -3047,7 +3000,7 @@
                 }
               ]
             },
-            "description": "Read-only public profile: ranked lists of the categories the owner has\nopted in, best first. Fully private profiles (and unknown handles) 404\nidentically, so the endpoint never confirms a private account exists."
+            "description": "Read-only profile: ranked lists of the categories the owner has opted in,\nbest first, filtered to what *this* caller may see.\n\nAuthentication is optional (#277). Anonymous callers and signed-in\nstrangers get ``public`` and nothing else; an accepted friend also gets\n``friends``; the owner gets everything of their own \u2014 including private\nshelves, and so never a 404 on their own handle \u2014 which is why the\nresponse carries ``viewer.relationship``: a client rendering this page has\nto be able to say *whose* view it is showing. ``viewer.following`` (#276)\nrides alongside it for the same reason \u2014 whether to render a Follow or\nFollowing button \u2014 and is computed only *after* every access decision\nabove has already been made: following is never part of the ceiling a\ncaller is served, only a fact about the payload once that's settled.\n\n**One ceiling, resolved once.** The caller's relationship is turned into a\nsingle tier ceiling before any shelf is read, and every shelf \u2014 ranked\nlist and watchlist alike \u2014 is then compared against that one value. The\nalternative, asking \"is this viewer a friend?\" per shelf, is what lets two\nshelves end up evaluated under different assumptions.\n\n**Nothing visible is indistinguishable from nothing there.** An unknown\nhandle, a profile whose tier is above this caller, and a profile with no\nshelf this caller may see all raise the *same* exception object: same\nstatus, same body, same headers. Since visibility is now\nviewer-dependent, so is the 404 \u2014 a profile a friend can see 404s for\neverybody else exactly as a handle nobody ever claimed does."
           }
         },
         {
@@ -3074,14 +3027,14 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"handle\": \"string\",\n  \"public_movies\": true,\n  \"public_tv\": true,\n  \"public_books\": true,\n  \"public_games\": true\n}",
+              "raw": "{\n  \"handle\": \"string\",\n  \"visibility_profile\": \"private\",\n  \"visibility_movies\": \"private\",\n  \"visibility_tv\": \"private\",\n  \"visibility_books\": \"private\",\n  \"visibility_games\": \"private\",\n  \"visibility_watchlist_movies\": \"private\",\n  \"visibility_watchlist_tv\": \"private\",\n  \"visibility_watchlist_books\": \"private\",\n  \"visibility_watchlist_games\": \"private\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             },
-            "description": "Update the handle and/or per-category public flags. Opening any category\nto the public requires a handle (that's the profile URL)."
+            "description": "Update the handle and/or any of the nine visibility tiers.\n\nOnly fields present in the body change. The result has to satisfy both\ninvariants \u2014 a handle for anything non-private, and a profile at least as\nopen as its most-open shelf \u2014 or the whole update is rejected. Both are\nchecked against the *resulting* state before anything is written, so a\nrejection leaves the row exactly as it was."
           }
         }
       ]

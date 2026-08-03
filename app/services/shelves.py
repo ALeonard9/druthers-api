@@ -29,11 +29,11 @@ class Shelf(NamedTuple):
     category: str
     # Human label ('Video Games'), as it appears on profiles and share cards.
     label: str
-    # Attribute on DbUser holding this shelf's public opt-in flag.
-    visibility_flag: str
-    # Attribute on DbUser holding this shelf's opt-in *watchlist* visibility
-    # flag (#236) — only takes effect when visibility_flag is also set.
-    watchlist_visibility_flag: str
+    # Attribute on DbUser holding this shelf's visibility tier.
+    visibility_tier: str
+    # Attribute on DbUser holding this shelf's *watchlist* visibility tier
+    # (#236) — only takes effect when visibility_tier admits the viewer too.
+    watchlist_visibility_tier: str
     tracker_model: Type
     catalog_model: Type
     # Tracker column joining to ``catalog_model.pk``.
@@ -44,8 +44,8 @@ SHELVES: Tuple[Shelf, ...] = (
     Shelf(
         'movies',
         'Movies',
-        'public_movies',
-        'public_watchlist_movies',
+        'visibility_movies',
+        'visibility_watchlist_movies',
         DbUserMovie,
         DbMovie,
         'movie_id',
@@ -53,8 +53,8 @@ SHELVES: Tuple[Shelf, ...] = (
     Shelf(
         'tv',
         'TV',
-        'public_tv',
-        'public_watchlist_tv',
+        'visibility_tv',
+        'visibility_watchlist_tv',
         DbUserTVShow,
         DbTVShow,
         'tv_show_id',
@@ -62,8 +62,8 @@ SHELVES: Tuple[Shelf, ...] = (
     Shelf(
         'books',
         'Books',
-        'public_books',
-        'public_watchlist_books',
+        'visibility_books',
+        'visibility_watchlist_books',
         DbUserBook,
         DbBook,
         'book_id',
@@ -71,10 +71,28 @@ SHELVES: Tuple[Shelf, ...] = (
     Shelf(
         'games',
         'Video Games',
-        'public_games',
-        'public_watchlist_games',
+        'visibility_games',
+        'visibility_watchlist_games',
         DbUserVideoGame,
         DbVideoGame,
         'game_id',
     ),
 )
+
+
+def shelf_tier_fields() -> Tuple[Tuple[str, str], ...]:
+    """
+    Every shelf tier column on ``DbUser`` paired with a human label.
+
+    Ordered ranked-list then watchlist, shelf by shelf, so a validation error
+    names shelves in the order the settings page lists them. Derived from
+    :data:`SHELVES` so adding a domain never means editing a second list.
+    """
+    return tuple(
+        pair
+        for shelf in SHELVES
+        for pair in (
+            (shelf.visibility_tier, shelf.label),
+            (shelf.watchlist_visibility_tier, f'{shelf.label} watchlist'),
+        )
+    )

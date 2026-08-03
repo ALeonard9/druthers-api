@@ -13,12 +13,10 @@ from fastapi.testclient import TestClient
 
 from app.db.models_sandbox import (
     DbBook,
-    DbCountry,
     DbMovie,
     DbTVEpisode,
     DbTVShow,
     DbUserBook,
-    DbUserCountry,
     DbUserMovie,
     DbUserTVEpisode,
     DbUserTVShow,
@@ -111,33 +109,6 @@ def test_delete_game_with_tracker_row(test_client: TestClient):
     db = test_client.test_db_session
     assert db.query(DbVideoGame).count() == 0
     assert db.query(DbUserVideoGame).count() == 0
-
-
-def test_delete_country_with_tracker_row(test_client: TestClient):
-    country_id = test_client.post(
-        '/v1/countries',
-        headers=_admin(test_client),
-        json={'title': 'Japan', 'country_code': 'jp'},
-    ).json()['id']
-    assert (
-        test_client.post(
-            f"/v1/users/me/countries/{country_id}",
-            headers=_user(test_client),
-            json={'on_watchlist': True},
-        ).status_code
-        == 201
-    )
-
-    assert (
-        test_client.delete(
-            f"/v1/countries/{country_id}", headers=_admin(test_client)
-        ).status_code
-        == 204
-    )
-
-    db = test_client.test_db_session
-    assert db.query(DbCountry).count() == 0
-    assert db.query(DbUserCountry).count() == 0
 
 
 def test_delete_tv_show_cascades_two_levels(test_client: TestClient):

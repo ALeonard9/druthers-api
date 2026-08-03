@@ -79,6 +79,15 @@ class Settings(BaseSettings):
     rate_limit_refresh: int = 60  # refreshes per user per 5 minutes
     rate_limit_search: int = 60  # search-proxy calls per user per minute
     catalog_add_daily_cap: int = 200  # catalog creations per user per day
+    # Friend requests (#275) are the one write that takes a handle belonging
+    # to someone else, so the cap is also the brake on probing for which
+    # handles exist. A person adds a handful of friends in a sitting; a
+    # scraper wants thousands.
+    rate_limit_friend_requests: int = 30  # friend requests per user per hour
+    # Following (#276) targets only already-public profiles, so there is no
+    # probing concern the way there is for friend requests — this cap exists
+    # purely to stop a mass-follow script.
+    rate_limit_follows: int = 60  # follow actions per user per hour
 
     # --- Invite-only access (#183) ---
     # Kill switch for POST /v1/users: closes open password self-registration.
@@ -91,6 +100,16 @@ class Settings(BaseSettings):
     # rejection. Intended for QA/pre-launch: set to just the operator's own
     # Google account.
     oauth_allowlist: Optional[str] = None
+
+    # --- Handle claiming (#278) ---
+    # Comma-separated handles exempted from the profanity check, case-
+    # insensitive. No wordlist is complete or neutral — `better-profanity`'s
+    # will occasionally flag a legitimate handle as a false positive (see
+    # `app/services/handles.py`). This is Adam's lever to unblock a specific
+    # user without touching the wordlist or redeploying code: add the handle,
+    # set the env var, restart. Unset = no exemptions (today's behavior for
+    # everyone).
+    handle_profanity_allowlist: Optional[str] = None
 
     # --- Observability ---
     loki_url: Optional[str] = None
@@ -160,6 +179,24 @@ class Settings(BaseSettings):
             if email.strip()
         )
         return emails or None
+
+    @property
+    def handle_profanity_allowlist_set(self) -> FrozenSet[str]:
+        """
+        Parsed, lowercased handle exemptions (empty set when unset).
+
+        Unlike ``oauth_allowlist_emails`` this has no "feature off" sentinel
+        to preserve — an empty set and "unset" behave identically at the
+        call site (nothing is exempted), so there's no ambiguity to protect
+        against.
+        """
+        if not self.handle_profanity_allowlist:
+            return frozenset()
+        return frozenset(
+            handle.strip().lower()
+            for handle in self.handle_profanity_allowlist.split(',')
+            if handle.strip()
+        )
 
     @property
     def google_client_ids(self) -> List[str]:

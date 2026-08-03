@@ -35,12 +35,10 @@ from app.db.hash import Hash
 from app.db.models import DbUser
 from app.db.models_sandbox import (
     DbBook,
-    DbCountry,
     DbMovie,
     DbTVEpisode,
     DbTVShow,
     DbUserBook,
-    DbUserCountry,
     DbUserMovie,
     DbUserTVEpisode,
     DbUserTVShow,
@@ -445,47 +443,6 @@ def run_import(dry_run: bool = False) -> Report:
                     },
                 ),
                 lambda nf: nf['user_id'] and nf['book_id'],
-            )
-
-            country_map = _migrate_catalog(
-                src,
-                session,
-                report,
-                'countries',
-                DbCountry,
-                'id, title, country_code',
-                'country_code',
-                lambda r: (
-                    # Lowercased to match the mledoze/flagcdn catalog keys.
-                    {
-                        'country_code': (_clean(r['country_code'], 4) or '').lower()
-                        or None
-                    },
-                    {'title': _clean(r['title'], 255) or 'Unknown'},
-                ),
-            )
-            _migrate_tracker(
-                src,
-                session,
-                report,
-                'g_user_countries',
-                DbUserCountry,
-                'countries_id, user_id, `rank`, completed, notes, g_first',
-                lambda r: (
-                    {
-                        'user_id': user_map.get(r['user_id']),
-                        'country_id': country_map.get(r['countries_id']),
-                    },
-                    {
-                        'rank': r['rank'] if r['completed'] == 1 else None,
-                        'completed': r['completed'],
-                        'notes': r['notes'],
-                        'first_visited': r['g_first'],
-                        'on_rankings': r['completed'] == 1,
-                        'on_watchlist': r['completed'] != 1,
-                    },
-                ),
-                lambda nf: nf['user_id'] and nf['country_id'],
             )
 
         if dry_run:

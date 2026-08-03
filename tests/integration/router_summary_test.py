@@ -128,7 +128,9 @@ def test_profile_public_tracks_handle_and_flags(test_client: TestClient):
     assert body['profile_public'] is False
 
     test_client.put(
-        '/v1/users/me/visibility', headers=_auth(token), json={'public_movies': True}
+        '/v1/users/me/visibility',
+        headers=_auth(token),
+        json={'visibility_profile': 'public', 'visibility_movies': 'public'},
     )
     body = test_client.get('/v1/users/me/summary', headers=_auth(token)).json()
     assert body['profile_public'] is True

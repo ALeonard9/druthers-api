@@ -73,11 +73,6 @@ tasks:
     cmds:
       - python -m app.migration.enrich_books
 
-  enrich:countries:
-    desc: "Seed the full world list + enrich countries from the world dataset"
-    cmds:
-      - python -m app.migration.enrich_countries
-
   enrich:games:
     desc: "Backfill IGDB detail for existing games (needs TWITCH_CLIENT_ID/SECRET)"
     cmds:

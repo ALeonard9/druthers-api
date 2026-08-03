@@ -1,7 +1,7 @@
 # Legacy data migration — orion (MySQL) → druthers (PostgreSQL)
 
-One-off, **idempotent** ETL that imports users and the five tracker domains
-(movies, TV + episodes, video games, books, countries) from the legacy `orion`
+One-off, **idempotent** ETL that imports users and the four tracker domains
+(movies, TV + episodes, video games, books) from the legacy `orion`
 MySQL database into the modern `druthers` PostgreSQL schema.
 
 Betting (`bet`), crypto, and Smash Up (`smash`) are **out of scope** for this
@@ -13,7 +13,7 @@ pass (those domains are not yet modeled in the API).
   the live DB) via `ORION_MYSQL_URL`.
 - Writes to the same target the app uses (`DATABASE_URL` / `POSTGRES_*`).
 - Upserts catalogs on their natural keys (`imdb`, `tvmaze`, `igdb`, `googleid`,
-  `country_code`, `email`) and tracker rows on `(user, item)`, so it is safe to
+  `email`) and tracker rows on `(user, item)`, so it is safe to
   re-run — a second run reports **0 inserts, all updates**.
 - Prints a reconciliation table (source vs insert/update/skip per table).
 
@@ -23,10 +23,9 @@ pass (those domains are not yet modeled in the API).
   accounts); the new stack uses Argon2 and cannot verify them. Each imported
   user gets an unusable random password — they re-auth via Google or a reset.
 - Legacy `user_group` (`User`/`Admin`) is lowercased to match the new RBAC.
-- `g_first` (first-completed) is preserved into `created_at` (and
-  `first_visited` for countries).
+- `g_first` (first-completed) is preserved into `created_at`.
 - Rows with a null natural key are skipped and counted (e.g. blank-email users,
-  one null `country_code`, untracked books with no `googleid`/title).
+  untracked books with no `googleid`/title).
 
 ## Run it
 

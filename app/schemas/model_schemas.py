@@ -7,6 +7,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from app.services.visibility import VisibilityTier
+
 
 # User data provided as input
 class InUserBase(BaseModel):
@@ -129,37 +131,142 @@ class OutToken(BaseModel):
 
 class InVisibilityUpdate(BaseModel):
     """
-    Request body for visibility settings. Only sent fields change; a null
-    handle clears it (allowed only while everything is private).
+    Request body for visibility settings (#274). Every setting is a tier —
+    ``private``, ``friends`` or ``public`` — not a boolean.
+
+    Only sent fields change; a null handle clears it (allowed only while
+    everything is private). An unsent field and an explicit null are both
+    left alone, so a client can PUT one radio button without echoing the
+    other eight.
     """
 
     handle: Optional[str] = None
-    public_movies: Optional[bool] = None
-    public_tv: Optional[bool] = None
-    public_books: Optional[bool] = None
-    public_games: Optional[bool] = None
-    public_watchlist_movies: Optional[bool] = None
-    public_watchlist_tv: Optional[bool] = None
-    public_watchlist_books: Optional[bool] = None
-    public_watchlist_games: Optional[bool] = None
+    visibility_profile: Optional[VisibilityTier] = None
+    visibility_movies: Optional[VisibilityTier] = None
+    visibility_tv: Optional[VisibilityTier] = None
+    visibility_books: Optional[VisibilityTier] = None
+    visibility_games: Optional[VisibilityTier] = None
+    visibility_watchlist_movies: Optional[VisibilityTier] = None
+    visibility_watchlist_tv: Optional[VisibilityTier] = None
+    visibility_watchlist_books: Optional[VisibilityTier] = None
+    visibility_watchlist_games: Optional[VisibilityTier] = None
 
 
 class OutVisibility(BaseModel):
     """
-    The caller's visibility settings. NULL flags read as private.
+    The caller's visibility settings, one tier per setting.
     """
 
     handle: Optional[str] = None
-    public_movies: Optional[bool] = False
-    public_tv: Optional[bool] = False
-    public_books: Optional[bool] = False
-    public_games: Optional[bool] = False
-    public_watchlist_movies: Optional[bool] = False
-    public_watchlist_tv: Optional[bool] = False
-    public_watchlist_books: Optional[bool] = False
-    public_watchlist_games: Optional[bool] = False
+    visibility_profile: VisibilityTier = VisibilityTier.PRIVATE
+    visibility_movies: VisibilityTier = VisibilityTier.PRIVATE
+    visibility_tv: VisibilityTier = VisibilityTier.PRIVATE
+    visibility_books: VisibilityTier = VisibilityTier.PRIVATE
+    visibility_games: VisibilityTier = VisibilityTier.PRIVATE
+    visibility_watchlist_movies: VisibilityTier = VisibilityTier.PRIVATE
+    visibility_watchlist_tv: VisibilityTier = VisibilityTier.PRIVATE
+    visibility_watchlist_books: VisibilityTier = VisibilityTier.PRIVATE
+    visibility_watchlist_games: VisibilityTier = VisibilityTier.PRIVATE
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class InFriendRequest(BaseModel):
+    """
+    Request body for sending a friend request (#275).
+
+    A handle and nothing else: there is no endpoint that lists or searches
+    users, so an exact handle someone told you is the only way to reach them.
+    """
+
+    handle: str = Field(min_length=1, max_length=30)
+
+
+class OutFriendAck(BaseModel):
+    """
+    Deliberately contentless acknowledgement of a friend-graph write.
+
+    Send and decline both answer with this, and send answers with *exactly*
+    this whether or not the handle resolved to anybody — see
+    ``router_friends`` for why the response must not vary.
+    """
+
+    message: str
+
+
+class OutFriendUser(BaseModel):
+    """
+    The other party in a friendship, as much of them as a friend may see.
+
+    No email, no visibility settings — a friendship is not an introduction to
+    someone's account.
+    """
+
+    id: str
+    handle: Optional[str] = None
+    display_name: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OutFriend(BaseModel):
+    """One accepted friendship. ``id`` addresses the friendship, not the user."""
+
+    id: str
+    user: OutFriendUser
+    friends_since: datetime
+
+
+class OutFriendRequest(BaseModel):
+    """One pending request, from the perspective of whoever is listing it."""
+
+    id: str
+    user: OutFriendUser
+    requested_at: datetime
+
+
+class OutPendingFriendRequests(BaseModel):
+    """
+    Both directions in one response.
+
+    The inbox badge and the "pending" state of an outgoing request are drawn
+    together, so splitting these across two endpoints would only ever mean
+    two calls.
+    """
+
+    incoming: list[OutFriendRequest] = []
+    outgoing: list[OutFriendRequest] = []
+
+
+class OutFollowUser(BaseModel):
+    """
+    The other party in a follow, as much of them as a follower may see.
+
+    A separate class from ``OutFriendUser`` even though the fields match: the
+    two relationships are deliberately kept apart everywhere else (#276), and
+    a schema shared between them would be the one place that split quietly
+    disappeared.
+    """
+
+    id: str
+    handle: Optional[str] = None
+    display_name: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OutFollow(BaseModel):
+    """
+    One follow edge, from whichever side is listing it.
+
+    ``id`` addresses the follow row, not either user. ``followed_at`` is the
+    one fact both sides are shown; there is nothing else to negotiate since a
+    follow needs no approval.
+    """
+
+    id: str
+    user: OutFollowUser
+    followed_at: datetime
 
 
 class OutSummaryEntry(BaseModel):

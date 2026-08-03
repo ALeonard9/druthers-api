@@ -402,584 +402,6 @@
         }
       }
     },
-    "/v1/countries": {
-      "get": {
-        "tags": [
-          "Countries"
-        ],
-        "summary": "Get All Countries",
-        "operationId": "get_all_countries_v1_countries_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CountryResponse"
-                  },
-                  "type": "array",
-                  "title": "Response Get All Countries V1 Countries Get"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Countries"
-        ],
-        "summary": "Create Country",
-        "operationId": "create_country_v1_countries_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CountryCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CountryResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/v1/countries/sync": {
-      "post": {
-        "tags": [
-          "Countries"
-        ],
-        "summary": "Sync Countries",
-        "description": "Seed/refresh the full world catalog from REST Countries.",
-        "operationId": "sync_countries_v1_countries_sync_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CountryResponse"
-                  },
-                  "type": "array",
-                  "title": "Response Sync Countries V1 Countries Sync Post"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/v1/countries/{country_id}": {
-      "get": {
-        "tags": [
-          "Countries"
-        ],
-        "summary": "Get Country",
-        "description": "Return one country's detail, enriching from REST Countries on first view.",
-        "operationId": "get_country_v1_countries__country_id__get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "country_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Country Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CountryResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "Countries"
-        ],
-        "summary": "Update Country",
-        "operationId": "update_country_v1_countries__country_id__put",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "country_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Country Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CountryUpdate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CountryResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Countries"
-        ],
-        "summary": "Delete Country",
-        "operationId": "delete_country_v1_countries__country_id__delete",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "country_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Country Id"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/users/me/countries": {
-      "get": {
-        "tags": [
-          "Countries"
-        ],
-        "summary": "Get User Countries",
-        "operationId": "get_user_countries_v1_users_me_countries_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/UserCountryResponse"
-                  },
-                  "type": "array",
-                  "title": "Response Get User Countries V1 Users Me Countries Get"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/v1/users/me/countries/rankings/order": {
-      "put": {
-        "tags": [
-          "Countries"
-        ],
-        "summary": "Reorder Rankings",
-        "description": "Persist a new ranking order (drag-and-drop). Rank = position in the list.",
-        "operationId": "reorder_rankings_v1_users_me_countries_rankings_order_put",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CountryRankingReorder"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/UserCountryResponse"
-                  },
-                  "type": "array",
-                  "title": "Response Reorder Rankings V1 Users Me Countries Rankings Order Put"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/v1/users/me/countries/{country_id}": {
-      "get": {
-        "tags": [
-          "Countries"
-        ],
-        "summary": "Get User Country",
-        "description": "Return the current user's tracker for one country (404 if not tracked).",
-        "operationId": "get_user_country_v1_users_me_countries__country_id__get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "country_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Country Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserCountryResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Countries"
-        ],
-        "summary": "Mark Country",
-        "description": "Add a country to the user's lists (idempotent \u2014 merges list membership).",
-        "operationId": "mark_country_v1_users_me_countries__country_id__post",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "country_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Country Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UserCountryCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserCountryResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "Countries"
-        ],
-        "summary": "Update User Country",
-        "description": "Update list membership, rank, notes, or first-visited for a country.",
-        "operationId": "update_user_country_v1_users_me_countries__country_id__put",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "country_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Country Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UserCountryUpdate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserCountryResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Countries"
-        ],
-        "summary": "Unmark Country",
-        "operationId": "unmark_country_v1_users_me_countries__country_id__delete",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "country_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Country Id"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/users/me/countries/{country_id}/rank": {
-      "put": {
-        "tags": [
-          "Countries"
-        ],
-        "summary": "Set Country Rank",
-        "description": "Place a country at an exact 1-based position in the visited ranking,\nshifting the countries at and below that position down by one.",
-        "operationId": "set_country_rank_v1_users_me_countries__country_id__rank_put",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "country_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Country Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RankPlacement"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserCountryResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/v1/movies": {
       "get": {
         "tags": [
@@ -4291,6 +3713,92 @@
         }
       }
     },
+    "/v1/users/me/episodes/{episode_id}/favorite": {
+      "post": {
+        "tags": [
+          "TV"
+        ],
+        "summary": "Mark Episode Favorited",
+        "description": "Favorite an episode, independent of watched status (idempotent).",
+        "operationId": "mark_episode_favorited_v1_users_me_episodes__episode_id__favorite_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "episode_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Episode Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserTVEpisodeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "TV"
+        ],
+        "summary": "Unmark Episode Favorited",
+        "operationId": "unmark_episode_favorited_v1_users_me_episodes__episode_id__favorite_delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "episode_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Episode Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/users/me/activity": {
       "get": {
         "tags": [
@@ -4885,7 +4393,7 @@
           "Visibility"
         ],
         "summary": "Update Visibility",
-        "description": "Update the handle and/or per-category public flags. Opening any category\nto the public requires a handle (that's the profile URL).",
+        "description": "Update the handle and/or any of the nine visibility tiers.\n\nOnly fields present in the body change. The result has to satisfy both\ninvariants \u2014 a handle for anything non-private, and a profile at least as\nopen as its most-open shelf \u2014 or the whole update is rejected. Both are\nchecked against the *resulting* state before anything is written, so a\nrejection leaves the row exactly as it was.",
         "operationId": "update_visibility_v1_users_me_visibility_put",
         "requestBody": {
           "content": {
@@ -4932,8 +4440,14 @@
           "Visibility"
         ],
         "summary": "Public Profile",
-        "description": "Read-only public profile: ranked lists of the categories the owner has\nopted in, best first. Fully private profiles (and unknown handles) 404\nidentically, so the endpoint never confirms a private account exists.",
+        "description": "Read-only profile: ranked lists of the categories the owner has opted in,\nbest first, filtered to what *this* caller may see.\n\nAuthentication is optional (#277). Anonymous callers and signed-in\nstrangers get ``public`` and nothing else; an accepted friend also gets\n``friends``; the owner gets everything of their own \u2014 including private\nshelves, and so never a 404 on their own handle \u2014 which is why the\nresponse carries ``viewer.relationship``: a client rendering this page has\nto be able to say *whose* view it is showing. ``viewer.following`` (#276)\nrides alongside it for the same reason \u2014 whether to render a Follow or\nFollowing button \u2014 and is computed only *after* every access decision\nabove has already been made: following is never part of the ceiling a\ncaller is served, only a fact about the payload once that's settled.\n\n**One ceiling, resolved once.** The caller's relationship is turned into a\nsingle tier ceiling before any shelf is read, and every shelf \u2014 ranked\nlist and watchlist alike \u2014 is then compared against that one value. The\nalternative, asking \"is this viewer a friend?\" per shelf, is what lets two\nshelves end up evaluated under different assumptions.\n\n**Nothing visible is indistinguishable from nothing there.** An unknown\nhandle, a profile whose tier is above this caller, and a profile with no\nshelf this caller may see all raise the *same* exception object: same\nstatus, same body, same headers. Since visibility is now\nviewer-dependent, so is the 404 \u2014 a profile a friend can see 404s for\neverybody else exactly as a handle nobody ever claimed does.",
         "operationId": "public_profile_v1_public__handle__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {}
+        ],
         "parameters": [
           {
             "name": "handle",
@@ -4965,6 +4479,434 @@
             }
           }
         }
+      }
+    },
+    "/v1/users/me/friends/requests": {
+      "get": {
+        "tags": [
+          "Friends"
+        ],
+        "summary": "List Friend Requests",
+        "operationId": "list_friend_requests_v1_users_me_friends_requests_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutPendingFriendRequests"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Friends"
+        ],
+        "summary": "Send Friend Request",
+        "description": "Send a friend request to an exact handle.\n\nAlways 202 unless the caller is already a party to the relationship (or\nis the target) \u2014 see the module docstring for why the shape of the\nnon-answers matters as much as the answer.",
+        "operationId": "send_friend_request_v1_users_me_friends_requests_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InFriendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutFriendAck"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/users/me/friends/requests/{request_id}/accept": {
+      "put": {
+        "tags": [
+          "Friends"
+        ],
+        "summary": "Accept Friend Request",
+        "description": "Accept an incoming request; from here both sides count as friends.",
+        "operationId": "accept_friend_request_v1_users_me_friends_requests__request_id__accept_put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutFriend"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me/friends/requests/{request_id}/decline": {
+      "put": {
+        "tags": [
+          "Friends"
+        ],
+        "summary": "Decline Friend Request",
+        "description": "Decline an incoming request.\n\nDeletes the row instead of recording a refusal: nobody should be able to\nread a standing \"no\" off the graph, and the pair can try again later.",
+        "operationId": "decline_friend_request_v1_users_me_friends_requests__request_id__decline_put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutFriendAck"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me/friends/requests/{request_id}": {
+      "delete": {
+        "tags": [
+          "Friends"
+        ],
+        "summary": "Cancel Friend Request",
+        "description": "Withdraw a request the caller sent, before it is answered.",
+        "operationId": "cancel_friend_request_v1_users_me_friends_requests__request_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me/friends": {
+      "get": {
+        "tags": [
+          "Friends"
+        ],
+        "summary": "List Friends",
+        "operationId": "list_friends_v1_users_me_friends_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OutFriend"
+                  },
+                  "type": "array",
+                  "title": "Response List Friends V1 Users Me Friends Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/users/me/friends/{friendship_id}": {
+      "delete": {
+        "tags": [
+          "Friends"
+        ],
+        "summary": "Unfriend",
+        "description": "End a friendship. Symmetric: either side may do this, and one row going\naway ends it for both \u2014 there is no second row to leave behind.",
+        "operationId": "unfriend_v1_users_me_friends__friendship_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "friendship_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Friendship Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me/following/{handle}": {
+      "put": {
+        "tags": [
+          "Follows"
+        ],
+        "summary": "Follow User",
+        "description": "Follow a public profile. Idempotent: following twice just returns the\nexisting row rather than erroring, since there is no second state for a\nrepeat call to conflict with.",
+        "operationId": "follow_user_v1_users_me_following__handle__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Handle"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutFollow"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Follows"
+        ],
+        "summary": "Unfollow User",
+        "description": "Stop following someone.\n\nDeliberately does not require the target to still be public \u2014 a follow\npersists through a followee tightening their profile (that's the whole\npoint of #276's \"grants nothing, persists anyway\" rule), and the follower\nmust still be able to unfollow after that happens.",
+        "operationId": "unfollow_user_v1_users_me_following__handle__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Handle"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me/following": {
+      "get": {
+        "tags": [
+          "Follows"
+        ],
+        "summary": "List Following",
+        "description": "Everyone the caller follows.",
+        "operationId": "list_following_v1_users_me_following_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OutFollow"
+                  },
+                  "type": "array",
+                  "title": "Response List Following V1 Users Me Following Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/users/me/followers": {
+      "get": {
+        "tags": [
+          "Follows"
+        ],
+        "summary": "List Followers",
+        "description": "Everyone following the caller.",
+        "operationId": "list_followers_v1_users_me_followers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OutFollow"
+                  },
+                  "type": "array",
+                  "title": "Response List Followers V1 Users Me Followers Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/v1/users/me/summary": {
@@ -5112,7 +5054,7 @@
           "occurred_at"
         ],
         "title": "ActivityItem",
-        "description": "One inferred user action, unified across all five tracker domains. Most\ntrackers only carry their latest touch (created_at/updated_at) rather\nthan a full history, so one tracker row = one entry here, dated by its\nlast update and with its action inferred from current list state.\nTV episodes are the exception (a real per-watch row exists), so each\nwatched episode appears individually rather than being collapsed into\nits show's row."
+        "description": "One inferred user action, unified across all four tracker domains. Most\ntrackers only carry their latest touch (created_at/updated_at) rather\nthan a full history, so one tracker row = one entry here, dated by its\nlast update and with its action inferred from current list state.\nTV episodes are the exception (a real per-watch row exists), so each\nwatched episode appears individually rather than being collapsed into\nits show's row."
       },
       "Body_get_token_v1_auth_token_post": {
         "properties": {
@@ -5843,302 +5785,6 @@
         ],
         "title": "BoredResponse"
       },
-      "CountryCreate": {
-        "properties": {
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "country_code": {
-            "type": "string",
-            "title": "Country Code"
-          },
-          "region": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region"
-          },
-          "subregion": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Subregion"
-          },
-          "capital": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Capital"
-          },
-          "population": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Population"
-          },
-          "flag_emoji": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Flag Emoji"
-          },
-          "flag_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Flag Url"
-          }
-        },
-        "type": "object",
-        "required": [
-          "title",
-          "country_code"
-        ],
-        "title": "CountryCreate"
-      },
-      "CountryRankingReorder": {
-        "properties": {
-          "country_ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Country Ids"
-          }
-        },
-        "type": "object",
-        "required": [
-          "country_ids"
-        ],
-        "title": "CountryRankingReorder",
-        "description": "Ordered list of country (catalog) ids defining the new ranking order."
-      },
-      "CountryResponse": {
-        "properties": {
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "country_code": {
-            "type": "string",
-            "title": "Country Code"
-          },
-          "region": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region"
-          },
-          "subregion": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Subregion"
-          },
-          "capital": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Capital"
-          },
-          "population": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Population"
-          },
-          "flag_emoji": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Flag Emoji"
-          },
-          "flag_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Flag Url"
-          },
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Updated At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "title",
-          "country_code",
-          "id",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "CountryResponse"
-      },
-      "CountryUpdate": {
-        "properties": {
-          "title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Title"
-          },
-          "country_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Country Code"
-          },
-          "region": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region"
-          },
-          "subregion": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Subregion"
-          },
-          "capital": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Capital"
-          },
-          "population": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Population"
-          },
-          "flag_emoji": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Flag Emoji"
-          },
-          "flag_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Flag Url"
-          }
-        },
-        "type": "object",
-        "title": "CountryUpdate"
-      },
       "GameRankingReorder": {
         "properties": {
           "game_ids": {
@@ -6346,6 +5992,22 @@
         "title": "InApiKeyCreate",
         "description": "Request body for minting an API key."
       },
+      "InFriendRequest": {
+        "properties": {
+          "handle": {
+            "type": "string",
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Handle"
+          }
+        },
+        "type": "object",
+        "required": [
+          "handle"
+        ],
+        "title": "InFriendRequest",
+        "description": "Request body for sending a friend request (#275).\n\nA handle and nothing else: there is no endpoint that lists or searches\nusers, so an exact handle someone told you is the only way to reach them."
+      },
       "InRefreshToken": {
         "properties": {
           "refresh_token": {
@@ -6398,54 +6060,100 @@
             ],
             "title": "Handle"
           },
-          "public_movies": {
+          "visibility_profile": {
             "anyOf": [
               {
-                "type": "boolean"
+                "$ref": "#/components/schemas/VisibilityTier"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Public Movies"
+            ]
           },
-          "public_tv": {
+          "visibility_movies": {
             "anyOf": [
               {
-                "type": "boolean"
+                "$ref": "#/components/schemas/VisibilityTier"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Public Tv"
+            ]
           },
-          "public_books": {
+          "visibility_tv": {
             "anyOf": [
               {
-                "type": "boolean"
+                "$ref": "#/components/schemas/VisibilityTier"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Public Books"
+            ]
           },
-          "public_games": {
+          "visibility_books": {
             "anyOf": [
               {
-                "type": "boolean"
+                "$ref": "#/components/schemas/VisibilityTier"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Public Games"
+            ]
+          },
+          "visibility_games": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visibility_watchlist_movies": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visibility_watchlist_tv": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visibility_watchlist_books": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visibility_watchlist_games": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
         "title": "InVisibilityUpdate",
-        "description": "Request body for visibility settings. Only sent fields change; a null\nhandle clears it (allowed only while everything is private)."
+        "description": "Request body for visibility settings (#274). Every setting is a tier \u2014\n``private``, ``friends`` or ``public`` \u2014 not a boolean.\n\nOnly sent fields change; a null handle clears it (allowed only while\neverything is private). An unsent field and an explicit null are both\nleft alone, so a client can PUT one radio button without echoing the\nother eight."
       },
       "MovieCreate": {
         "properties": {
@@ -7364,6 +7072,187 @@
         "title": "OutApiKeyCreated",
         "description": "Creation response: the one and only time the plaintext key appears."
       },
+      "OutFollow": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "user": {
+            "$ref": "#/components/schemas/OutFollowUser"
+          },
+          "followed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Followed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user",
+          "followed_at"
+        ],
+        "title": "OutFollow",
+        "description": "One follow edge, from whichever side is listing it.\n\n``id`` addresses the follow row, not either user. ``followed_at`` is the\none fact both sides are shown; there is nothing else to negotiate since a\nfollow needs no approval."
+      },
+      "OutFollowUser": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handle"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "OutFollowUser",
+        "description": "The other party in a follow, as much of them as a follower may see.\n\nA separate class from ``OutFriendUser`` even though the fields match: the\ntwo relationships are deliberately kept apart everywhere else (#276), and\na schema shared between them would be the one place that split quietly\ndisappeared."
+      },
+      "OutFriend": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "user": {
+            "$ref": "#/components/schemas/OutFriendUser"
+          },
+          "friends_since": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Friends Since"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user",
+          "friends_since"
+        ],
+        "title": "OutFriend",
+        "description": "One accepted friendship. ``id`` addresses the friendship, not the user."
+      },
+      "OutFriendAck": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "OutFriendAck",
+        "description": "Deliberately contentless acknowledgement of a friend-graph write.\n\nSend and decline both answer with this, and send answers with *exactly*\nthis whether or not the handle resolved to anybody \u2014 see\n``router_friends`` for why the response must not vary."
+      },
+      "OutFriendRequest": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "user": {
+            "$ref": "#/components/schemas/OutFriendUser"
+          },
+          "requested_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Requested At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user",
+          "requested_at"
+        ],
+        "title": "OutFriendRequest",
+        "description": "One pending request, from the perspective of whoever is listing it."
+      },
+      "OutFriendUser": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handle"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "OutFriendUser",
+        "description": "The other party in a friendship, as much of them as a friend may see.\n\nNo email, no visibility settings \u2014 a friendship is not an introduction to\nsomeone's account."
+      },
+      "OutPendingFriendRequests": {
+        "properties": {
+          "incoming": {
+            "items": {
+              "$ref": "#/components/schemas/OutFriendRequest"
+            },
+            "type": "array",
+            "title": "Incoming",
+            "default": []
+          },
+          "outgoing": {
+            "items": {
+              "$ref": "#/components/schemas/OutFriendRequest"
+            },
+            "type": "array",
+            "title": "Outgoing",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "OutPendingFriendRequests",
+        "description": "Both directions in one response.\n\nThe inbox badge and the \"pending\" state of an outgoing request are drawn\ntogether, so splitting these across two endpoints would only ever mean\ntwo calls."
+      },
       "OutResponseBaseModel": {
         "properties": {
           "success": {
@@ -7676,58 +7565,46 @@
             ],
             "title": "Handle"
           },
-          "public_movies": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Public Movies",
-            "default": false
+          "visibility_profile": {
+            "$ref": "#/components/schemas/VisibilityTier",
+            "default": "private"
           },
-          "public_tv": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Public Tv",
-            "default": false
+          "visibility_movies": {
+            "$ref": "#/components/schemas/VisibilityTier",
+            "default": "private"
           },
-          "public_books": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Public Books",
-            "default": false
+          "visibility_tv": {
+            "$ref": "#/components/schemas/VisibilityTier",
+            "default": "private"
           },
-          "public_games": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Public Games",
-            "default": false
+          "visibility_books": {
+            "$ref": "#/components/schemas/VisibilityTier",
+            "default": "private"
+          },
+          "visibility_games": {
+            "$ref": "#/components/schemas/VisibilityTier",
+            "default": "private"
+          },
+          "visibility_watchlist_movies": {
+            "$ref": "#/components/schemas/VisibilityTier",
+            "default": "private"
+          },
+          "visibility_watchlist_tv": {
+            "$ref": "#/components/schemas/VisibilityTier",
+            "default": "private"
+          },
+          "visibility_watchlist_books": {
+            "$ref": "#/components/schemas/VisibilityTier",
+            "default": "private"
+          },
+          "visibility_watchlist_games": {
+            "$ref": "#/components/schemas/VisibilityTier",
+            "default": "private"
           }
         },
         "type": "object",
         "title": "OutVisibility",
-        "description": "The caller's visibility settings. NULL flags read as private."
+        "description": "The caller's visibility settings, one tier per setting."
       },
       "RankPlacement": {
         "properties": {
@@ -9028,251 +8905,6 @@
         "type": "object",
         "title": "UserBookUpdate"
       },
-      "UserCountryCreate": {
-        "properties": {
-          "on_watchlist": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "On Watchlist"
-          },
-          "on_rankings": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "On Rankings"
-          },
-          "rank": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rank"
-          },
-          "completed": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completed"
-          },
-          "notes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Notes"
-          },
-          "first_visited": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "First Visited"
-          }
-        },
-        "type": "object",
-        "title": "UserCountryCreate"
-      },
-      "UserCountryResponse": {
-        "properties": {
-          "on_watchlist": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "On Watchlist"
-          },
-          "on_rankings": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "On Rankings"
-          },
-          "rank": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rank"
-          },
-          "completed": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completed"
-          },
-          "notes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Notes"
-          },
-          "first_visited": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "First Visited"
-          },
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "country": {
-            "$ref": "#/components/schemas/CountryResponse"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Updated At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "country",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "UserCountryResponse"
-      },
-      "UserCountryUpdate": {
-        "properties": {
-          "on_watchlist": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "On Watchlist"
-          },
-          "on_rankings": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "On Rankings"
-          },
-          "rank": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rank"
-          },
-          "completed": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completed"
-          },
-          "notes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Notes"
-          },
-          "first_visited": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "First Visited"
-          }
-        },
-        "type": "object",
-        "title": "UserCountryUpdate"
-      },
       "UserMovieCreate": {
         "properties": {
           "on_watchlist": {
@@ -9543,6 +9175,30 @@
               }
             ],
             "title": "Watched At"
+          },
+          "favorited": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Favorited",
+            "default": false
+          },
+          "favorited_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Favorited At"
           },
           "id": {
             "type": "string",
@@ -10827,6 +10483,16 @@
         "type": "object",
         "title": "VideoGameUpdate"
       },
+      "VisibilityTier": {
+        "type": "string",
+        "enum": [
+          "private",
+          "friends",
+          "public"
+        ],
+        "title": "VisibilityTier",
+        "description": "How widely one shelf \u2014 or the whole profile \u2014 is shared."
+      },
       "WatchProvider": {
         "properties": {
           "provider_id": {
@@ -10968,16 +10634,20 @@
       "description": "Book catalog and per-user tracker"
     },
     {
-      "name": "Countries",
-      "description": "Country catalog and per-user tracker"
-    },
-    {
       "name": "Activity",
       "description": "Cross-domain activity log and \"I'm bored\" recommendation"
     },
     {
       "name": "Notifications",
       "description": "Per-user notification feed"
+    },
+    {
+      "name": "Friends",
+      "description": "Mutual friend requests, friends list, and unfriend"
+    },
+    {
+      "name": "Follows",
+      "description": "Asymmetric, unapproved follows \u2014 grants no extra visibility"
     },
     {
       "name": "Search",
