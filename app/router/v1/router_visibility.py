@@ -21,7 +21,7 @@ resolution has to happen once rather than per shelf.
 """
 
 import re
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func
@@ -64,10 +64,18 @@ RESERVED_HANDLES = {
     'www',
 }
 
-# Ranked entries served per shelf on a public profile. The profile is the
-# shareable surface (every share-card click lands here), so it gets a bound
-# rather than the full ranked list it used to return.
+# Ranked entries served per shelf on a public profile when no length is
+# requested (#279 parameterized this; 25 remains the default so existing
+# callers see no change).
 PROFILE_SHELF_LIMIT = 25
+
+# Upper bound on a requested `limit` for a single shelf (#279). A request
+# beyond this clamps rather than 422ing — deliberately looser than the
+# tracker endpoints' MAX_PAGE (app/services/tracker_query.py), which error
+# instead: those are for API integrators who should know the max, this is a
+# shared link that has to stay robust to a hand-edited or scraped query
+# string. Chosen with the 2,000-item shelf test case in mind (#122).
+MAX_PUBLIC_SHELF_LIMIT = 2000
 
 # The public profile answers differently per caller (#277), on the success
 # path and on the 404 alike, so every response off it is keyed on credentials.
@@ -173,8 +181,8 @@ def _assert_profile_covers_shelves(tiers: dict) -> None:
     )
     raise HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        detail=f'{label} is set to {required.value}, so your profile must be '
-        f'at least {required.value} — it is currently {profile.value}',
+        detail=f"{label} is set to {required.value}, so your profile must be "
+        f"at least {required.value} — it is currently {profile.value}",
     )
 
 
@@ -197,8 +205,15 @@ def _viewer_relationship(
     return ViewerRelationship.NONE
 
 
-def _shelf_payload(
-    db: Session, user: DbUser, shelf: Shelf, ceiling: VisibilityTier
+def _shelf_payload(  # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
+    db: Session,
+    user: DbUser,
+    shelf: Shelf,
+    ceiling: VisibilityTier,
+    ranked_limit: int = PROFILE_SHELF_LIMIT,
+    ranked_offset: int = 0,
+    watchlist_limit: int = PROFILE_SHELF_LIMIT,
+    watchlist_offset: int = 0,
 ) -> dict:
     """
     One shelf as the profile serves it: ranked list, and watchlist if allowed.
@@ -206,6 +221,12 @@ def _shelf_payload(
     Called only for a shelf the ceiling already admits. The watchlist tier
     (#236) is then checked against that same ceiling, which is what keeps a
     watchlist from ever being served for a shelf the viewer cannot see.
+
+    ``ranked_limit``/``ranked_offset`` and their watchlist counterparts page
+    each list independently (#279) — a client viewing one shelf's ranked list
+    in depth has no reason to also pull a deep page of its watchlist, so the
+    two default to the small preview size unless the caller specifically
+    asked for that one to go deep.
     """
     tracker_model, catalog_model = shelf.tracker_model, shelf.catalog_model
     ranked = (
@@ -213,8 +234,8 @@ def _shelf_payload(
         tracker_model.on_rankings.is_(True),
         tracker_model.rank.isnot(None),
     )
-    # ranked_count is the shelf total, so it comes from COUNT rather than
-    # len(rows) now that rows are capped at PROFILE_SHELF_LIMIT.
+    # ranked_count is the shelf total, independent of ranked_limit — a client
+    # paging through a long shelf still needs to know how much is left.
     ranked_count = (
         db.query(func.count())  # pylint: disable=not-callable
         .select_from(tracker_model)
@@ -229,7 +250,8 @@ def _shelf_payload(
         )
         .filter(*ranked)
         .order_by(tracker_model.rank)
-        .limit(PROFILE_SHELF_LIMIT)
+        .offset(ranked_offset)
+        .limit(ranked_limit)
         .all()
     )
     payload = {
@@ -252,18 +274,28 @@ def _shelf_payload(
     if not admits(ceiling, getattr(user, shelf.watchlist_visibility_tier)):
         return payload
 
+    watchlist_filter = (
+        tracker_model.user_id == user.pk,
+        tracker_model.on_watchlist.is_(True),
+    )
+    # watchlist_count mirrors ranked_count: the true total, independent of
+    # watchlist_limit (#279).
+    payload['watchlist_count'] = (
+        db.query(func.count())  # pylint: disable=not-callable
+        .select_from(tracker_model)
+        .filter(*watchlist_filter)
+        .scalar()
+    )
     watchlist_rows = (
         db.query(catalog_model)
         .join(
             tracker_model,
             getattr(tracker_model, shelf.join_col) == catalog_model.pk,
         )
-        .filter(
-            tracker_model.user_id == user.pk,
-            tracker_model.on_watchlist.is_(True),
-        )
+        .filter(*watchlist_filter)
         .order_by(tracker_model.created_at.desc())
-        .limit(PROFILE_SHELF_LIMIT)
+        .offset(watchlist_offset)
+        .limit(watchlist_limit)
         .all()
     )
     payload['watchlist'] = [
@@ -325,11 +357,20 @@ def update_visibility(
     # without it a generated client would refuse to call this anonymously.
     openapi_extra={'security': [{}]},
 )
-def public_profile(
+def public_profile(  # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     handle: str,
     response: Response,
     db: Session = Depends(get_db),
     viewer: Optional[DbUser] = Depends(get_optional_current_user),
+    # Depth controls (#279). `shelf` narrows the response to one category —
+    # the hub view has no use for a deep page of every shelf at once, so
+    # `limit`/`offset` only take effect when a specific shelf is named.
+    # `kind` picks which of that shelf's two lists (ranked or watchlist)
+    # the limit/offset apply to; the other stays at the small preview size.
+    shelf: Optional[str] = None,
+    kind: Literal['ranked', 'watchlist'] = 'ranked',
+    limit: int = PROFILE_SHELF_LIMIT,
+    offset: int = 0,
 ):
     """
     Read-only profile: ranked lists of the categories the owner has opted in,
@@ -357,7 +398,16 @@ def public_profile(
     shelf this caller may see all raise the *same* exception object: same
     status, same body, same headers. Since visibility is now
     viewer-dependent, so is the 404 — a profile a friend can see 404s for
-    everybody else exactly as a handle nobody ever claimed does.
+    everybody else exactly as a handle nobody ever claimed does. A named
+    ``shelf`` that doesn't exist, or that this ceiling doesn't admit, folds
+    into the same 404 rather than a distinct error — see #279.
+
+    **Depth is viewer-controlled, not owner-controlled** (#279): the owner
+    picks a tier, the viewer picks how much of an admitted shelf to read.
+    ``limit`` clamps to ``MAX_PUBLIC_SHELF_LIMIT`` rather than erroring — a
+    shared link has to survive a hand-edited or scraped query string — and
+    only applies once a single ``shelf`` is named; the multi-shelf hub view
+    always gets the small preview size for every shelf.
     """
     user = db.query(DbUser).filter(DbUser.handle == handle.lower()).first()
     # One object for every "you get nothing" outcome, so they cannot drift
@@ -379,12 +429,32 @@ def public_profile(
 
     response.headers.update(VARY_ON_AUTH)
 
+    candidates = (
+        SHELVES if shelf is None else tuple(s for s in SHELVES if s.category == shelf)
+    )
+
+    clamped_limit = max(1, min(limit, MAX_PUBLIC_SHELF_LIMIT))
+    clamped_offset = max(0, offset)
+    ranked_depth = (
+        (clamped_limit, clamped_offset)
+        if shelf is not None and kind == 'ranked'
+        else (PROFILE_SHELF_LIMIT, 0)
+    )
+    watchlist_depth = (
+        (clamped_limit, clamped_offset)
+        if shelf is not None and kind == 'watchlist'
+        else (PROFILE_SHELF_LIMIT, 0)
+    )
+
     shelves = [
-        _shelf_payload(db, user, shelf, ceiling)
-        for shelf in SHELVES
-        if admits(ceiling, getattr(user, shelf.visibility_tier))
+        _shelf_payload(db, user, s, ceiling, *ranked_depth, *watchlist_depth)
+        for s in candidates
+        if admits(ceiling, getattr(user, s.visibility_tier))
     ]
 
+    # A named shelf that doesn't exist or isn't admitted lands here exactly
+    # like the multi-shelf case coming up empty — same 404, see the
+    # docstring on why that has to be indistinguishable.
     if not shelves:
         raise not_found
 
