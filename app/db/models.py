@@ -19,6 +19,7 @@ from sqlalchemy.orm import backref, relationship
 
 from app.db.database import Base
 from app.services.friendships import DEFAULT_STATUS, FriendshipStatus
+from app.services.preferences import RankedListLength
 from app.services.visibility import DEFAULT_TIER, VisibilityTier
 
 
@@ -36,7 +37,7 @@ def tier_column(name: str) -> Column:
         name,
         Enum(
             VisibilityTier,
-            name=f'ck_users_{name}',
+            name=f"ck_users_{name}",
             native_enum=False,
             create_constraint=True,
             length=16,
@@ -101,6 +102,21 @@ class DbUser(DBBaseModel):
     visibility_watchlist_tv = tier_column('visibility_watchlist_tv')
     visibility_watchlist_books = tier_column('visibility_watchlist_books')
     visibility_watchlist_games = tier_column('visibility_watchlist_games')
+
+    # --- Display preferences (#122). Viewer-controlled, not visibility —
+    # how much of a ranked list to read, remembered across sessions and
+    # devices. NULL means "unset", read as the default (25) everywhere.
+    ranked_list_length = Column(
+        Enum(
+            RankedListLength,
+            name='ck_users_ranked_list_length',
+            native_enum=False,
+            create_constraint=True,
+            length=4,
+            values_callable=lambda members: [member.value for member in members],
+        ),
+        nullable=True,
+    )
 
 
 class DbApiKey(DBBaseModel):

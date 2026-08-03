@@ -29,6 +29,7 @@ from .router.v1 import (
     router_friends,
     router_import,
     router_notifications,
+    router_preferences,
     router_search,
     router_summary,
     router_visibility,
@@ -126,7 +127,7 @@ async def log_request_latency(request, call_next):
         },
     )
     # Lets the browser's network panel attribute the time without a log dive.
-    response.headers['Server-Timing'] = f'app;dur={elapsed_ms:.1f}'
+    response.headers['Server-Timing'] = f"app;dur={elapsed_ms:.1f}"
     return response
 
 
@@ -145,6 +146,7 @@ app.include_router(router_import.router)
 app.include_router(router_visibility.router)
 app.include_router(router_friends.router)
 app.include_router(router_follows.router)
+app.include_router(router_preferences.router)
 app.include_router(router_summary.router)
 
 # Serve static files

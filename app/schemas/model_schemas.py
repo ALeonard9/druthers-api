@@ -7,6 +7,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from app.services.preferences import RankedListLength
 from app.services.visibility import VisibilityTier
 
 
@@ -267,6 +268,20 @@ class OutFollow(BaseModel):
     id: str
     user: OutFollowUser
     followed_at: datetime
+
+
+class InPreferencesUpdate(BaseModel):
+    """Request body for display preferences (#122). Only sent fields change."""
+
+    ranked_list_length: Optional[RankedListLength] = None
+
+
+class OutPreferences(BaseModel):
+    """The caller's display preferences, defaulted where unset."""
+
+    ranked_list_length: RankedListLength = RankedListLength.TWENTY_FIVE
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class OutSummaryEntry(BaseModel):
