@@ -263,6 +263,7 @@ def _shelf_payload(  # pylint: disable=too-many-arguments, too-many-positional-a
         'items': [
             {
                 'rank': rank,
+                'id': str(item.id),
                 'title': item.title,
                 'year': item.year,
                 'poster_url': item.poster_url,
@@ -300,6 +301,7 @@ def _shelf_payload(  # pylint: disable=too-many-arguments, too-many-positional-a
     )
     payload['watchlist'] = [
         {
+            'id': str(item.id),
             'title': item.title,
             'year': item.year,
             'poster_url': item.poster_url,
