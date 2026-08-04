@@ -1,4 +1,6 @@
 # pylint: disable=missing-module-docstring, missing-function-docstring
+import uuid
+
 from fastapi.testclient import TestClient
 
 TIER_FIELDS = (
@@ -273,6 +275,8 @@ def test_public_profile_exposes_only_public_ranked_lists(test_client: TestClient
     assert body['handle'] == 'avery'
     assert [s['category'] for s in body['shelves']] == ['Movies']
     item = body['shelves'][0]['items'][0]
+    item_id = item.pop('id')
+    uuid.UUID(item_id)  # validates it's a real UUID
     assert item == {
         'rank': 1,
         'title': 'Heat',
@@ -391,6 +395,9 @@ def test_watchlist_shown_only_when_both_tiers_public(test_client: TestClient):
     )
 
     shelf = test_client.get('/v1/public/avery').json()['shelves'][0]
+    wl_item = shelf['watchlist'][0]
+    wl_id = wl_item.pop('id')
+    uuid.UUID(wl_id)  # validates it's a real UUID
     assert shelf['watchlist'] == [
         {'title': 'Sicario', 'year': 2015, 'poster_url': None}
     ]
