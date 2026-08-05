@@ -33,6 +33,7 @@ from .router.v1 import (
     router_search,
     router_summary,
     router_visibility,
+    router_comparison,
     router_movies,
     router_games,
     router_books,
@@ -162,6 +163,7 @@ app.include_router(router_api_keys.router)
 app.include_router(router_export.router)
 app.include_router(router_import.router)
 app.include_router(router_visibility.router)
+app.include_router(router_comparison.router)
 app.include_router(router_friends.router)
 app.include_router(router_follows.router)
 app.include_router(router_preferences.router)

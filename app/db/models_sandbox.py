@@ -35,7 +35,7 @@ def rank_is_1_based(table_name: str) -> tuple:
     """
     return (
         CheckConstraint(
-            'rank IS NULL OR rank >= 1', name=f'ck_{table_name}_rank_1_based'
+            'rank IS NULL OR rank >= 1', name=f"ck_{table_name}_rank_1_based"
         ),
     )
 
@@ -98,6 +98,9 @@ class DbUserMovie(DBBaseModel):
 
     movie_id = Column(Integer, ForeignKey('movies.pk'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.pk'), nullable=False)
+    source_user_id = Column(
+        Integer, ForeignKey('users.pk', ondelete='SET NULL'), nullable=True, index=True
+    )
 
     # Two independent lists: a movie may be on the watchlist, in the ranked
     # list (with a rank position), or both. `completed` is retained from the
@@ -119,7 +122,13 @@ class DbUserMovie(DBBaseModel):
     is_seed_data = Column(Boolean, nullable=False, default=False)
 
     movie = relationship('DbMovie', back_populates='user_movies')
-    user = relationship('DbUser', backref='user_movies')
+    user = relationship('DbUser', foreign_keys=[user_id], backref='user_movies')
+    source_user = relationship('DbUser', foreign_keys=[source_user_id])
+
+    @property
+    def source_handle(self):
+        """Return the handle of the user who inspired this tracker entry."""
+        return self.source_user.handle if self.source_user else None
 
 
 class DbTVShow(DBBaseModel):
@@ -157,6 +166,9 @@ class DbUserTVShow(DBBaseModel):
 
     tv_show_id = Column(Integer, ForeignKey('tv_shows.pk'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.pk'), nullable=False)
+    source_user_id = Column(
+        Integer, ForeignKey('users.pk', ondelete='SET NULL'), nullable=True, index=True
+    )
 
     # Two independent lists, mirroring the Movies tracker. `status` and
     # `freeze` are retained from the legacy import but no longer drive the UI.
@@ -176,7 +188,13 @@ class DbUserTVShow(DBBaseModel):
     is_seed_data = Column(Boolean, nullable=False, default=False)
 
     tv_show = relationship('DbTVShow', back_populates='user_tv_shows')
-    user = relationship('DbUser', backref='user_tv_shows')
+    user = relationship('DbUser', foreign_keys=[user_id], backref='user_tv_shows')
+    source_user = relationship('DbUser', foreign_keys=[source_user_id])
+
+    @property
+    def source_handle(self):
+        """Return the handle of the user who inspired this tracker entry."""
+        return self.source_user.handle if self.source_user else None
 
 
 class DbTVEpisode(DBBaseModel):
@@ -245,6 +263,9 @@ class DbUserVideoGame(DBBaseModel):
 
     game_id = Column(Integer, ForeignKey('video_games.pk'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.pk'), nullable=False)
+    source_user_id = Column(
+        Integer, ForeignKey('users.pk', ondelete='SET NULL'), nullable=True, index=True
+    )
 
     # Two independent lists, mirroring the Movies tracker: on_watchlist is the
     # backlog, on_rankings the played-and-ranked list. `completed` is retained
@@ -265,7 +286,13 @@ class DbUserVideoGame(DBBaseModel):
     is_seed_data = Column(Boolean, nullable=False, default=False)
 
     game = relationship('DbVideoGame', back_populates='user_games')
-    user = relationship('DbUser', backref='user_video_games')
+    user = relationship('DbUser', foreign_keys=[user_id], backref='user_video_games')
+    source_user = relationship('DbUser', foreign_keys=[source_user_id])
+
+    @property
+    def source_handle(self):
+        """Return the handle of the user who inspired this tracker entry."""
+        return self.source_user.handle if self.source_user else None
 
 
 class DbBook(DBBaseModel):
@@ -301,6 +328,9 @@ class DbUserBook(DBBaseModel):
 
     book_id = Column(Integer, ForeignKey('books.pk'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.pk'), nullable=False)
+    source_user_id = Column(
+        Integer, ForeignKey('users.pk', ondelete='SET NULL'), nullable=True, index=True
+    )
 
     # Two independent lists, mirroring the Movies tracker: on_watchlist is the
     # to-read list, on_rankings the read-and-ranked list. `completed` is
@@ -320,4 +350,10 @@ class DbUserBook(DBBaseModel):
     is_seed_data = Column(Boolean, nullable=False, default=False)
 
     book = relationship('DbBook', back_populates='user_books')
-    user = relationship('DbUser', backref='user_books')
+    user = relationship('DbUser', foreign_keys=[user_id], backref='user_books')
+    source_user = relationship('DbUser', foreign_keys=[source_user_id])
+
+    @property
+    def source_handle(self):
+        """Return the handle of the user who inspired this tracker entry."""
+        return self.source_user.handle if self.source_user else None

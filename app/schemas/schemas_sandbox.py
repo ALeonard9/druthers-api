@@ -155,6 +155,7 @@ class UserMovieResponse(UserMovieBase):
     movie: MovieSummary
     created_at: datetime
     updated_at: datetime
+    source_handle: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -267,6 +268,7 @@ class UserTVShowResponse(UserTVShowBase):
     tv_show: TVShowSummary
     created_at: datetime
     updated_at: datetime
+    source_handle: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -454,6 +456,7 @@ class UserVideoGameResponse(UserVideoGameBase):
     game: VideoGameSummary
     created_at: datetime
     updated_at: datetime
+    source_handle: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -552,6 +555,7 @@ class UserBookResponse(UserBookBase):
     book: BookSummary
     created_at: datetime
     updated_at: datetime
+    source_handle: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 
