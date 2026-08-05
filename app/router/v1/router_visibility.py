@@ -31,10 +31,10 @@ from app.auth.oauth2 import get_current_user, get_optional_current_user
 from app.config import get_settings
 from app.db.database import get_db
 from app.db.db_follow import is_following
-from app.db.db_friendship import are_friends
 from app.db.models import DbUser
 from app.schemas.model_schemas import InVisibilityUpdate, OutVisibility
 from app.services import handles
+from app.services.profile_access import viewer_relationship
 from app.services.shelves import SHELVES, Shelf, shelf_tier_fields
 from app.services.visibility import (
     PROFILE_TIER_FIELD,
@@ -184,25 +184,6 @@ def _assert_profile_covers_shelves(tiers: dict) -> None:
         detail=f"{label} is set to {required.value}, so your profile must be "
         f"at least {required.value} — it is currently {profile.value}",
     )
-
-
-def _viewer_relationship(
-    db: Session, owner: DbUser, viewer: Optional[DbUser]
-) -> ViewerRelationship:
-    """
-    What this caller is to the owner — resolved once, in one lookup.
-
-    Ownership is checked before friendship because a user is never their own
-    friend (see :func:`app.db.db_friendship.are_friends`): the owner is served
-    by owning the profile, not by an edge in the graph.
-    """
-    if viewer is None:
-        return ViewerRelationship.ANONYMOUS
-    if viewer.pk == owner.pk:
-        return ViewerRelationship.SELF
-    if are_friends(db, viewer.pk, owner.pk):
-        return ViewerRelationship.FRIEND
-    return ViewerRelationship.NONE
 
 
 def _shelf_payload(  # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
@@ -424,7 +405,7 @@ def public_profile(  # pylint: disable=too-many-arguments, too-many-positional-a
     if user is None:
         raise not_found
 
-    relationship = _viewer_relationship(db, user, viewer)
+    relationship = viewer_relationship(db, user, viewer)
     ceiling = ceiling_for(relationship)
     if not admits(ceiling, user.visibility_profile):
         raise not_found
