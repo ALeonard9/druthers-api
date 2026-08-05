@@ -8,13 +8,21 @@ from app.services.visibility import VisibilityTier, admits
 MIN_SHARED_FOR_SCORE = 5
 RESULT_LIMIT = 5
 METHOD = (
-    'We compare rank positions directly. Smaller differences mean closer agreement.'
+    'Each gap is the absolute difference between your two rank positions. '
+    'Alignment is 100% minus the average gap as a share of the longer shelf’s rank span.'
 )
 
 
 def _rank_gap(your_rank: int, their_rank: int) -> int:
     """Return the absolute number of places between two rankings."""
     return abs(your_rank - their_rank)
+
+
+def _alignment_score(gaps: list[int], longer_shelf_count: int) -> int:
+    """Scale the average raw gap against the longer shelf's possible span."""
+    rank_span = max(1, longer_shelf_count - 1)
+    mean_gap = sum(gaps) / len(gaps)
+    return round(max(0.0, 1 - (mean_gap / rank_span)) * 100)
 
 
 def _item(catalog, **extra) -> dict:
@@ -72,6 +80,11 @@ def compare_shelf(  # pylint: disable=too-many-locals
         getattr(row, shelf.join_col): row
         for row in db.query(tracker).filter(tracker.user_id == viewer.pk).all()
     }
+    viewer_ranked_count = sum(
+        1
+        for row in viewer_trackers.values()
+        if row.on_rankings and row.rank is not None
+    )
     base['recommendations'] = [
         _item(
             item,
@@ -106,8 +119,10 @@ def compare_shelf(  # pylint: disable=too-many-locals
         shared, key=lambda item: (item['gap'], item['title'].lower())
     )[:RESULT_LIMIT]
     if len(shared) >= MIN_SHARED_FOR_SCORE:
-        mean_gap = sum(item['gap'] for item in shared) / len(shared)
-        base['alignment_score'] = round(max(0.0, 100 - mean_gap))
+        base['alignment_score'] = _alignment_score(
+            [item['gap'] for item in shared],
+            max(viewer_ranked_count, len(target_rows)),
+        )
         base['alignment_status'] = 'ready'
 
     if watchlist_visible:
