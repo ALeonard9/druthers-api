@@ -42,7 +42,12 @@ class ViewerRelationship(StrEnum):
     SELF = 'self'
 
 
-DEFAULT_TIER = VisibilityTier.PRIVATE
+# New accounts start visible to friends, not private (web#156) — a fresh
+# signup is otherwise invisible to the friends who invited them. This one
+# constant drives every tier_column() default in app/db/models.py, so the
+# profile's own default moves in lockstep with the shelves it fronts and the
+# "profile >= most-open shelf" floor invariant holds from account creation.
+DEFAULT_TIER = VisibilityTier.FRIENDS
 
 # The DbUser column governing the profile page itself (the ninth setting).
 PROFILE_TIER_FIELD = 'visibility_profile'

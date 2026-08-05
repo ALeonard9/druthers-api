@@ -211,7 +211,24 @@ def test_following_an_unknown_handle_404s(test_client: TestClient):
 
 
 def test_cannot_follow_a_private_profile(test_client: TestClient):
-    _set_visibility(test_client, test_client.second_user.token, handle='blake')
+    # Explicit: every tier now defaults to 'friends' (web#156), so a test of
+    # a genuinely *private* profile has to lower every shelf too — the floor
+    # invariant (#274) otherwise rejects a private profile under a friends
+    # shelf, and 'friends' alone would 404 here too, but for the wrong reason.
+    _set_visibility(
+        test_client,
+        test_client.second_user.token,
+        handle='blake',
+        visibility_profile='private',
+        visibility_movies='private',
+        visibility_tv='private',
+        visibility_books='private',
+        visibility_games='private',
+        visibility_watchlist_movies='private',
+        visibility_watchlist_tv='private',
+        visibility_watchlist_books='private',
+        visibility_watchlist_games='private',
+    )
     response = test_client.put(
         '/v1/users/me/following/blake', headers=_auth(test_client.first_user.token)
     )
@@ -393,11 +410,21 @@ def test_a_follow_survives_the_followee_going_private(test_client: TestClient):
 
     # Both in one update: #274's invariant rejects a private profile that
     # still has a public shelf under it, so the shelf has to come down too.
+    # Every other shelf now defaults to 'friends' (web#156) rather than
+    # 'private', so they need lowering explicitly as well, or the same
+    # invariant rejects this update on one of *them* instead.
     _set_visibility(
         test_client,
         owner_token,
         visibility_profile='private',
         visibility_movies='private',
+        visibility_tv='private',
+        visibility_books='private',
+        visibility_games='private',
+        visibility_watchlist_movies='private',
+        visibility_watchlist_tv='private',
+        visibility_watchlist_books='private',
+        visibility_watchlist_games='private',
     )
 
     # The row is untouched...
