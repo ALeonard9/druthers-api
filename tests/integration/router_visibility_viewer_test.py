@@ -262,6 +262,12 @@ def test_a_friends_only_profile_is_a_404_for_everybody_else(
         handle=HANDLE,
         visibility_profile='friends',
         visibility_movies='friends',
+        # Every shelf now defaults to 'friends' too (web#156) — pin the other
+        # three closed so this stays a test of "only Movies is friends-tier",
+        # not an accident of the account-wide default.
+        visibility_tv='private',
+        visibility_books='private',
+        visibility_games='private',
     )
     _befriend(test_client, test_client.second_user.token, owner_token)
 
@@ -294,7 +300,16 @@ def test_nothing_visible_404s_even_when_the_profile_tier_admits_you(
     owner_token = test_client.first_user.token
     _stock_every_shelf(test_client, owner_token)
     _set_visibility(
-        test_client, owner_token, handle=HANDLE, visibility_profile='friends'
+        test_client,
+        owner_token,
+        handle=HANDLE,
+        visibility_profile='friends',
+        # Shelves default to 'friends' now (web#156) — pin them private so
+        # this test still exercises "profile open, every shelf closed".
+        visibility_movies='private',
+        visibility_tv='private',
+        visibility_books='private',
+        visibility_games='private',
     )
     _befriend(test_client, test_client.second_user.token, owner_token)
 
@@ -357,7 +372,23 @@ def test_unfriending_takes_the_shelves_back(test_client: TestClient):
 def test_the_owner_of_a_private_profile_still_sees_it(test_client: TestClient):
     owner_token = test_client.first_user.token
     _stock_every_shelf(test_client, owner_token)
-    _set_visibility(test_client, owner_token, handle=HANDLE)
+    # Explicit: every tier now defaults to 'friends' (web#156), so a test of
+    # a genuinely *private* profile has to lower every shelf too, or the
+    # floor invariant (#274) rejects a private profile under a friends shelf.
+    _set_visibility(
+        test_client,
+        owner_token,
+        handle=HANDLE,
+        visibility_profile='private',
+        visibility_movies='private',
+        visibility_tv='private',
+        visibility_books='private',
+        visibility_games='private',
+        visibility_watchlist_movies='private',
+        visibility_watchlist_tv='private',
+        visibility_watchlist_books='private',
+        visibility_watchlist_games='private',
+    )
 
     anonymous = test_client.get(f'/v1/public/{HANDLE}')
     assert anonymous.status_code == 404

@@ -51,12 +51,12 @@ def _watchlist_a_movie(
     )
 
 
-def test_defaults_are_fully_private(test_client: TestClient):
+def test_defaults_are_fully_friends(test_client: TestClient):
     body = test_client.get(
         '/v1/users/me/visibility', headers=_auth(test_client.first_user.token)
     ).json()
     assert body['handle'] is None
-    assert [body[field] for field in TIER_FIELDS] == ['private'] * len(TIER_FIELDS)
+    assert [body[field] for field in TIER_FIELDS] == ['friends'] * len(TIER_FIELDS)
 
 
 def test_leaving_private_requires_a_handle(test_client: TestClient):
@@ -138,10 +138,13 @@ def test_clearing_a_handle_only_allowed_while_fully_private(test_client: TestCli
         == 'avery'
     )
 
+    # Every tier now defaults to 'friends' (web#156), so "fully private" must
+    # be reached explicitly rather than relying on the untouched fields'
+    # default — this PUT sets all nine, not just the two touched above.
     test_client.put(
         '/v1/users/me/visibility',
         headers=_auth(token),
-        json={'visibility_profile': 'private', 'visibility_movies': 'private'},
+        json={field: 'private' for field in TIER_FIELDS},
     )
     cleared = test_client.put(
         '/v1/users/me/visibility', headers=_auth(token), json={'handle': None}
@@ -175,6 +178,16 @@ def test_the_offending_shelf_is_named_for_watchlists_too(test_client: TestClient
         json={
             'handle': 'avery',
             'visibility_profile': 'private',
+            # Every other tier now defaults to 'friends' (web#156) — pin them
+            # private so visibility_watchlist_games is unambiguously the one
+            # field this update leaves in violation.
+            'visibility_movies': 'private',
+            'visibility_tv': 'private',
+            'visibility_books': 'private',
+            'visibility_games': 'private',
+            'visibility_watchlist_movies': 'private',
+            'visibility_watchlist_tv': 'private',
+            'visibility_watchlist_books': 'private',
             'visibility_watchlist_games': 'friends',
         },
     )
@@ -255,7 +268,7 @@ def test_partial_updates_only_touch_sent_fields(test_client: TestClient):
     assert body['visibility_movies'] == 'public'
     assert body['visibility_books'] == 'friends'
     assert body['visibility_tv'] == 'friends'
-    assert body['visibility_games'] == 'private'
+    assert body['visibility_games'] == 'friends'
 
 
 def test_public_profile_exposes_only_public_ranked_lists(test_client: TestClient):

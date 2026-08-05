@@ -372,11 +372,29 @@ def test_a_user_without_a_handle_cannot_be_reached(test_client: TestClient):
     takes the account back off the map.
     """
     _claim_handle(test_client, test_client.second_user.token, 'blake')
+    # Clearing a handle is only allowed while fully private, and every tier
+    # now defaults to 'friends' (web#156) — go there explicitly first.
     test_client.put(
+        '/v1/users/me/visibility',
+        headers=_auth(test_client.second_user.token),
+        json={
+            'visibility_profile': 'private',
+            'visibility_movies': 'private',
+            'visibility_tv': 'private',
+            'visibility_books': 'private',
+            'visibility_games': 'private',
+            'visibility_watchlist_movies': 'private',
+            'visibility_watchlist_tv': 'private',
+            'visibility_watchlist_books': 'private',
+            'visibility_watchlist_games': 'private',
+        },
+    )
+    cleared = test_client.put(
         '/v1/users/me/visibility',
         headers=_auth(test_client.second_user.token),
         json={'handle': None},
     )
+    assert cleared.status_code == 200, cleared.text
     assert _send(test_client, test_client.first_user.token, 'blake').status_code == 202
     assert (
         test_client.get(
