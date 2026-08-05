@@ -48,6 +48,18 @@ from .utils.exceptions import (
 settings = get_settings()
 
 
+def _is_mutable_user_read(method: str, path: str) -> bool:
+    """Return whether a response reflects tracker or viewer-specific state."""
+    if method != 'GET':
+        return False
+    return (
+        path.startswith('/v1/users/me/')
+        or path.startswith('/v1/public/')
+        or path == '/v1/search'
+        or path.endswith('/search')
+    )
+
+
 # Create FastAPI app
 app = FastAPI(
     title='druthers.io API ' + settings.env,
@@ -128,6 +140,12 @@ async def log_request_latency(request, call_next):
     )
     # Lets the browser's network panel attribute the time without a log dive.
     response.headers['Server-Timing'] = f"app;dur={elapsed_ms:.1f}"
+    # Tracker mutations make public profiles, rankings, and catalog-search
+    # badges stale immediately. These reads are cheap live SQL lookups and
+    # viewer-specific, so do not let a browser, CDN, or framework data cache
+    # retain them under a URL-only key (#297).
+    if _is_mutable_user_read(request.method, request.url.path):
+        response.headers['Cache-Control'] = 'private, no-store'
     return response
 
 
