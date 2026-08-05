@@ -22,7 +22,6 @@ repos:
   - id: debug-statements
   - id: check-added-large-files
     args: [--maxkb=200]
-  - id: double-quote-string-fixer
   - id: mixed-line-ending
   - id: name-tests-test
   - id: no-commit-to-branch
@@ -35,7 +34,6 @@ repos:
     rev: 26.5.1
     hooks:
     - id: black
-      args: [--skip-string-normalization]
       language_version: python3.14
 - repo: local
   hooks:
