@@ -1,16 +1,13 @@
 # pylint: disable=missing-function-docstring
-"""The ranking normalization behind comparison scores."""
+"""The direct rank-distance calculation behind comparisons."""
 
-from app.services.comparison import _position
-
-
-def test_top_weighting_expands_differences_near_the_favorites():
-    # Both spans are ten places long, but the top-of-list span deliberately
-    # counts for more than the same raw distance near the bottom.
-    top_gap = _position(11, 100) - _position(1, 100)
-    bottom_gap = _position(100, 100) - _position(90, 100)
-    assert top_gap > bottom_gap
+from app.services.comparison import _rank_gap
 
 
-def test_one_item_list_has_a_stable_best_position():
-    assert _position(1, 1) == 0.0
+def test_equal_ranks_have_no_gap():
+    assert _rank_gap(14, 14) == 0
+
+
+def test_gap_is_the_absolute_rank_difference():
+    assert _rank_gap(88, 10) == 78
+    assert _rank_gap(10, 88) == 78
