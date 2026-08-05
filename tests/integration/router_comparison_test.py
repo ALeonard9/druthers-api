@@ -112,8 +112,9 @@ def test_comparison_scores_visible_rankings_and_marks_watchlist(
     ]
     assert movies['recommendations'][0]['on_your_watchlist'] is True
     assert movies['recommendations'][1]['on_your_watchlist'] is False
-    assert movies['biggest_gaps'][0]['gap'] >= movies['biggest_gaps'][-1]['gap']
-    assert movies['most_aligned'][0]['gap'] <= movies['most_aligned'][-1]['gap']
+    assert [item['gap'] for item in movies['biggest_gaps']] == [4, 4, 2, 2, 0]
+    assert [item['gap'] for item in movies['most_aligned']] == [0, 2, 2, 4, 4]
+    assert movies['most_aligned'][0]['title'] == 'Movie 3'
 
 
 def test_hidden_watchlist_does_not_block_ranked_comparison(test_client: TestClient):
