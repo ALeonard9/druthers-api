@@ -104,7 +104,7 @@ def test_comparison_scores_visible_rankings_and_marks_watchlist(
     )
     assert movies['shared_ranked_count'] == 5
     assert movies['alignment_status'] == 'ready'
-    assert isinstance(movies['alignment_score'], int)
+    assert movies['alignment_score'] == 60
     assert [item['title'] for item in movies['common_watchlist']] == ['Movie 8']
     assert [item['title'] for item in movies['recommendations']] == [
         'Movie 6',
