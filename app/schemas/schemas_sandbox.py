@@ -125,6 +125,7 @@ class MovieSearchResult(BaseModel):
     imdb: Optional[str] = None
     title: str
     year: Optional[str] = None
+    release_date: Optional[str] = None
     poster_url: Optional[str] = None
     type: Optional[str] = None
     popularity: Optional[float] = None
