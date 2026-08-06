@@ -1,3 +1,4 @@
+# pylint: disable=missing-module-docstring, missing-function-docstring
 """
 Unit test verifying Argon2 hashing cost configuration (#285).
 
