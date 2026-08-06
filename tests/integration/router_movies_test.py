@@ -335,6 +335,9 @@ def test_search_movies_returns_results(
     assert data[0]['poster_url'] == 'https://image.tmdb.org/t/p/w500/matrix.jpg'
     # TMDB title search carries no IMDb id.
     assert data[0]['imdb'] is None
+    # Full release_date, not just year, so the frontend can show unreleased
+    # titles a date instead of a rank affordance (web#180).
+    assert data[0]['release_date'] == '1999-03-30'
     # A missing poster_path becomes null rather than a URL that would 404.
     assert data[1]['poster_url'] is None
 

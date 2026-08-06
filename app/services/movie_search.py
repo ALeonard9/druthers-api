@@ -62,6 +62,7 @@ def _normalize_hit(item: dict) -> dict:
         'imdb': item.get('imdb_id'),
         'title': item.get('title') or item.get('original_title'),
         'year': _year(item.get('release_date')),
+        'release_date': item.get('release_date'),
         'poster_url': tmdb.image_url(item.get('poster_path')),
         'type': 'movie',
         # TMDB supplies a real popularity score; search_ranking uses it as the

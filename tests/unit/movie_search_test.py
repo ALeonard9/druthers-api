@@ -149,6 +149,7 @@ def test_search_movies_by_imdb_id_returns_search_hit_shape(mock_get, mock_settin
             'imdb': 'tt0120338',
             'title': 'Titanic',
             'year': '1997',
+            'release_date': '1997-11-18',
             'poster_url': 'https://image.tmdb.org/t/p/w500/t.jpg',
             'type': 'movie',
             'popularity': 91.2,
@@ -210,6 +211,9 @@ def test_search_movies_title_query_uses_search_endpoint(mock_get, mock_settings)
     # Title search carries no IMDb id — that's why tmdb is the join key.
     assert results[0]['imdb'] is None
     assert results[0]['popularity'] == 91.2
+    # Full release_date (not just year) so the frontend can tell unreleased
+    # titles apart and show a date instead of a rank affordance (web#180).
+    assert results[0]['release_date'] == '1997-11-18'
     args, kwargs = mock_get.call_args
     assert args[0].endswith('/search/movie')
     assert kwargs['params']['query'] == 'Titanic'
