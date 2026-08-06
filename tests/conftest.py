@@ -1,8 +1,13 @@
+# pylint: disable=wrong-import-position, import-outside-toplevel
 """
 Creates a fixture to provide a database session for testing.
 """
 
 import os
+
+# Ensure test environment mode is set before app config is loaded (#285)
+os.environ['ENV'] = 'test'
+
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
@@ -21,6 +26,132 @@ from app.run import app
 from app.schemas.model_schemas import InUserBase
 
 fake = Faker()
+
+
+@pytest.fixture(autouse=True)
+def _block_outbound_http(monkeypatch):
+    """
+    Guard against unmocked outbound network requests in tests (#284).
+
+    Fails any test that attempts a socket connection to a non-loopback address,
+    naming the offending host in the failure message.
+    """
+    import socket
+
+    orig_connect = socket.socket.connect
+
+    def guarded_connect(self, address):
+        host = (
+            address[0]
+            if isinstance(address, tuple) and len(address) > 0
+            else str(address)
+        )
+        if host not in ('127.0.0.1', 'localhost', '::1', 'testserver'):
+            pytest.fail(
+                f"Outbound network request blocked in test: attempted connection to {host}. "
+                'Mock the upstream provider instead of calling live services (#284).'
+            )
+        return orig_connect(self, address)
+
+    monkeypatch.setattr(socket.socket, 'connect', guarded_connect)
+
+
+@pytest.fixture(autouse=True)
+def _mock_upstream_providers(request, monkeypatch):
+    """
+    Autouse fixture that stubs out upstream provider calls (TMDB, TVMaze, Open Library, IGDB)
+    during integration tests to keep test execution hermetic and fast (#284).
+    """
+    if 'integration' in str(request.path):
+        monkeypatch.setattr(
+            'app.services.tmdb.try_request', lambda *args, **kwargs: None, raising=False
+        )
+        monkeypatch.setattr(
+            'app.services.movie_search.get_movie_details',
+            lambda *args, **kwargs: None,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            'app.services.tv_search.get_tv_show_details',
+            lambda *args, **kwargs: None,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            'app.services.tv_search.enrich_tv_show',
+            lambda db, show, *args, **kwargs: show,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            'app.services.tv_search._tvmaze_detail',
+            lambda *args, **kwargs: None,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            'app.services.tv_search.sync_episodes',
+            lambda *args, **kwargs: 0,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            'app.services.tv_search.get_show_episodes',
+            lambda *args, **kwargs: [],
+            raising=False,
+        )
+        monkeypatch.setattr(
+            'app.services.book_search.get_book_detail',
+            lambda *args, **kwargs: None,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            'app.services.book_search.enrich_book',
+            lambda db, book, *args, **kwargs: book,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            'app.services.book_search._openlibrary_detail',
+            lambda *args, **kwargs: None,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            'app.services.game_search.get_game_details',
+            lambda *args, **kwargs: None,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            'app.services.game_search.enrich_game',
+            lambda db, game, *args, **kwargs: game,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            'app.services.game_search._igdb_detail',
+            lambda *args, **kwargs: None,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            'app.services.watch_providers.get_watch_providers',
+            lambda *args, **kwargs: None,
+            raising=False,
+        )
+
+        monkeypatch.setattr(
+            'app.router.v1.router_tv.get_tv_show_detail',
+            lambda *args, **kwargs: None,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            'app.router.v1.router_books.get_book_detail',
+            lambda *args, **kwargs: None,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            'app.router.v1.router_movies.get_movie_details',
+            lambda *args, **kwargs: None,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            'app.router.v1.router_games.get_game_details',
+            lambda *args, **kwargs: None,
+            raising=False,
+        )
 
 
 # Create a new database session for testing

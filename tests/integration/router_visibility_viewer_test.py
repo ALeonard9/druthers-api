@@ -292,11 +292,11 @@ def test_a_friends_only_profile_is_a_404_for_everybody_else(
     ) == _fingerprint(unknown)
 
 
-def test_nothing_visible_404s_even_when_the_profile_tier_admits_you(
+def test_nothing_visible_returns_200_when_profile_tier_admits_you(
     test_client: TestClient,
 ):
     # Profile reachable by a friend, but every shelf below it is private: the
-    # friend must not get an empty 200 that confirms the account exists.
+    # friend gets a 200 with empty shelves list and profile header (#296).
     owner_token = test_client.first_user.token
     _stock_every_shelf(test_client, owner_token)
     _set_visibility(
@@ -316,7 +316,19 @@ def test_nothing_visible_404s_even_when_the_profile_tier_admits_you(
     friend = test_client.get(
         f'/v1/public/{HANDLE}', headers=_auth(test_client.second_user.token)
     )
-    assert _fingerprint(friend) == _fingerprint(test_client.get('/v1/public/nobody'))
+    assert friend.status_code == 200
+    data = friend.json()
+    assert data['handle'] == HANDLE
+    assert data['shelves'] == []
+    assert data['total_ranked'] == 0
+    assert data['viewer'] == {'relationship': 'friend', 'following': False}
+
+    # Querying a specific unadmitted shelf still returns 404.
+    named_shelf = test_client.get(
+        f'/v1/public/{HANDLE}?shelf=movies',
+        headers=_auth(test_client.second_user.token),
+    )
+    assert named_shelf.status_code == 404
 
 
 def test_a_pending_request_is_not_a_friendship(test_client: TestClient):

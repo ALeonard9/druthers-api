@@ -36,7 +36,7 @@ def _token_response(user: models.DbUser, refresh_token: str) -> dict:
         'access_token': access_token,
         'refresh_token': refresh_token,
         'token_type': 'bearer',
-        'expires_in': oauth2.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        'expires_in': get_settings().access_token_expire_minutes * 60,
         'refresh_expires_in': get_settings().refresh_token_expire_days * 86400,
         'user_id': user.id,
         'user_group': user.user_group,

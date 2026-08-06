@@ -5,7 +5,15 @@ This module provides hashing utilities for passwords using Argon2.
 from pwdlib import PasswordHash
 from pwdlib.hashers.argon2 import Argon2Hasher
 
-pwd_cxt = PasswordHash((Argon2Hasher(),))
+from app.config import get_settings
+
+
+def _get_pwd_cxt() -> PasswordHash:
+    params = get_settings().argon2_params
+    return PasswordHash((Argon2Hasher(**params),))
+
+
+pwd_cxt = _get_pwd_cxt()
 
 
 class Hash:
