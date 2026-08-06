@@ -7,5 +7,5 @@ pytest-metadata==3.1.1
 pytest-testmon==2.2.0  # pre-push: run only tests affected by changes
 Faker==40.36.0
 httpx==0.28.1
-coverage==7.15.2
+coverage==7.15.3
 python-dateutil==2.9.0.post0
