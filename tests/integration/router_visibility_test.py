@@ -353,7 +353,10 @@ def test_toggling_a_category_off_removes_it(test_client: TestClient):
         headers=_auth(token),
         json={'visibility_movies': 'private'},
     )
-    assert test_client.get('/v1/public/avery').status_code == 404
+    resp = test_client.get('/v1/public/avery')
+    assert resp.status_code == 200
+    assert resp.json()['shelves'] == []
+    assert test_client.get('/v1/public/avery?shelf=movies').status_code == 404
 
 
 def test_watchlist_tier_alone_exposes_nothing(test_client: TestClient):
@@ -372,7 +375,9 @@ def test_watchlist_tier_alone_exposes_nothing(test_client: TestClient):
         },
     )
 
-    assert test_client.get('/v1/public/avery').status_code == 404
+    resp = test_client.get('/v1/public/avery')
+    assert resp.status_code == 200
+    assert resp.json()['shelves'] == []
 
 
 def test_watchlist_shown_only_when_both_tiers_public(test_client: TestClient):

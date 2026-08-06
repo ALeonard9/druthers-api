@@ -435,10 +435,10 @@ def public_profile(  # pylint: disable=too-many-arguments, too-many-positional-a
         if admits(ceiling, getattr(user, s.visibility_tier))
     ]
 
-    # A named shelf that doesn't exist or isn't admitted lands here exactly
-    # like the multi-shelf case coming up empty — same 404, see the
-    # docstring on why that has to be indistinguishable.
-    if not shelves:
+    # A named shelf query (`?shelf=...`) that doesn't exist or isn't admitted
+    # returns 404. When no specific shelf is requested, an admitted profile
+    # with no visible shelves returns 200 with an empty shelves list (#296).
+    if shelf is not None and not shelves:
         raise not_found
 
     # Following (#276) grants no additional visibility — it never touches

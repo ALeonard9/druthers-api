@@ -46,7 +46,7 @@ class Settings(BaseSettings):
 
     # --- Auth ---
     jwt_secret_key: Optional[str] = None
-    access_token_expire_minutes: int = 30
+    access_token_expire_minutes: int = 1440
     # Refresh tokens (#246) keep the access token short-lived without making
     # people re-authenticate with Google. Expiry slides on every rotation, so
     # a user who opens the app at least once a month never signs in again;
@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     # would look like theft and sign the user out. Beyond the window, reuse
     # still burns the whole session down.
     refresh_token_reuse_leeway_seconds: int = 30
+
+    # Argon2 password hashing cost parameters (#285).
+    argon2_time_cost: Optional[int] = None
+    argon2_memory_cost: Optional[int] = None
+    argon2_parallelism: Optional[int] = None
     google_client_id: Optional[str] = None
     # Additional OAuth client ids accepted at sign-in, comma-separated. Native
     # clients need their own client id (an iOS client is keyed to the bundle
@@ -219,6 +224,30 @@ class Settings(BaseSettings):
                 if client_id and client_id not in ids:
                     ids.append(client_id)
         return ids
+
+    @property
+    def argon2_params(self) -> dict:
+        """
+        Argon2 password hashing parameters (#285).
+
+        In test environment (env == 'test'), cheap settings (time_cost=1, memory_cost=8,
+        parallelism=1) are used to accelerate tests. In non-test environments, standard
+        Argon2 defaults apply.
+        """
+        if self.env == 'test':
+            return {
+                'time_cost': self.argon2_time_cost or 1,
+                'memory_cost': self.argon2_memory_cost or 8,
+                'parallelism': self.argon2_parallelism or 1,
+            }
+        res = {}
+        if self.argon2_time_cost is not None:
+            res['time_cost'] = self.argon2_time_cost
+        if self.argon2_memory_cost is not None:
+            res['memory_cost'] = self.argon2_memory_cost
+        if self.argon2_parallelism is not None:
+            res['parallelism'] = self.argon2_parallelism
+        return res
 
 
 @lru_cache
