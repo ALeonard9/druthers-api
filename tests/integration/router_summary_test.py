@@ -115,6 +115,44 @@ def test_summary_is_per_user(test_client: TestClient):
     assert body['total_ranked'] == 0
 
 
+def test_needs_onboarding_true_for_empty_unfinished_account(test_client: TestClient):
+    body = test_client.get(
+        '/v1/users/me/summary', headers=_auth(test_client.first_user.token)
+    ).json()
+    assert body['onboarding_completed'] is False
+    assert body['needs_onboarding'] is True
+
+
+def test_needs_onboarding_false_once_an_item_exists(test_client: TestClient):
+    # An account with items but a still-false flag (e.g. migrated/seeded data,
+    # or pre-existing users who never ran the wizard) must not be routed into
+    # onboarding just because the flag defaults false.
+    token = test_client.first_user.token
+    _queue(test_client, token, _add_movie(test_client, 'Heat', 'tt0113277'))
+
+    body = test_client.get('/v1/users/me/summary', headers=_auth(token)).json()
+    assert body['onboarding_completed'] is False
+    assert body['needs_onboarding'] is False
+
+
+def test_needs_onboarding_false_once_flag_set_even_at_zero_items(
+    test_client: TestClient,
+):
+    # A user who skips the wizard without adding anything still flips the
+    # flag; needs_onboarding must honor that so the home <-> onboarding
+    # redirect doesn't loop.
+    token = test_client.first_user.token
+    test_client.put(
+        '/v1/users/me/preferences',
+        headers=_auth(token),
+        json={'onboarding_completed': True},
+    )
+
+    body = test_client.get('/v1/users/me/summary', headers=_auth(token)).json()
+    assert body['onboarding_completed'] is True
+    assert body['needs_onboarding'] is False
+
+
 def test_profile_public_tracks_handle_and_flags(test_client: TestClient):
     token = test_client.first_user.token
     _rank(test_client, token, _add_movie(test_client, 'Heat', 'tt0113277'), 1)
