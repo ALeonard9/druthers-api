@@ -108,6 +108,7 @@ def build_summary(db: Session, user: DbUser, top_n: int = TOP_N) -> dict:
         and any(s['public'] for s in shelves),
         'shelves': shelves,
         'total_ranked': sum(s['ranked_count'] for s in shelves),
+        'onboarding_completed': user.onboarding_completed,
     }
 
 

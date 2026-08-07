@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Column,
     DateTime,
@@ -14,6 +15,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import backref, relationship
 
@@ -116,6 +118,14 @@ class DbUser(DBBaseModel):
             values_callable=lambda members: [member.value for member in members],
         ),
         nullable=True,
+    )
+
+    # First-time onboarding state (#135).
+    onboarding_completed = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text('false'),
     )
 
 

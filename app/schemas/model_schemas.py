@@ -274,12 +274,14 @@ class InPreferencesUpdate(BaseModel):
     """Request body for display preferences (#122). Only sent fields change."""
 
     ranked_list_length: Optional[RankedListLength] = None
+    onboarding_completed: Optional[bool] = None
 
 
 class OutPreferences(BaseModel):
     """The caller's display preferences, defaulted where unset."""
 
     ranked_list_length: RankedListLength = RankedListLength.TWENTY_FIVE
+    onboarding_completed: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -316,3 +318,4 @@ class OutSummary(BaseModel):
     profile_public: bool = False
     shelves: list[OutSummaryShelf]
     total_ranked: int
+    onboarding_completed: bool

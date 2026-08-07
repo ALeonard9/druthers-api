@@ -20,7 +20,8 @@ router = APIRouter(prefix='/v1', tags=['Preferences'])
 def get_preferences(current_user: list = Depends(get_current_user)):
     user = current_user[0]
     return OutPreferences(
-        ranked_list_length=preferences.coerce(user.ranked_list_length)
+        ranked_list_length=preferences.coerce(user.ranked_list_length),
+        onboarding_completed=user.onboarding_completed,
     )
 
 
@@ -34,8 +35,14 @@ def update_preferences(
     data = request.model_dump(exclude_unset=True)
     if 'ranked_list_length' in data and data['ranked_list_length'] is not None:
         user.ranked_list_length = data['ranked_list_length']
+    if 'onboarding_completed' in data and data['onboarding_completed'] is not None:
+        user.onboarding_completed = data['onboarding_completed']
+
+    if data:
         db.commit()
         db.refresh(user)
+
     return OutPreferences(
-        ranked_list_length=preferences.coerce(user.ranked_list_length)
+        ranked_list_length=preferences.coerce(user.ranked_list_length),
+        onboarding_completed=user.onboarding_completed,
     )
