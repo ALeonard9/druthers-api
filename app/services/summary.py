@@ -96,6 +96,8 @@ def build_summary(db: Session, user: DbUser, top_n: int = TOP_N) -> dict:
             }
         )
 
+    total_items = sum(s['ranked_count'] + s['queued_count'] for s in shelves)
+
     return {
         'handle': user.handle,
         'display_name': user.display_name,
@@ -109,6 +111,12 @@ def build_summary(db: Session, user: DbUser, top_n: int = TOP_N) -> dict:
         'shelves': shelves,
         'total_ranked': sum(s['ranked_count'] for s in shelves),
         'onboarding_completed': user.onboarding_completed,
+        # The wizard is for empty accounts, not a one-shot flag: a user
+        # migrated or seeded with items already has something to show and
+        # must never be routed to onboarding just because the flag defaults
+        # false. Once ``onboarding_completed`` is set (finished or skipped),
+        # it stays honored even at zero items, so skipping doesn't loop.
+        'needs_onboarding': not user.onboarding_completed and total_items == 0,
     }
 
 

@@ -319,3 +319,4 @@ class OutSummary(BaseModel):
     shelves: list[OutSummaryShelf]
     total_ranked: int
     onboarding_completed: bool
+    needs_onboarding: bool
