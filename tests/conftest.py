@@ -245,12 +245,17 @@ def fixture_test_user_data_generator():
     '''
 
     def _generate_user_data(num_users=1):
+        import uuid
+
         user_data = []
         for _ in range(num_users):
             user_data.append(
                 InUserBase(
                     display_name=fake.name(),
-                    email=f'{fake.first_name()}.{fake.last_name_nonbinary()}@zoho.com',
+                    email=(
+                        f'{fake.first_name()}.{fake.last_name_nonbinary()}'
+                        f'.{uuid.uuid4().hex[:8]}@zoho.com'
+                    ),
                     password=fake.password(length=20),
                 )
             )
