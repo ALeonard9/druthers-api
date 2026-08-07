@@ -110,6 +110,10 @@ def build_summary(db: Session, user: DbUser, top_n: int = TOP_N) -> dict:
         and any(s['public'] for s in shelves),
         'shelves': shelves,
         'total_ranked': sum(s['ranked_count'] for s in shelves),
+        # Ranked + queued across every shelf — "has this account added
+        # anything at all," for first-run UI (onboarding, the tutorial) that
+        # should only show to genuinely empty accounts.
+        'total_items': total_items,
         'onboarding_completed': user.onboarding_completed,
         # The wizard is for empty accounts, not a one-shot flag: a user
         # migrated or seeded with items already has something to show and

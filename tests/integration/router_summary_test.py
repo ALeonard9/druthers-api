@@ -115,6 +115,26 @@ def test_summary_is_per_user(test_client: TestClient):
     assert body['total_ranked'] == 0
 
 
+def test_total_items_counts_ranked_and_queued_across_shelves(test_client: TestClient):
+    token = test_client.first_user.token
+    assert (
+        test_client.get('/v1/users/me/summary', headers=_auth(token)).json()[
+            'total_items'
+        ]
+        == 0
+    )
+
+    _rank(test_client, token, _add_movie(test_client, 'Heat', 'tt0113277'), 1)
+    _queue(test_client, token, _add_movie(test_client, 'Ronin', 'tt0113276'))
+
+    assert (
+        test_client.get('/v1/users/me/summary', headers=_auth(token)).json()[
+            'total_items'
+        ]
+        == 2
+    )
+
+
 def test_needs_onboarding_true_for_empty_unfinished_account(test_client: TestClient):
     body = test_client.get(
         '/v1/users/me/summary', headers=_auth(test_client.first_user.token)
