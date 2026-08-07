@@ -318,5 +318,6 @@ class OutSummary(BaseModel):
     profile_public: bool = False
     shelves: list[OutSummaryShelf]
     total_ranked: int
+    total_items: int
     onboarding_completed: bool
     needs_onboarding: bool
