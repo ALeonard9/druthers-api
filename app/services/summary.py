@@ -10,7 +10,7 @@ indexed queries per shelf, so page cost stops scaling with library size.
 
 from typing import List, Optional
 
-from sqlalchemy import case, func
+from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
 
 from app.db.models import DbUser
@@ -24,14 +24,33 @@ TOP_N = 5
 
 
 def _counts(db: Session, shelf: Shelf, user_pk: int):
-    """Ranked and queued totals for one shelf, in a single aggregate query."""
+    """Placed, ready-to-rank, and watchlist totals in one aggregate query."""
     tracker = shelf.tracker_model
     # count() ignores NULLs, so a CASE with no ELSE counts only the matches.
     return (
         db.query(
             func.count(  # pylint: disable=not-callable
-                case((tracker.on_rankings.is_(True), 1))
+                case(
+                    (
+                        and_(
+                            tracker.on_rankings.is_(True),
+                            tracker.rank.isnot(None),
+                        ),
+                        1,
+                    )
+                )
             ).label('ranked'),
+            func.count(  # pylint: disable=not-callable
+                case(
+                    (
+                        and_(
+                            tracker.on_rankings.is_(True),
+                            tracker.rank.is_(None),
+                        ),
+                        1,
+                    )
+                )
+            ).label('ready_to_rank'),
             func.count(  # pylint: disable=not-callable
                 case((tracker.on_watchlist.is_(True), 1))
             ).label('queued'),
@@ -78,8 +97,10 @@ def build_summary(db: Session, user: DbUser, top_n: int = TOP_N) -> dict:
     """
     limit = max(1, min(top_n, TOP_N))
     shelves = []
+    ready_to_rank_total = 0
     for shelf in SHELVES:
         counts = _counts(db, shelf, user.pk)
+        ready_to_rank_total += counts.ready_to_rank
         shelves.append(
             {
                 'category': shelf.category,
@@ -96,7 +117,13 @@ def build_summary(db: Session, user: DbUser, top_n: int = TOP_N) -> dict:
             }
         )
 
-    total_items = sum(s['ranked_count'] + s['queued_count'] for s in shelves)
+    # Ready-to-rank rows are real account content, but are deliberately not a
+    # rank total until they have a position. Keep them in the zero-item test
+    # without inflating homepage, share-card, or Top-N totals.
+    total_items = (
+        sum(s['ranked_count'] + s['queued_count'] for s in shelves)
+        + ready_to_rank_total
+    )
 
     return {
         'handle': user.handle,
@@ -110,9 +137,9 @@ def build_summary(db: Session, user: DbUser, top_n: int = TOP_N) -> dict:
         and any(s['public'] for s in shelves),
         'shelves': shelves,
         'total_ranked': sum(s['ranked_count'] for s in shelves),
-        # Ranked + queued across every shelf — "has this account added
-        # anything at all," for first-run UI (onboarding, the tutorial) that
-        # should only show to genuinely empty accounts.
+        # Placed + ready-to-rank + queued across every shelf — "has this
+        # account added anything at all," for first-run UI (onboarding, the
+        # tutorial) that should only show to genuinely empty accounts.
         'total_items': total_items,
         'onboarding_completed': user.onboarding_completed,
         # The wizard is for empty accounts, not a one-shot flag: a user
@@ -126,4 +153,4 @@ def build_summary(db: Session, user: DbUser, top_n: int = TOP_N) -> dict:
 
 def profile_path(handle: Optional[str]) -> Optional[str]:
     """Canonical public-profile path for a handle (see DbUser.handle)."""
-    return f'/u/{handle}' if handle else None
+    return f"/u/{handle}" if handle else None

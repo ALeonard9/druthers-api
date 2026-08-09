@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 
 def _auth(token: str) -> dict:
-    return {'Authorization': f'Bearer {token}'}
+    return {'Authorization': f"Bearer {token}"}
 
 
 def _add_movie(test_client: TestClient, title: str, imdb: str, year: int = 1999) -> str:
@@ -16,12 +16,12 @@ def _add_movie(test_client: TestClient, title: str, imdb: str, year: int = 1999)
 
 def _rank(test_client: TestClient, token: str, movie_id: str, position: int):
     test_client.post(
-        f'/v1/users/me/movies/{movie_id}',
+        f"/v1/users/me/movies/{movie_id}",
         headers=_auth(token),
         json={'on_rankings': True},
     )
     test_client.put(
-        f'/v1/users/me/movies/{movie_id}/rank',
+        f"/v1/users/me/movies/{movie_id}/rank",
         headers=_auth(token),
         json={'position': position},
     )
@@ -29,9 +29,17 @@ def _rank(test_client: TestClient, token: str, movie_id: str, position: int):
 
 def _queue(test_client: TestClient, token: str, movie_id: str):
     test_client.post(
-        f'/v1/users/me/movies/{movie_id}',
+        f"/v1/users/me/movies/{movie_id}",
         headers=_auth(token),
         json={'on_watchlist': True},
+    )
+
+
+def _ready_to_rank(test_client: TestClient, token: str, movie_id: str):
+    test_client.post(
+        f"/v1/users/me/movies/{movie_id}",
+        headers=_auth(token),
+        json={'on_rankings': True},
     )
 
 
@@ -62,9 +70,9 @@ def test_top_is_ranked_order_and_counts_are_separate(test_client: TestClient):
     token = test_client.first_user.token
     # Rank three, queue two.
     for i, title in enumerate(['Heat', 'Ronin', 'Sneakers'], start=1):
-        _rank(test_client, token, _add_movie(test_client, title, f'tt000{i}'), i)
+        _rank(test_client, token, _add_movie(test_client, title, f"tt000{i}"), i)
     for i, title in enumerate(['Alien', 'Aliens'], start=4):
-        _queue(test_client, token, _add_movie(test_client, title, f'tt000{i}'))
+        _queue(test_client, token, _add_movie(test_client, title, f"tt000{i}"))
 
     movies = _shelf(
         test_client.get('/v1/users/me/summary', headers=_auth(token)).json(),
@@ -76,10 +84,30 @@ def test_top_is_ranked_order_and_counts_are_separate(test_client: TestClient):
     assert movies['queued_count'] == 2
 
 
+def test_ready_to_rank_items_do_not_inflate_rank_totals(test_client: TestClient):
+    token = test_client.first_user.token
+    _rank(test_client, token, _add_movie(test_client, 'Heat', 'tt0113277'), 1)
+    _rank(test_client, token, _add_movie(test_client, 'Ronin', 'tt0122690'), 2)
+    _ready_to_rank(
+        test_client,
+        token,
+        _add_movie(test_client, 'Sneakers', 'tt0105435'),
+    )
+
+    body = test_client.get('/v1/users/me/summary', headers=_auth(token)).json()
+    movies = _shelf(body, 'movies')
+
+    assert [entry['title'] for entry in movies['top']] == ['Heat', 'Ronin']
+    assert movies['ranked_count'] == 2
+    assert body['total_ranked'] == 2
+    assert body['total_items'] == 3
+    assert body['needs_onboarding'] is False
+
+
 def test_top_is_capped_at_five(test_client: TestClient):
     token = test_client.first_user.token
     for i in range(1, 8):
-        _rank(test_client, token, _add_movie(test_client, f'Film {i}', f'tt10{i}'), i)
+        _rank(test_client, token, _add_movie(test_client, f"Film {i}", f"tt10{i}"), i)
 
     body = test_client.get('/v1/users/me/summary', headers=_auth(token)).json()
     assert len(_shelf(body, 'movies')['top']) == 5
