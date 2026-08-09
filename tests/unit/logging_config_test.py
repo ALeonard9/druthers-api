@@ -5,8 +5,14 @@ Test the Cloud Run structured-logging pieces of logging_config.
 import json
 import logging
 import sys
+from datetime import datetime, timezone
 
-from app.log.logging_config import GcpJsonFormatter, running_on_cloud_run
+from app.config import Settings
+from app.log.logging_config import (
+    CustomFormatter,
+    GcpJsonFormatter,
+    running_on_cloud_run,
+)
 
 
 def make_record(level, msg, exc_info=None):
@@ -61,3 +67,14 @@ def test_running_on_cloud_run(monkeypatch):
     assert running_on_cloud_run() is False
     monkeypatch.setenv('K_SERVICE', 'druthers-api')
     assert running_on_cloud_run() is True
+
+
+def test_console_formatter_uses_configured_time_zone():
+    """Log timestamps follow TIME_ZONE, including daylight-saving offsets."""
+    settings = Settings(time_zone='America/Los_Angeles')
+    record = make_record(logging.INFO, 'checks clock')
+    record.created = datetime(2026, 7, 1, 18, 30, tzinfo=timezone.utc).timestamp()
+
+    output = CustomFormatter(time_zone=settings.time_zone_info).format(record)
+
+    assert '2026-07-01 11:30:00 => checks clock' in output

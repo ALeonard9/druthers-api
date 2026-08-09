@@ -5,15 +5,30 @@ Logging configuration for the API
 import json
 import logging
 import os
+from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from typing import override
+from zoneinfo import ZoneInfo
 
 import logging_loki
 
 from app.config import get_settings
 
 
-class CustomFormatter(logging.Formatter):
+class TimeZoneFormatter(logging.Formatter):
+    """Standard formatter whose timestamps use an explicit IANA time zone."""
+
+    def __init__(self, *args, time_zone: ZoneInfo, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.time_zone = time_zone
+
+    def formatTime(self, record, datefmt=None):  # noqa: N802
+        """Render record timestamps in the configured IANA time zone."""
+        timestamp = datetime.fromtimestamp(record.created, self.time_zone)
+        return timestamp.strftime(datefmt) if datefmt else timestamp.isoformat()
+
+
+class CustomFormatter(TimeZoneFormatter):
     """
     Creates custom formatter to color log messages.
     """
@@ -42,8 +57,11 @@ class CustomFormatter(logging.Formatter):
         Provides formatting for log messages.
         """
         log_fmt = self.FORMATS.get(record.levelno)
-        formatter = logging.Formatter(log_fmt)
-        formatter.datefmt = '%Y-%m-%d %H:%M:%S'
+        formatter = TimeZoneFormatter(
+            log_fmt,
+            datefmt='%Y-%m-%d %H:%M:%S',
+            time_zone=self.time_zone,
+        )
         return formatter.format(record)
 
 
@@ -101,17 +119,19 @@ def configure_logger():
     logger.setLevel(settings.log_level.upper())
 
     # Create a formatter and set it for the handler
-    file_log_formatter = logging.Formatter(
-        '%(levelname)s: [%(name)s] %(asctime)s => %(message)s (%(filename)s:%(lineno)d)'
+    file_log_formatter = TimeZoneFormatter(
+        '%(levelname)s: [%(name)s] %(asctime)s => %(message)s '
+        '(%(filename)s:%(lineno)d)',
+        datefmt='%Y-%m-%d %H:%M:%S',
+        time_zone=settings.time_zone_info,
     )
-    file_log_formatter.datefmt = '%Y-%m-%d %H:%M:%S'
 
     # Used separate formatters as color ASCII threw off the file log formatting
     # On Cloud Run, stdout is the log pipeline: emit structured JSON instead.
     if running_on_cloud_run():
         ch.setFormatter(GcpJsonFormatter())
     else:
-        ch.setFormatter(CustomFormatter())
+        ch.setFormatter(CustomFormatter(time_zone=settings.time_zone_info))
     logger.addHandler(ch)
 
     logger.debug('API env set to: %s', settings.env)
@@ -128,6 +148,7 @@ def configure_logger():
 
     # Rotating file handler
     rotating_handler = RotatingFileHandler(log_file, maxBytes=10485760, backupCount=10)
+    rotating_handler.setFormatter(file_log_formatter)
     logger.addHandler(rotating_handler)
     logger.addHandler(fh)
 
