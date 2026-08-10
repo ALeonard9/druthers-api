@@ -36,27 +36,13 @@ Usage::
 Every run also seeds the **fixed dev cast** (#313): six accounts covering the
 relationship/visibility positions the social features (compare, sharing,
 friends' activity) need, anchored to the *target* user -- the ``--email``
-user, default the seed admin -- who becomes "you":
+user, default the seed admin -- who becomes "you". They all share the dev
+password ``change-me``, so a demo can be driven from any seat.
 
-    handle         email                 tier       relationship to you
-    ------         -----                 ----       ------------------
-    you            ADMIN_EMAIL           public     the seed target
-    friend         friend@example.com    friends    accepted friend
-    follower       follower@example.com  public     follows you, not followed back
-    followee       followee@example.com  public     you follow them; books are friends-only
-    public-user    public@example.com    public     stranger, shares 3 titles
-    private-user   private@example.com   private    invisible to everyone but themselves
-    stranger       stranger@example.com  public     no relationship, no shared titles
-
-All cast accounts share the dev password ``change-me``, so any position can
-be signed into to demo from that seat. The seeder makes the target user
-public with the handle ``you`` (required for a follower to exist), ranks eight
-real movies from ``seed_movies.json`` for them, and ranks a fixed subset of
-those same movies for each cast member -- which pins the compare states to
-known values: the friend shares all eight (``ready``), public-user three,
-follower two, followee one and stranger none (``not_enough_overlap``), and
-the followee's friends-only books shelf compares as ``hidden``. The private
-cast member 404s identically to an unknown handle.
+``docs/dev-cast.md`` is the reference for who they are: handles, credentials,
+time zones, which seat demonstrates which rule, and why the shelf sizes are
+what they are. It is deliberately the only copy of that table -- ``_CAST_USERS``
+below is the only other place these facts live, and a third would drift.
 
 The cast is additive and idempotent: re-running never duplicates a user, a
 friendship, a follow, or a tracker row. ``--wipe`` clears every seeded tracker
@@ -150,6 +136,17 @@ def _cast_tiers(style: str, **overrides) -> dict:
 # comparison alignment states) are pinned to known values on every run.
 _CAST_CANON_TMDB = (157336, 603, 27205, 155, 680, 438631, 496243, 244786)
 
+# Ranked-shelf sizes are deliberately small and deliberately uneven. Every
+# movie a cast member ranks is a movie the target also ranks -- the default
+# ``--count`` is the entire fixture -- so shelf size *is* overlap size, and
+# overlap is what pins each comparison state. Five shared titles is the
+# threshold between ``not_enough_overlap`` and ``ready``; the numbers below
+# straddle it on purpose. Grow one and you change what its seat demos.
+#
+# Time zones are spread across the cast so the per-user zone preference is
+# visible without editing anything: the greeting and the schedule's idea of
+# "today" differ by seat, and Sydney/Tokyo are far enough from Chicago to
+# land on a different calendar day for most of the working day.
 _CAST_USERS = (
     {
         'email': 'friend@example.com',
@@ -160,6 +157,7 @@ _CAST_USERS = (
         # and compares ``ready``; from anyone else the profile 404s.
         'tiers': _cast_tiers('friends'),
         'canon_movies': 8,
+        'time_zone': 'Europe/London',
     },
     {
         'email': 'follower@example.com',
@@ -168,6 +166,7 @@ _CAST_USERS = (
         'position': 'follower',
         'tiers': _cast_tiers('public'),
         'canon_movies': 2,
+        'time_zone': 'Asia/Tokyo',
     },
     {
         'email': 'followee@example.com',
@@ -178,6 +177,7 @@ _CAST_USERS = (
         # whose comparison shows ``hidden`` under a visible profile.
         'tiers': _cast_tiers('public', visibility_books='friends'),
         'canon_movies': 1,
+        'time_zone': 'America/Los_Angeles',
     },
     {
         'email': 'public@example.com',
@@ -186,6 +186,7 @@ _CAST_USERS = (
         'position': 'public',
         'tiers': _cast_tiers('public'),
         'canon_movies': 3,
+        'time_zone': 'Australia/Sydney',
     },
     {
         'email': 'private@example.com',
@@ -193,7 +194,13 @@ _CAST_USERS = (
         'handle': 'private-user',
         'position': 'private',
         'tiers': _cast_tiers('private'),
-        'canon_movies': 0,
+        # A stocked shelf that nobody else can reach. Left empty, a 404 from
+        # this seat proved nothing -- "hidden because private" and "hidden
+        # because there is nothing there" looked identical. The count is free
+        # to move: no other seat can see this profile, so no comparison state
+        # depends on it.
+        'canon_movies': 6,
+        'time_zone': 'America/New_York',
     },
     {
         'email': 'stranger@example.com',
@@ -202,10 +209,13 @@ _CAST_USERS = (
         'position': 'stranger',
         'tiers': _cast_tiers('public'),
         'canon_movies': 0,
-        # Non-canon ranked movies so the profile is not empty; none of them
-        # affect the (zero) canon overlap, so the state stays
-        # ``not_enough_overlap``.
-        'extra_movies': 2,
+        # A visible profile that still compares as ``not_enough_overlap`` --
+        # the case that only exists while the shared count stays under five.
+        # These are non-canon rows, but the target ranks the whole fixture,
+        # so they *do* count as shared titles: four is the most this seat can
+        # hold without turning into another ``ready``.
+        'extra_movies': 4,
+        'time_zone': 'UTC',
     },
 )
 
@@ -720,7 +730,7 @@ def _get_or_create_cast_user(session: Session, spec: dict) -> DbUser:
     The cast account for ``spec``, created on first sight and reused after.
 
     Idempotent by email. The fixed handle is claimed only when the account
-    has none, and the nine tiers are re-applied every run.
+    has none, and the nine tiers and the time zone are re-applied every run.
     """
     user = session.query(DbUser).filter_by(email=spec['email']).one_or_none()
     if user is None:
@@ -736,6 +746,7 @@ def _get_or_create_cast_user(session: Session, spec: dict) -> DbUser:
         user.handle = spec['handle']
     for field, tier in spec['tiers'].items():
         setattr(user, field, tier)
+    user.time_zone = spec['time_zone']
     return user
 
 
@@ -763,9 +774,12 @@ def _extra_cast_movies(canon: list, count: int) -> list:
     """
     ``count`` non-canon fixture movies, picked deterministically.
 
-    Gives a cast member a non-empty ranked shelf without shifting their canon
-    overlap count: extra movies are never added to the target user by the
-    seeder, so they cannot push a <5-canon user to ``ready`` on their own.
+    Gives a cast member a ranked shelf beyond the canon. "Non-canon" means
+    outside the eight titles that pin the comparison canon -- it does *not*
+    mean the title goes unshared: the target user's default ``--count`` is
+    the whole movie fixture, so every extra is a shared title too. Keep
+    ``canon_movies + extra_movies`` under five on any seat whose demo depends
+    on ``not_enough_overlap``.
     """
     canon_tmdb = {row['tmdb'] for row in canon}
     return [
