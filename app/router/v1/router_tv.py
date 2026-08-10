@@ -65,7 +65,7 @@ router = APIRouter(prefix='/v1', tags=['TV'])
 
 def _local_day_start(user) -> datetime:
     """
-    Midnight of the caller's own today, tz-naive.
+    Midnight opening the caller's own today, tz-naive.
 
     Episode airdates are stored naive at midnight of a calendar date (see
     ``tv_search._to_date``), with no clock time to compare against -- so
@@ -77,6 +77,18 @@ def _local_day_start(user) -> datetime:
     """
     today = datetime.now(preferences.time_zone_info(user.time_zone)).date()
     return datetime.combine(today, time.min)
+
+
+def _local_day_end(user) -> datetime:
+    """
+    Midnight closing the caller's own today -- the "already aired" cutoff.
+
+    Exclusive upper bound, so an episode dated today counts as aired (which
+    is what the schedule has always done) without a stray clock time on the
+    row pushing it into the future. Comparing against the *start* of today
+    instead would quietly un-air anything that aired earlier the same day.
+    """
+    return _local_day_start(user) + timedelta(days=1)
 
 
 # Global Entity Endpoints
@@ -381,7 +393,7 @@ def get_user_tv_shows(
         apply_list_params(query, DbUserTVShow, params).all(), params, 'TV'
     )
     show_pks = [t.tv_show_id for t in trackers]
-    now = _local_day_start(current_user[0])
+    aired_before = _local_day_end(current_user[0])
 
     aired: dict = {}
     watched: dict = {}
@@ -394,7 +406,7 @@ def get_user_tv_shows(
             .filter(
                 DbTVEpisode.tv_show_id.in_(show_pks),
                 DbTVEpisode.airdate.isnot(None),
-                DbTVEpisode.airdate <= now,
+                DbTVEpisode.airdate < aired_before,
             )
             .group_by(DbTVEpisode.tv_show_id)
             .all()
@@ -408,7 +420,7 @@ def get_user_tv_shows(
             .filter(
                 DbTVEpisode.tv_show_id.in_(show_pks),
                 DbTVEpisode.airdate.isnot(None),
-                DbTVEpisode.airdate <= now,
+                DbTVEpisode.airdate < aired_before,
                 DbUserTVEpisode.user_id == user_pk,
                 DbUserTVEpisode.watched == 1,
             )
@@ -449,9 +461,10 @@ def get_schedule(  # pylint: disable=too-many-locals
     window turns over at their midnight rather than the server's.
     """
     user_pk = current_user[0].pk
-    now = _local_day_start(current_user[0])
-    window_start = now - timedelta(days=window_days)
-    window_end = now + timedelta(days=window_days)
+    today = _local_day_start(current_user[0])
+    aired_before = _local_day_end(current_user[0])
+    window_start = today - timedelta(days=window_days)
+    window_end = today + timedelta(days=window_days)
 
     trackers = (
         db.query(DbUserTVShow)
@@ -476,9 +489,10 @@ def get_schedule(  # pylint: disable=too-many-locals
         shows_by_pk = {
             s.pk: s for s in db.query(DbTVShow).filter(DbTVShow.pk.in_(active_show_pks))
         }
-        # catch_up only needs airdate <= now; upcoming only needs <= window_end
-        # (>= window_start is checked in Python below). window_end >= now
-        # always, so bounding the fetch to airdate <= window_end covers both.
+        # catch_up only needs airdate < aired_before; upcoming only needs
+        # <= window_end (>= window_start is checked in Python below).
+        # window_end >= aired_before for any window_days >= 1, so bounding the
+        # fetch to airdate <= window_end covers both.
         # The unwatched anti-join is pushed into SQL too, instead of loading
         # every episode of every active show and filtering in Python — row
         # count no longer scales with the full episode catalog.
@@ -516,7 +530,7 @@ def get_schedule(  # pylint: disable=too-many-locals
             )
             if window_start <= ep.airdate <= window_end:
                 upcoming.append(item)
-            if ep.airdate <= now:
+            if ep.airdate < aired_before:
                 catch_up.append(item)
 
         upcoming.sort(key=lambda i: (i.airdate, i.show_title, i.season_number or 0))
