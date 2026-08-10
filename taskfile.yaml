@@ -89,7 +89,7 @@ tasks:
       - python -m app.migration.orion_import {{.CLI_ARGS}}
 
   seed:dev:
-    desc: "Populate local dev Postgres with real catalog data + randomized tracker state. Usage: task seed:dev -- --count 500 | --wipe"
+    desc: "Populate local dev Postgres with real catalog data + randomized tracker state + the fixed dev cast (#313). Usage: task seed:dev -- --count 500 | --wipe"
     cmds:
       - python -m app.migration.seed_dev {{.CLI_ARGS}}
 

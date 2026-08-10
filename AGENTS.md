@@ -1,3 +1,20 @@
+## Python formatting
+
+The pre-commit `black` hook runs with `--skip-string-normalization` (see
+`.pre-commit-config.yaml`) — it never rewrites quote style. A separate
+`double-quote-string-fixer` hook converts double quotes to single after.
+If you run `black` by hand instead of relying on the hook, pass
+`--skip-string-normalization` too, or it'll flip the file to double quotes
+and force an extra fix-and-recommit round trip.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
 <!-- BEGIN:druthers-workflow -->
 ## Development workflow
 
@@ -184,23 +201,3 @@ and were never revisited.
   a hard blocker anyway; the check not being enforced yet isn't permission
   to ignore it.
 <!-- END:druthers-workflow -->
-
-## Python formatting
-
-The pre-commit `black` hook runs with `--skip-string-normalization` (see
-`.pre-commit-config.yaml`) — it never rewrites quote style. A separate
-`double-quote-string-fixer` hook converts double quotes to single after.
-If you run `black` by hand instead of relying on the hook, pass
-`--skip-string-normalization` too, or it'll flip the file to double quotes
-and force an extra fix-and-recommit round trip.
-
-## graphify
-
-This project has a knowledge graph at graphify-out/ with god nodes, community
-structure, and cross-file relationships.
-
-Rules:
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when
-  query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current
-  (AST-only, no API cost).

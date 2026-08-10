@@ -1,6 +1,7 @@
 # pylint: disable=missing-module-docstring, missing-function-docstring
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
+from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 
@@ -754,3 +755,80 @@ def test_tv_watch_providers_unknown_show_404s(test_client: TestClient):
     headers = {'Authorization': f"Bearer {test_client.admin_user.token}"}
     response = test_client.get('/v1/tv-shows/nope/watch-providers', headers=headers)
     assert response.status_code == 404
+
+
+# --- Schedule window follows the caller's time zone ---
+# Kiritimati is UTC+14 and Midway is UTC-11: 25 hours apart, so their local
+# calendar dates are *always* a day apart, whatever the suite happens to run
+# at. That is what makes the assertions below deterministic instead of
+# passing only during part of the day.
+_AHEAD = 'Pacific/Kiritimati'
+_BEHIND = 'Pacific/Midway'
+
+
+def _set_time_zone(test_client: TestClient, headers: dict, zone: str) -> None:
+    resp = test_client.put(
+        '/v1/users/me/preferences', headers=headers, json={'time_zone': zone}
+    )
+    assert resp.status_code == 200, resp.text
+
+
+def _local_today(zone: str) -> date:
+    return datetime.now(ZoneInfo(zone)).date()
+
+
+def test_schedule_window_turns_over_at_the_users_midnight(test_client: TestClient):
+    """
+    One episode, one instant, two zones -- and it is only in one window.
+
+    The episode airs five days after *Kiritimati's* today, which is the last
+    day that zone's +/-5 window reaches. Midway is a calendar day behind, so
+    the same date is six days out from its today and falls outside. A window
+    anchored on the server's clock puts the episode in both, or neither.
+    """
+    show_id = _make_show(test_client, title='Timezone Show')
+    headers = {'Authorization': f"Bearer {test_client.first_user.token}"}
+    test_client.post(
+        f"/v1/users/me/tv-shows/{show_id}",
+        headers=headers,
+        json={'on_rankings': True},
+    )
+    edge = _local_today(_AHEAD) + timedelta(days=5)
+    episode_id = _make_episode(
+        test_client, show_id, title='Edge of the window', airdate=f"{edge}T00:00:00"
+    )
+
+    _set_time_zone(test_client, headers, _AHEAD)
+    ahead = test_client.get('/v1/users/me/schedule', headers=headers).json()
+
+    _set_time_zone(test_client, headers, _BEHIND)
+    behind = test_client.get('/v1/users/me/schedule', headers=headers).json()
+
+    assert episode_id in {e['episode_id'] for e in ahead['upcoming']}
+    assert episode_id not in {e['episode_id'] for e in behind['upcoming']}
+
+
+def test_schedule_zone_is_per_user(test_client: TestClient):
+    """A second user's window is unaffected by the first user's choice."""
+    show_id = _make_show(test_client, title='Shared Show')
+    first = {'Authorization': f"Bearer {test_client.first_user.token}"}
+    second = {'Authorization': f"Bearer {test_client.second_user.token}"}
+    for headers in (first, second):
+        test_client.post(
+            f"/v1/users/me/tv-shows/{show_id}",
+            headers=headers,
+            json={'on_rankings': True},
+        )
+    edge = _local_today(_AHEAD) + timedelta(days=5)
+    episode_id = _make_episode(
+        test_client, show_id, title='Shared edge', airdate=f"{edge}T00:00:00"
+    )
+
+    _set_time_zone(test_client, first, _AHEAD)
+    _set_time_zone(test_client, second, _BEHIND)
+
+    ahead = test_client.get('/v1/users/me/schedule', headers=first).json()
+    behind = test_client.get('/v1/users/me/schedule', headers=second).json()
+
+    assert episode_id in {e['episode_id'] for e in ahead['upcoming']}
+    assert episode_id not in {e['episode_id'] for e in behind['upcoming']}

@@ -120,6 +120,14 @@ class DbUser(DBBaseModel):
         nullable=True,
     )
 
+    # Which IANA zone this user's own hours are rendered in — the greeting,
+    # the schedule's idea of "today", anything that reads as a wall clock.
+    # NULL means "never chosen" and reads as the deployment's TIME_ZONE
+    # (#322), so the fleet-wide default can move without rewriting rows.
+    # Unconstrained on purpose: the tzdb gains and drops zone names between
+    # releases, and a CHECK would turn that into failed writes.
+    time_zone = Column(String(64), nullable=True)
+
     # First-time onboarding state (#135).
     onboarding_completed = Column(
         Boolean,

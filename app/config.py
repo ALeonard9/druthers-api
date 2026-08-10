@@ -8,7 +8,9 @@ All environment-driven settings are read here through a single Pydantic
 
 from functools import lru_cache
 from typing import FrozenSet, List, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +27,7 @@ class Settings(BaseSettings):
     env: str = 'local'
     lz: Optional[str] = None
     log_level: str = 'INFO'
+    time_zone: str = 'America/Chicago'
     # Baked in at image build time (see Dockerfile ARG/ENV GIT_SHA). Lets a
     # running container be checked against the working tree instead of
     # silently serving a stale build (api#232).
@@ -134,6 +137,21 @@ class Settings(BaseSettings):
     # used to enrich rows Open Library cannot resolve by ISBN but which carry
     # a legacy ``googleid``; enrichment simply skips them when unset.
     google_books_api_key: Optional[str] = None
+
+    @property
+    def time_zone_info(self) -> ZoneInfo:
+        """Return the configured IANA time zone for operator-facing time."""
+        return ZoneInfo(self.time_zone)
+
+    @field_validator('time_zone')
+    @classmethod
+    def validate_time_zone(cls, value: str) -> str:
+        """Reject an invalid IANA time zone before the app starts."""
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError(f'Unknown IANA time zone: {value}') from exc
+        return value
 
     @property
     def sqlalchemy_database_url(self) -> str:
