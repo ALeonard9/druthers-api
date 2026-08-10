@@ -1,6 +1,6 @@
 """
-Populate the LOCAL dev Postgres with a realistic volume of real catalog data
-and randomized tracker state (#228).
+Populate the LOCAL dev Postgres with a realistic volume of real catalog data,
+randomized tracker state (#228), and the fixed dev cast (#313).
 
 Titles, ids, and metadata come from the checked-in fixtures
 ``app/migration/fixtures/seed_*.json`` -- real movies/shows/books/games
@@ -32,6 +32,37 @@ Usage::
     task seed:dev -- --email you@example.com       # target a non-admin local user, e.g.
                                                     # whichever account Google Sign-In
                                                     # actually created when you signed in
+
+Every run also seeds the **fixed dev cast** (#313): six accounts covering the
+relationship/visibility positions the social features (compare, sharing,
+friends' activity) need, anchored to the *target* user -- the ``--email``
+user, default the seed admin -- who becomes "you":
+
+    handle         email                 tier       relationship to you
+    ------         -----                 ----       ------------------
+    you            ADMIN_EMAIL           public     the seed target
+    friend         friend@example.com    friends    accepted friend
+    follower       follower@example.com  public     follows you, not followed back
+    followee       followee@example.com  public     you follow them; books are friends-only
+    public-user    public@example.com    public     stranger, shares 3 titles
+    private-user   private@example.com   private    invisible to everyone but themselves
+    stranger       stranger@example.com  public     no relationship, no shared titles
+
+All cast accounts share the dev password ``change-me``, so any position can
+be signed into to demo from that seat. The seeder makes the target user
+public with the handle ``you`` (required for a follower to exist), ranks eight
+real movies from ``seed_movies.json`` for them, and ranks a fixed subset of
+those same movies for each cast member -- which pins the compare states to
+known values: the friend shares all eight (``ready``), public-user three,
+follower two, followee one and stranger none (``not_enough_overlap``), and
+the followee's friends-only books shelf compares as ``hidden``. The private
+cast member 404s identically to an unknown handle.
+
+The cast is additive and idempotent: re-running never duplicates a user, a
+friendship, a follow, or a tracker row. ``--wipe`` clears every seeded tracker
+row -- the target user's randomized rows and the cast's canon rows alike --
+while leaving catalog rows, the cast users themselves, and their
+relationships in place.
 """
 
 import argparse
@@ -46,8 +77,11 @@ from urllib.parse import urlsplit
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.db import db_follow
+from app.db import db_friendship
 from app.db.database import SessionLocal
-from app.db.models import DbUser
+from app.db.hash import Hash
+from app.db.models import DbFollow, DbFriendship, DbUser
 from app.db.models_sandbox import (
     DbBook,
     DbMovie,
@@ -62,6 +96,7 @@ from app.db.models_sandbox import (
 )
 from app.log.logging_config import logger
 from app.services.book_search import apply_detail_to_book
+from app.services.friendships import FriendshipStatus, canonical_pair
 from app.services.game_search import apply_detail_to_game
 from app.services.movie_search import apply_detail_to_movie
 from app.services.tv_search import apply_detail_to_show
@@ -80,6 +115,99 @@ _FIVE_YEARS_DAYS = 5 * 365
 # (ids themselves were fake, so there was no marker column to use instead).
 # Kept here only so a dev DB seeded the old way can be cleaned up once.
 _LEGACY_FAKE_ID_BASE = 900_000
+
+# --- Fixed dev cast (#313) ---------------------------------------------------
+# Six accounts covering the relationship/visibility positions the social
+# features need, anchored to the seed target ("you"). All share one password
+# so any position can be signed into. Documented in the module docstring and
+# the README; ``_seed_cast`` is what brings them to life.
+
+_CAST_PASSWORD = 'change-me'
+_TARGET_HANDLE = 'you'
+
+# The nine per-user visibility columns on ``users`` (see ``DbUser``).
+_TIER_FIELDS = (
+    'visibility_profile',
+    'visibility_movies',
+    'visibility_tv',
+    'visibility_books',
+    'visibility_games',
+    'visibility_watchlist_movies',
+    'visibility_watchlist_tv',
+    'visibility_watchlist_books',
+    'visibility_watchlist_games',
+)
+
+
+def _cast_tiers(style: str, **overrides) -> dict:
+    """All nine tier columns at ``style``, with ``overrides`` applied."""
+    return {field: overrides.get(field, style) for field in _TIER_FIELDS}
+
+
+# Eight real movies from seed_movies.json, selected by TMDB id. They form the
+# deterministic overlap canon: the target user ranks all of them and each cast
+# member ranks a fixed prefix, so shared-rank counts (and therefore the
+# comparison alignment states) are pinned to known values on every run.
+_CAST_CANON_TMDB = (157336, 603, 27205, 155, 680, 438631, 496243, 244786)
+
+_CAST_USERS = (
+    {
+        'email': 'friend@example.com',
+        'display_name': 'Friend',
+        'handle': 'friend',
+        'position': 'friend',
+        # Friends-only everywhere: from a friend's seat every shelf is visible
+        # and compares ``ready``; from anyone else the profile 404s.
+        'tiers': _cast_tiers('friends'),
+        'canon_movies': 8,
+    },
+    {
+        'email': 'follower@example.com',
+        'display_name': 'Follower',
+        'handle': 'follower',
+        'position': 'follower',
+        'tiers': _cast_tiers('public'),
+        'canon_movies': 2,
+    },
+    {
+        'email': 'followee@example.com',
+        'display_name': 'Followee',
+        'handle': 'followee',
+        'position': 'followee',
+        # Public profile with a friends-only books shelf: the one cast member
+        # whose comparison shows ``hidden`` under a visible profile.
+        'tiers': _cast_tiers('public', visibility_books='friends'),
+        'canon_movies': 1,
+    },
+    {
+        'email': 'public@example.com',
+        'display_name': 'Public User',
+        'handle': 'public-user',
+        'position': 'public',
+        'tiers': _cast_tiers('public'),
+        'canon_movies': 3,
+    },
+    {
+        'email': 'private@example.com',
+        'display_name': 'Private User',
+        'handle': 'private-user',
+        'position': 'private',
+        'tiers': _cast_tiers('private'),
+        'canon_movies': 0,
+    },
+    {
+        'email': 'stranger@example.com',
+        'display_name': 'Stranger',
+        'handle': 'stranger',
+        'position': 'stranger',
+        'tiers': _cast_tiers('public'),
+        'canon_movies': 0,
+        # Non-canon ranked movies so the profile is not empty; none of them
+        # affect the (zero) canon overlap, so the state stays
+        # ``not_enough_overlap``.
+        'extra_movies': 2,
+    },
+)
 
 
 def _assert_local_dev() -> None:
@@ -572,8 +700,193 @@ def _seed_books(session: Session, user: DbUser, rows: list) -> None:
         )
 
 
+def _claim_target_user(user: DbUser) -> None:
+    """
+    Make the seed target the anchor of the cast: public everywhere with a
+    handle, so a follower can exist and others can compare against them.
+
+    An existing handle is never clobbered -- only a ``None`` handle is
+    claimed. The tiers are re-applied every run: the cast positions are this
+    script's job to hold.
+    """
+    if user.handle is None:
+        user.handle = _TARGET_HANDLE
+    for field in _TIER_FIELDS:
+        setattr(user, field, 'public')
+
+
+def _get_or_create_cast_user(session: Session, spec: dict) -> DbUser:
+    """
+    The cast account for ``spec``, created on first sight and reused after.
+
+    Idempotent by email. The fixed handle is claimed only when the account
+    has none, and the nine tiers are re-applied every run.
+    """
+    user = session.query(DbUser).filter_by(email=spec['email']).one_or_none()
+    if user is None:
+        user = DbUser(
+            display_name=spec['display_name'],
+            email=spec['email'],
+            password=Hash.hash_password(_CAST_PASSWORD),
+            handle=spec['handle'],
+        )
+        session.add(user)
+        session.flush()
+    elif user.handle is None:
+        user.handle = spec['handle']
+    for field, tier in spec['tiers'].items():
+        setattr(user, field, tier)
+    return user
+
+
+def _cast_canon_movies() -> list:
+    """
+    The overlap canon as real fixture rows, selected by TMDB id.
+
+    A canon movie missing from a regenerated fixture is skipped with a warning
+    rather than fabricated -- the cast never invents catalog data.
+    """
+    fixture = {row['tmdb']: row for row in _load_fixture('seed_movies.json')}
+    canon = []
+    for tmdb in _CAST_CANON_TMDB:
+        row = fixture.get(tmdb)
+        if row is None:
+            logger.warning(
+                'seed_dev cast: canon movie tmdb=%d missing from fixture', tmdb
+            )
+            continue
+        canon.append(row)
+    return canon
+
+
+def _extra_cast_movies(canon: list, count: int) -> list:
+    """
+    ``count`` non-canon fixture movies, picked deterministically.
+
+    Gives a cast member a non-empty ranked shelf without shifting their canon
+    overlap count: extra movies are never added to the target user by the
+    seeder, so they cannot push a <5-canon user to ``ready`` on their own.
+    """
+    canon_tmdb = {row['tmdb'] for row in canon}
+    return [
+        row
+        for row in _load_fixture('seed_movies.json')
+        if row['tmdb'] not in canon_tmdb
+    ][:count]
+
+
+def _rank_movies(session: Session, user: DbUser, rows: list) -> int:
+    """
+    Rank each of ``rows`` for ``user`` from the first free rank onward.
+
+    Skips anything the user already tracks so seeding never overwrites an
+    existing rank. Returns how many new tracker rows were created.
+    """
+    created = 0
+    rank = _next_rank(session, DbUserMovie, user)
+    for data in rows:
+        movie = _get_or_create_movie(session, data)
+        if _already_tracked(
+            session, DbUserMovie, user.pk, DbUserMovie.movie_id, movie.pk
+        ):
+            continue
+        session.add(
+            DbUserMovie(
+                movie_id=movie.pk,
+                user_id=user.pk,
+                on_rankings=True,
+                rank=rank,
+                ranked_at=_random_past_datetime(),
+                completed=1,
+                completed_at=_random_past_date(),
+                is_seed_data=True,
+            )
+        )
+        created += 1
+        rank += 1
+    return created
+
+
+def _ensure_friendship(session: Session, requester: DbUser, other: DbUser) -> None:
+    """
+    The accepted friendship the cast matrix calls for, created once.
+
+    ``requester`` sent the request. Idempotent: an existing row -- pending or
+    accepted -- is left exactly where it is, since a row that already exists
+    was not written by this seeder run.
+    """
+    if db_friendship.friendship_between(session, requester.pk, other.pk) is not None:
+        return
+    low, high = canonical_pair(requester.pk, other.pk)
+    now = datetime.now(timezone.utc)
+    session.add(
+        DbFriendship(
+            user_low_id=low,
+            user_high_id=high,
+            requested_by_id=requester.pk,
+            status=FriendshipStatus.ACCEPTED,
+            requested_at=now,
+            responded_at=now,
+        )
+    )
+
+
+def _ensure_follow(session: Session, follower: DbUser, followee: DbUser) -> None:
+    """One asymmetric follow, created once; never duplicated."""
+    if db_follow.find(session, follower.pk, followee.pk) is None:
+        session.add(DbFollow(follower_id=follower.pk, followee_id=followee.pk))
+
+
+def _seed_cast(session: Session, target: DbUser) -> dict:
+    """
+    Create the fixed dev cast and wire their relationships (#313).
+
+    Anchored to ``target`` -- the seed's ``--email`` user, default the seed
+    admin -- who is made public with the handle ``you``, becomes the friend of
+    ``friend``, the followee of ``follower``, and follows ``followee``. The
+    eight-movie canon is ranked for the target and a fixed prefix of it for
+    each cast member, pinning the compare states; see the module docstring for
+    the full matrix.
+    """
+    _claim_target_user(target)
+    users = {
+        spec['email']: _get_or_create_cast_user(session, spec) for spec in _CAST_USERS
+    }
+
+    _ensure_friendship(session, target, users['friend@example.com'])
+    _ensure_follow(session, users['follower@example.com'], target)
+    _ensure_follow(session, target, users['followee@example.com'])
+
+    canon = _cast_canon_movies()
+    ranked = {target.pk: _rank_movies(session, target, canon)}
+    for spec in _CAST_USERS:
+        user = users[spec['email']]
+        count = _rank_movies(session, user, canon[: spec.get('canon_movies', 0)])
+        count += _rank_movies(
+            session, user, _extra_cast_movies(canon, spec.get('extra_movies', 0))
+        )
+        ranked[user.pk] = count
+    return {'cast_users': len(users), 'ranked_rows': sum(ranked.values())}
+
+
+def _existing_cast_users(session: Session) -> list:
+    """
+    The cast accounts that already exist, by their fixed emails.
+
+    ``--wipe`` wipes what is there without creating anything, so wipe looks up
+    rather than upserts.
+    """
+    emails = [spec['email'] for spec in _CAST_USERS]
+    return session.query(DbUser).filter(DbUser.email.in_(emails)).all()
+
+
 def run_seed(count: int, wipe_only: bool, email: str = None) -> dict:
-    """Wipe this script's previously-seeded tracker rows, then optionally reseed."""
+    """
+    Wipe this script's previously-seeded tracker rows, then optionally reseed.
+
+    Wipe covers the target user and the fixed dev cast alike; the cast users
+    themselves, their relationships, and catalog rows are all left in place.
+    """
     session = SessionLocal()
     try:
         purged = _purge_legacy_fake_rows(session)
@@ -583,6 +896,9 @@ def run_seed(count: int, wipe_only: bool, email: str = None) -> dict:
 
         user = _target_user(session, email)
         wiped = _wipe(session, user)
+        for cast_user in _existing_cast_users(session):
+            for key, value in _wipe(session, cast_user).items():
+                wiped[key] = wiped.get(key, 0) + value
         session.commit()
         logger.info('seed_dev: wiped previously-seeded tracker rows: %s', wiped)
         if wipe_only:
@@ -614,10 +930,15 @@ def run_seed(count: int, wipe_only: bool, email: str = None) -> dict:
                 _load_fixture('seed_books.json'), max(10, count // _BOOK_RATIO), 'books'
             ),
         )
+        cast = _seed_cast(session, user)
 
         session.commit()
         logger.info(
-            'seed_dev: populated from real-catalog fixtures (target count=%d)', count
+            'seed_dev: populated from real-catalog fixtures (target count=%d) '
+            'and cast (%d users, %d ranked rows)',
+            count,
+            cast['cast_users'],
+            cast['ranked_rows'],
         )
         return wiped
     except Exception:
