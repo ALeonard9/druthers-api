@@ -84,3 +84,35 @@ async def test_validation_exception_handler():
             'type': 'value_error.missing',
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_validation_handler_survives_a_raw_exception_in_ctx():
+    """
+    A ``field_validator`` raising ValueError must still produce a 422.
+
+    Pydantic parks the exception *object* in ``ctx['error']`` for a
+    value_error. JSONResponse cannot encode that, so the handler used to
+    raise while building the response and the caller got a 500 for input the
+    API had already correctly rejected -- the failure mode was invisible
+    until a schema actually used a validator this way.
+    """
+    request = Request({'type': 'http', 'method': 'PUT', 'path': '/x', 'headers': []})
+    exc = RequestValidationError(
+        [
+            {
+                'type': 'value_error',
+                'loc': ['body', 'time_zone'],
+                'msg': 'Value error, Unknown IANA time zone: Mars/Olympus_Mons',
+                'input': 'Mars/Olympus_Mons',
+                'ctx': {'error': ValueError('Unknown IANA time zone')},
+            }
+        ]
+    )
+
+    response = await validation_exception_handler(request, exc)
+    body = json.loads(response.body.decode('utf-8'))
+
+    assert response.status_code == HTTP_422_UNPROCESSABLE_CONTENT
+    assert body['data'][0]['ctx'] == {'error': 'Unknown IANA time zone'}
+    assert 'Mars/Olympus_Mons' in body['data'][0]['msg']

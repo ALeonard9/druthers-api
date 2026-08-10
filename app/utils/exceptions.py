@@ -30,6 +30,27 @@ async def http_exception_handler(_: Request, exc: HTTPException):
     )
 
 
+def _encodable_errors(errors: list) -> list:
+    """
+    Make pydantic's error list JSON-encodable.
+
+    When a ``field_validator`` rejects a value by raising ``ValueError``,
+    pydantic parks the exception *object* in ``ctx['error']``. JSONResponse
+    cannot encode that, so the handler itself raised and the caller got a 500
+    for input that had already been correctly identified as a 422. Stringifying
+    ``ctx`` loses nothing -- the message is repeated in ``msg`` -- and it
+    covers every future validator without each one having to remember.
+    """
+    encodable = []
+    for error in errors:
+        item = dict(error)
+        ctx = item.get('ctx')
+        if isinstance(ctx, dict):
+            item['ctx'] = {key: str(value) for key, value in ctx.items()}
+        encodable.append(item)
+    return encodable
+
+
 async def validation_exception_handler(_: Request, exc: RequestValidationError):
     """
     Custom handler for RequestValidationError.
@@ -37,7 +58,9 @@ async def validation_exception_handler(_: Request, exc: RequestValidationError):
     return JSONResponse(
         status_code=HTTP_422_UNPROCESSABLE_CONTENT,
         content=OutResponseBaseModel(
-            success=False, message='Validation Error', data=exc.errors()
+            success=False,
+            message='Validation Error',
+            data=_encodable_errors(exc.errors()),
         ).model_dump(exclude_none=True),
     )
 

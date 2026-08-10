@@ -5,8 +5,9 @@ This module defines the Pydantic models (schemas) for the API.
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from app.services import preferences
 from app.services.preferences import RankedListLength
 from app.services.visibility import VisibilityTier
 
@@ -275,6 +276,17 @@ class InPreferencesUpdate(BaseModel):
 
     ranked_list_length: Optional[RankedListLength] = None
     onboarding_completed: Optional[bool] = None
+    time_zone: Optional[str] = None
+
+    @field_validator('time_zone')
+    @classmethod
+    def validate_time_zone(cls, value: Optional[str]) -> Optional[str]:
+        """Reject a zone tzdata cannot resolve here, as a 422 rather than a 500."""
+        if value is None:
+            return None
+        if not preferences.is_valid_time_zone(value):
+            raise ValueError(f'Unknown IANA time zone: {value}')
+        return value
 
 
 class OutPreferences(BaseModel):
@@ -282,6 +294,9 @@ class OutPreferences(BaseModel):
 
     ranked_list_length: RankedListLength = RankedListLength.TWENTY_FIVE
     onboarding_completed: bool = False
+    # Always a concrete zone, never null: an unset column reads as the
+    # deployment default, so no client has to own that fallback itself.
+    time_zone: str = 'UTC'
 
     model_config = ConfigDict(from_attributes=True)
 

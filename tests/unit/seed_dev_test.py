@@ -1,12 +1,13 @@
 # pylint: disable=missing-module-docstring, missing-function-docstring, protected-access
 import pytest
 
-from app.config import Settings
+from app.config import Settings, get_settings
 from app.db import db_follow, db_friendship
 from app.db.hash import Hash
 from app.db.models import DbFollow, DbFriendship, DbUser
 from app.db.models_sandbox import DbMovie, DbTVShow, DbUserMovie, DbUserTVShow
 from app.migration import seed_dev
+from app.services import preferences
 from app.services.friendships import FriendshipStatus
 
 _MOVIE_A = {
@@ -229,7 +230,9 @@ def test_seed_cast_creates_fixed_users_and_relationships(test_client):
     session.commit()
 
     assert result['cast_users'] == 6
-    assert result['ranked_rows'] == 24
+    # target 8 canon + friend 8 + follower 2 + followee 1 + public 3
+    # + private 6 + stranger 4 non-canon.
+    assert result['ranked_rows'] == 32
 
     friend = _cast_user(session, 'friend@example.com')
     assert friend.handle == 'friend'
@@ -297,18 +300,68 @@ def test_seed_cast_ranks_the_canon_movies(test_client):
     assert len(ranked(_cast_user(session, 'follower@example.com'))) == 2
     assert len(ranked(_cast_user(session, 'public@example.com'))) == 3
     assert len(ranked(_cast_user(session, 'followee@example.com'))) == 1
-    # stranger: zero canon overlap, but a couple of non-canon ranks so the
-    # profile is not empty -- that keeps the compare state not_enough_overlap.
+    # stranger: zero canon overlap, but non-canon ranks so the profile is not
+    # empty -- that keeps the compare state not_enough_overlap.
     stranger = _cast_user(session, 'stranger@example.com')
     stranger_ranked = ranked(stranger)
-    assert len(stranger_ranked) == 2
+    assert len(stranger_ranked) == 4
     assert not stranger_ranked & target_canon
     assert (
         session.query(DbUserMovie)
         .filter(DbUserMovie.user_id == stranger.pk, DbUserMovie.is_seed_data.is_(True))
         .count()
-        == 2
+        == 4
     )
+
+
+def test_seed_cast_stocks_the_private_users_shelf(test_client):
+    """
+    An empty private shelf made the 404 unfalsifiable.
+
+    With nothing behind it, "you cannot see this profile" and "this profile
+    has nothing in it" produced the same response, so the visibility rule
+    could have been broken without any test or demo noticing.
+    """
+    session = test_client.test_db_session
+    seed_dev._seed_cast(session, test_client.first_user)
+    session.commit()
+
+    private_user = _cast_user(session, 'private@example.com')
+    assert (
+        session.query(DbUserMovie)
+        .filter(
+            DbUserMovie.user_id == private_user.pk,
+            DbUserMovie.on_rankings.is_(True),
+        )
+        .count()
+        == 6
+    )
+
+
+def test_seed_cast_gives_every_member_a_distinct_time_zone(test_client):
+    """The spread is the point: one zone for all of them demos nothing."""
+    session = test_client.test_db_session
+    seed_dev._seed_cast(session, test_client.first_user)
+    session.commit()
+
+    zones = [
+        _cast_user(session, spec['email']).time_zone for spec in seed_dev._CAST_USERS
+    ]
+    assert all(zones)
+    assert len(set(zones)) == len(zones)
+    for zone in zones:
+        assert preferences.is_valid_time_zone(zone)
+
+
+def test_seed_cast_leaves_the_target_on_the_deployment_zone(test_client):
+    """The target seat stays NULL, which is what exercises the fallback."""
+    session = test_client.test_db_session
+    target = test_client.first_user
+    seed_dev._seed_cast(session, target)
+    session.commit()
+
+    assert target.time_zone is None
+    assert preferences.coerce_time_zone(target.time_zone) == get_settings().time_zone
 
 
 def test_seed_cast_is_idempotent(test_client):
@@ -331,10 +384,10 @@ def test_seed_cast_is_idempotent(test_client):
     assert session.query(DbFollow).count() == 2
     assert (
         session.query(DbUserMovie).filter(DbUserMovie.is_seed_data.is_(True)).count()
-        == 24
+        == 32
     )
-    # 8 canon titles plus the 2 non-canon ones stranger's shelf pulls in.
-    assert session.query(DbMovie).count() == 10
+    # 8 canon titles plus the 4 non-canon ones stranger's shelf pulls in.
+    assert session.query(DbMovie).count() == 12
 
 
 def test_wipe_removes_cast_trackers_but_keeps_relationships(test_client):
@@ -354,8 +407,8 @@ def test_wipe_removes_cast_trackers_but_keeps_relationships(test_client):
         session.query(DbUserMovie).filter(DbUserMovie.user_id == friend_pk).count() == 0
     )
     # Catalog rows survive a wipe -- they are real either way. 8 canon plus
-    # the 2 non-canon titles stranger's shelf pulls in.
-    assert session.query(DbMovie).count() == 10
+    # the 4 non-canon titles stranger's shelf pulls in.
+    assert session.query(DbMovie).count() == 12
     # The user and the friendship row are not wiped; the relationship outlives
     # the tracker rows.
     assert session.query(DbUser).filter(DbUser.pk == friend_pk).count() == 1

@@ -7,7 +7,7 @@ proxy, lazy enrichment on detail view, and per-user trackers with independent
 Watchlist/Rankings lists plus episode-level watched marks.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -15,6 +15,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.db.database import get_db
+from app.services import preferences
 from app.services.rate_limit import catalog_add_cap, search_rate_limit
 from app.services.tracker_query import (
     apply_list_params,
@@ -60,6 +61,34 @@ from app.services.search_correction import correct_query
 from app.services.tracked_status import attach_tracked_status
 
 router = APIRouter(prefix='/v1', tags=['TV'])
+
+
+def _local_day_start(user) -> datetime:
+    """
+    Midnight opening the caller's own today, tz-naive.
+
+    Episode airdates are stored naive at midnight of a calendar date (see
+    ``tv_search._to_date``), with no clock time to compare against -- so
+    every "has this aired yet" question is really a calendar-day question.
+    Anchoring the day on the user's ``time_zone`` (falling back to the
+    deployment's ``TIME_ZONE``, #322) is what makes it turn over at their
+    midnight instead of UTC's, which is up to a day's difference for a
+    viewer in Sydney or Los Angeles.
+    """
+    today = datetime.now(preferences.time_zone_info(user.time_zone)).date()
+    return datetime.combine(today, time.min)
+
+
+def _local_day_end(user) -> datetime:
+    """
+    Midnight closing the caller's own today -- the "already aired" cutoff.
+
+    Exclusive upper bound, so an episode dated today counts as aired (which
+    is what the schedule has always done) without a stray clock time on the
+    row pushing it into the future. Comparing against the *start* of today
+    instead would quietly un-air anything that aired earlier the same day.
+    """
+    return _local_day_start(user) + timedelta(days=1)
 
 
 # Global Entity Endpoints
@@ -364,8 +393,7 @@ def get_user_tv_shows(
         apply_list_params(query, DbUserTVShow, params).all(), params, 'TV'
     )
     show_pks = [t.tv_show_id for t in trackers]
-    # airdate is stored tz-naive (see tv_search._to_date), so compare naive.
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    aired_before = _local_day_end(current_user[0])
 
     aired: dict = {}
     watched: dict = {}
@@ -378,7 +406,7 @@ def get_user_tv_shows(
             .filter(
                 DbTVEpisode.tv_show_id.in_(show_pks),
                 DbTVEpisode.airdate.isnot(None),
-                DbTVEpisode.airdate <= now,
+                DbTVEpisode.airdate < aired_before,
             )
             .group_by(DbTVEpisode.tv_show_id)
             .all()
@@ -392,7 +420,7 @@ def get_user_tv_shows(
             .filter(
                 DbTVEpisode.tv_show_id.in_(show_pks),
                 DbTVEpisode.airdate.isnot(None),
-                DbTVEpisode.airdate <= now,
+                DbTVEpisode.airdate < aired_before,
                 DbUserTVEpisode.user_id == user_pk,
                 DbUserTVEpisode.watched == 1,
             )
@@ -427,12 +455,16 @@ def get_schedule(  # pylint: disable=too-many-locals
     What to watch: unwatched episodes airing within +/- ``window_days`` of
     today, everything overdue and unwatched (catch-up), and shows the user
     has frozen (paused tracking on, so they're excluded from both).
+
+    "Today" is the caller's own calendar day (their ``time_zone``
+    preference, falling back to the deployment's ``TIME_ZONE``), so the
+    window turns over at their midnight rather than the server's.
     """
     user_pk = current_user[0].pk
-    # airdate is stored tz-naive (see tv_search._to_date), so compare naive too.
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    window_start = now - timedelta(days=window_days)
-    window_end = now + timedelta(days=window_days)
+    today = _local_day_start(current_user[0])
+    aired_before = _local_day_end(current_user[0])
+    window_start = today - timedelta(days=window_days)
+    window_end = today + timedelta(days=window_days)
 
     trackers = (
         db.query(DbUserTVShow)
@@ -457,9 +489,10 @@ def get_schedule(  # pylint: disable=too-many-locals
         shows_by_pk = {
             s.pk: s for s in db.query(DbTVShow).filter(DbTVShow.pk.in_(active_show_pks))
         }
-        # catch_up only needs airdate <= now; upcoming only needs <= window_end
-        # (>= window_start is checked in Python below). window_end >= now
-        # always, so bounding the fetch to airdate <= window_end covers both.
+        # catch_up only needs airdate < aired_before; upcoming only needs
+        # <= window_end (>= window_start is checked in Python below).
+        # window_end >= aired_before for any window_days >= 1, so bounding the
+        # fetch to airdate <= window_end covers both.
         # The unwatched anti-join is pushed into SQL too, instead of loading
         # every episode of every active show and filtering in Python — row
         # count no longer scales with the full episode catalog.
@@ -497,7 +530,7 @@ def get_schedule(  # pylint: disable=too-many-locals
             )
             if window_start <= ep.airdate <= window_end:
                 upcoming.append(item)
-            if ep.airdate <= now:
+            if ep.airdate < aired_before:
                 catch_up.append(item)
 
         upcoming.sort(key=lambda i: (i.airdate, i.show_title, i.season_number or 0))
