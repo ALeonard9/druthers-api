@@ -148,6 +148,15 @@ Acceptance Criteria, Context, Channel Impact, and an Estimate block carrying
 **Recommended model** and **Human effort**. The fleet dispatcher routes work
 off that Estimate block, so it is not decoration.
 
+Every issue also carries exactly one `priority:p1`–`priority:p5` label
+(applied via labels/project board, not the template body):
+
+- **P1** — immediate build; prod or the build is broken.
+- **P2** — high value, time-sensitive.
+- **P3** — chores, done as time permits (default when urgency is unstated).
+- **P4** — backlog / nice-to-have; low urgency and low value.
+- **P5** — roadmap: big, high-value, long-term, not an immediate need.
+
 PRs follow `.github/PULL_REQUEST_TEMPLATE.md`:
 
 - **`## Summary`** — bullets that lead with the cause, then the fix. Not a
