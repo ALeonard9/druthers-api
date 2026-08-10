@@ -333,7 +333,8 @@ def test_seed_cast_is_idempotent(test_client):
         session.query(DbUserMovie).filter(DbUserMovie.is_seed_data.is_(True)).count()
         == 24
     )
-    assert session.query(DbMovie).count() == 8
+    # 8 canon titles plus the 2 non-canon ones stranger's shelf pulls in.
+    assert session.query(DbMovie).count() == 10
 
 
 def test_wipe_removes_cast_trackers_but_keeps_relationships(test_client):
@@ -352,8 +353,9 @@ def test_wipe_removes_cast_trackers_but_keeps_relationships(test_client):
     assert (
         session.query(DbUserMovie).filter(DbUserMovie.user_id == friend_pk).count() == 0
     )
-    # Catalog rows survive a wipe -- they are real either way.
-    assert session.query(DbMovie).count() == 8
+    # Catalog rows survive a wipe -- they are real either way. 8 canon plus
+    # the 2 non-canon titles stranger's shelf pulls in.
+    assert session.query(DbMovie).count() == 10
     # The user and the friendship row are not wiped; the relationship outlives
     # the tracker rows.
     assert session.query(DbUser).filter(DbUser.pk == friend_pk).count() == 1
