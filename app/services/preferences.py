@@ -1,13 +1,17 @@
 """
 Viewer display preferences (#122).
 
-Today, just how many entries of a ranked list to show by default. Kept
-apart from :mod:`app.services.visibility` on purpose: this is a reading
-preference the *viewer* controls, not a sharing setting the *owner*
-controls, and it never touches the tier ladder.
+How many entries of a ranked list to show by default, and which time zone
+the caller's own hours are rendered in. Kept apart from
+:mod:`app.services.visibility` on purpose: these are reading preferences the
+*viewer* controls, not sharing settings the *owner* controls, and they never
+touch the tier ladder.
 """
 
 from enum import StrEnum
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
+
+from app.config import get_settings
 
 
 class RankedListLength(StrEnum):
@@ -28,3 +32,39 @@ def coerce(value) -> RankedListLength:
         return RankedListLength(value)
     except ValueError:
         return DEFAULT_RANKED_LIST_LENGTH
+
+
+def is_valid_time_zone(value: str) -> bool:
+    """Whether ``value`` names a zone this interpreter's tzdata can resolve."""
+    if not isinstance(value, str) or not value:
+        return False
+    # ``available_timezones`` is the membership test; ZoneInfo alone accepts
+    # some paths that are not real zones on platforms with a system tzdb.
+    if value not in available_timezones():
+        return False
+    try:
+        ZoneInfo(value)
+    except (ZoneInfoNotFoundError, ValueError):
+        return False
+    return True
+
+
+def coerce_time_zone(value) -> str:
+    """
+    Read a stored IANA zone defensively, falling back to the deployment's.
+
+    NULL means "never chosen" -- the overwhelming majority of rows -- and
+    reads as ``TIME_ZONE`` from the environment (#322), so a fleet-wide
+    default can still be moved without touching a single user row. An
+    unrecognised string falls back the same way rather than raising: this
+    runs on every read of every preference, and a zone that disappeared from
+    tzdata between releases must not take the endpoint down with it.
+    """
+    if isinstance(value, str) and is_valid_time_zone(value):
+        return value
+    return get_settings().time_zone
+
+
+def time_zone_info(value) -> ZoneInfo:
+    """The :class:`ZoneInfo` for a stored zone, defaulted like :func:`coerce_time_zone`."""
+    return ZoneInfo(coerce_time_zone(value))
