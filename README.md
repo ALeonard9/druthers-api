@@ -90,6 +90,29 @@ what changed (`pytest-testmon`) — CI runs the full suite as the merge gate.
 pip install pre-commit && pre-commit install && pre-commit install --hook-type pre-push
 ```
 
+### Seeding local data (fixed dev cast)
+
+`task seed:dev` populates local Postgres with real catalog data plus randomized
+tracker state, and seeds a fixed cast of users covering the relationship and
+visibility positions the social features need (#313). All cast accounts share
+the dev password `change-me`:
+
+| Position | Handle | Email | Relationship to you |
+|---|---|---|---|
+| You (seed target) | `you` | `you@example.com` | public everywhere; ranks the 8-movie canon |
+| Friend | `friend` | `friend@example.com` | accepted friend; shares all 8 canon movies (`ready`) |
+| Follower | `follower` | `follower@example.com` | follows you, not followed back; shares 2 |
+| Followee | `followee` | `followee@example.com` | you follow them; books shelf friends-only (`hidden`); shares 1 |
+| Public user | `public-user` | `public@example.com` | no relationship; shares 3 |
+| Private user | `private-user` | `private@example.com` | invisible; 404s like an unknown handle |
+| Stranger | `stranger` | `stranger@example.com` | no relationship; shares 0 (`not_enough_overlap`) |
+
+The cast is additive and idempotent — re-running never duplicates a user,
+friendship, follow, or tracker row. `task seed:dev -- --wipe` clears every
+seeded tracker row (the target's randomized rows and the cast's canon rows
+alike) while leaving catalog rows, the cast users, and their relationships in
+place. See the `seed_dev.py` docstring for the full matrix.
+
 ## API reference
 
 All endpoints are prefixed with `/v1`; protected routes require `Authorization: Bearer <token>`.
