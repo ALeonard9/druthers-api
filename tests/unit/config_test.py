@@ -4,6 +4,9 @@ parsing added for #183 (the rest of Settings is exercised indirectly by
 every other test that calls get_settings()).
 '''
 
+import pytest
+from pydantic import ValidationError
+
 from app.config import Settings
 
 
@@ -61,3 +64,9 @@ def test_google_client_ids_without_primary():
     """Additional ids work even if the primary was never set."""
     settings = Settings(google_client_id=None, google_additional_client_ids='ios-456')
     assert settings.google_client_ids == ['ios-456']
+
+
+def test_time_zone_rejects_unknown_iana_name():
+    """A typo must fail at startup instead of quietly falling back to UTC."""
+    with pytest.raises(ValidationError, match='Unknown IANA time zone'):
+        Settings(time_zone='America/Not-A-Place')

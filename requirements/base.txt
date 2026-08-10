@@ -13,6 +13,7 @@ idna>=3.18 # not directly required, pinned by Snyk to avoid a vulnerability
 psycopg2-binary==2.9.12
 python-dotenv==1.2.2
 python-logging-loki==0.3.1
+tzdata==2025.2
 click>=8.4.2 # not directly required, pinned by Snyk to avoid a vulnerability
 PyJWT==2.13.0
 google-auth==2.56.2
