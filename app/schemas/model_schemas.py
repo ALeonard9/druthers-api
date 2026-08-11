@@ -277,6 +277,10 @@ class OutUserSearchResult(BaseModel):
     id: str
     display_name: str
     handle: Optional[str] = None
+    # Public profiles alone disclose their audience size. Friends-only
+    # results carry null, matching the existing optional-handle convention
+    # without turning a friend search into a follower-enumeration side channel.
+    follower_count: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 

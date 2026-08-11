@@ -84,6 +84,24 @@ def test_following_a_public_profile_succeeds(test_client: TestClient):
     )
 
 
+def test_public_profile_exposes_an_accurate_follower_count(test_client: TestClient):
+    _claim_public_handle(test_client, test_client.second_user.token, 'blake')
+    profile = '/v1/public/blake'
+    assert test_client.get(profile).json()['follower_count'] == 0
+
+    followed = test_client.put(
+        '/v1/users/me/following/blake', headers=_auth(test_client.first_user.token)
+    )
+    assert followed.status_code == 200
+    assert test_client.get(profile).json()['follower_count'] == 1
+
+    unfollowed = test_client.delete(
+        '/v1/users/me/following/blake', headers=_auth(test_client.first_user.token)
+    )
+    assert unfollowed.status_code == 204
+    assert test_client.get(profile).json()['follower_count'] == 0
+
+
 def test_follow_and_unfollow_show_up_on_both_sides(test_client: TestClient):
     _claim_public_handle(test_client, test_client.second_user.token, 'blake')
     follow = test_client.put(
@@ -488,6 +506,12 @@ def test_a_follow_survives_the_followee_going_private(test_client: TestClient):
         == 404
     )
     assert test_client.get('/v1/public/blake').status_code == 404
+
+    # The owner may still render their private profile, but its retained
+    # follow row is hidden rather than converted into an audience count.
+    owner_view = test_client.get('/v1/public/blake', headers=_auth(owner_token))
+    assert owner_view.status_code == 200
+    assert 'follower_count' not in owner_view.json()
 
     # The follower can still unfollow afterwards.
     unfollow = test_client.delete(
