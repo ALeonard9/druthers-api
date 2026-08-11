@@ -183,3 +183,7 @@ database/data/*
 # Local Claude Code artifacts (not checked in for this repo)
 CLAUDE.md
 graphify-out/
+# Machine-local: settings.local.json holds absolute paths to this machine's
+# hooks, and the lock is run state. .claude/skills/ is shared and is tracked.
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
