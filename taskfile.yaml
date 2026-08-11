@@ -134,15 +134,24 @@ tasks:
     cmds:
       - python -m app.migration.orion_import {{.CLI_ARGS}}
 
+  # Both of these run inside the compose network, for the same reason `migrate`
+  # does. On the host, `python` is not on PATH at all unless .venv happens to be
+  # activated, and even once it is, nothing exports ENV -- so Settings.env falls
+  # back to 'local' and sqlalchemy_database_url quietly returns SQLite. The
+  # seeder would then populate a stray .db file and report success while dev
+  # Postgres stayed empty. The container has the interpreter, the env file, and
+  # the right hostname for Postgres (env/dev.env points at the compose service
+  # name, which does not resolve from the host anyway).
   seed:dev:
     desc: "Populate local dev Postgres with real catalog data + randomized tracker state + the fixed dev cast (#313). Usage: task seed:dev -- --count 500 | --wipe"
     cmds:
-      - python -m app.migration.seed_dev {{.CLI_ARGS}}
+      - docker compose -f dc-dev.yml --env-file env/dev.env run --rm api-dev python -m app.migration.seed_dev {{.CLI_ARGS}}
 
   fixtures:build:
     desc: "Refresh app/migration/fixtures/seed_*.json from TMDB/TVMaze/Open Library/IGDB (needs API keys)"
     cmds:
-      - python -m app.migration.build_seed_fixtures
+      # Writes land on the host because api-dev bind-mounts the repo at /app.
+      - docker compose -f dc-dev.yml --env-file env/dev.env run --rm api-dev python -m app.migration.build_seed_fixtures
 
   gh:
     desc: "Open project repository in GitHub"
