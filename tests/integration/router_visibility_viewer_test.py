@@ -248,6 +248,46 @@ def test_a_public_watchlist_cannot_outrun_its_private_shelf(profile: TestClient)
     ]
 
 
+# --- Direct shelf references ------------------------------------------------
+
+
+def test_a_named_shelf_does_not_bypass_the_viewers_tier(
+    profile: TestClient, stranger_token
+):
+    """
+    Guessing a valid handle and shelf slug must go through the same ceiling
+    as the profile hub: strangers cannot fetch friends shelves, and friends
+    cannot fetch private ones.
+    """
+    attempts = (
+        (stranger_token, 'tv', 'Ranked tv-shows'),
+        (profile.second_user.token, 'games', 'Ranked games'),
+    )
+    for token, shelf, secret_title in attempts:
+        denied = profile.get(f'/v1/public/{HANDLE}?shelf={shelf}', headers=_auth(token))
+        nonexistent = profile.get(
+            f'/v1/public/{HANDLE}?shelf=not-a-shelf', headers=_auth(token)
+        )
+        assert _fingerprint(denied) == _fingerprint(nonexistent)
+        assert secret_title not in str(denied.json())
+
+
+def test_a_named_public_shelf_still_redacts_private_tracker_data(
+    profile: TestClient, stranger_token
+):
+    """Public means the ranked item, not the owner's tracker row or notes."""
+    response = profile.get(
+        f'/v1/public/{HANDLE}?shelf=movies', headers=_auth(stranger_token)
+    )
+    assert response.status_code == 200
+    shelf = response.json()['shelves'][0]
+    assert shelf['category'] == 'Movies'
+    assert [item['title'] for item in shelf['items']] == ['Ranked movies']
+    assert set(shelf['items'][0]) == {'rank', 'id', 'title', 'year', 'poster_url'}
+    assert 'private note!' not in str(response.json())
+    assert 'user_id' not in str(response.json())
+
+
 # --- 404 indistinguishability ----------------------------------------------
 
 
