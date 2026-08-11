@@ -138,12 +138,12 @@ class InVisibilityUpdate(BaseModel):
     ``share_activity`` is the independent whole-feed opt-out.
 
     Only sent fields change; a null handle clears it (allowed only while
-    everything is private). An unsent field and an explicit null are both
-    left alone, so a client can PUT one radio button without echoing the
-    other eight.
+    everything is private). A null shelf tier clears its override and resumes
+    using ``default_privacy``; an omitted field is left alone.
     """
 
     handle: Optional[str] = None
+    default_privacy: Optional[VisibilityTier] = None
     visibility_profile: Optional[VisibilityTier] = None
     visibility_movies: Optional[VisibilityTier] = None
     visibility_tv: Optional[VisibilityTier] = None
@@ -162,15 +162,16 @@ class OutVisibility(BaseModel):
     """
 
     handle: Optional[str] = None
+    default_privacy: VisibilityTier = VisibilityTier.FRIENDS
     visibility_profile: VisibilityTier = VisibilityTier.PRIVATE
-    visibility_movies: VisibilityTier = VisibilityTier.PRIVATE
-    visibility_tv: VisibilityTier = VisibilityTier.PRIVATE
-    visibility_books: VisibilityTier = VisibilityTier.PRIVATE
-    visibility_games: VisibilityTier = VisibilityTier.PRIVATE
-    visibility_watchlist_movies: VisibilityTier = VisibilityTier.PRIVATE
-    visibility_watchlist_tv: VisibilityTier = VisibilityTier.PRIVATE
-    visibility_watchlist_books: VisibilityTier = VisibilityTier.PRIVATE
-    visibility_watchlist_games: VisibilityTier = VisibilityTier.PRIVATE
+    visibility_movies: Optional[VisibilityTier] = None
+    visibility_tv: Optional[VisibilityTier] = None
+    visibility_books: Optional[VisibilityTier] = None
+    visibility_games: Optional[VisibilityTier] = None
+    visibility_watchlist_movies: Optional[VisibilityTier] = None
+    visibility_watchlist_tv: Optional[VisibilityTier] = None
+    visibility_watchlist_books: Optional[VisibilityTier] = None
+    visibility_watchlist_games: Optional[VisibilityTier] = None
     share_activity: bool = True
 
     model_config = ConfigDict(from_attributes=True)

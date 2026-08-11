@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import DbUser
 from app.services.shelves import SHELVES, Shelf
-from app.services.visibility import is_public
+from app.services.visibility import is_public, resolve_tier
 
 # Ranked entries returned per shelf. Five is the product ("your Top 5"), not
 # an arbitrary page size — callers may ask for fewer but not more, so this
@@ -112,7 +112,11 @@ def build_summary(db: Session, user: DbUser, top_n: int = TOP_N) -> dict:
                 # question about ``public`` alone now that the profile itself
                 # is viewer-aware (#277). A friends-only shelf is false here
                 # and still reaches friends on the profile.
-                'public': is_public(getattr(user, shelf.visibility_tier)),
+                'public': is_public(
+                    resolve_tier(
+                        user.default_privacy, getattr(user, shelf.visibility_tier)
+                    )
+                ),
                 'top': _top(db, shelf, user.pk, limit),
             }
         )

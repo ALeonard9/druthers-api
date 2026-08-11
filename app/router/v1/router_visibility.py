@@ -44,8 +44,9 @@ from app.services.visibility import (
     ceiling_for,
     coerce,
     covers,
-    most_open,
     is_public,
+    most_open,
+    resolve_tier,
 )
 
 router = APIRouter(prefix='/v1', tags=['Visibility'])
@@ -85,6 +86,7 @@ VARY_ON_AUTH = {'Vary': 'Authorization'}
 # Every tier column a client may set, profile first. Shelf columns come from
 # the registry, so a new domain arrives here without a code change.
 TIER_FIELDS = (PROFILE_TIER_FIELD,) + tuple(field for field, _ in shelf_tier_fields())
+SHELF_TIER_FIELDS = frozenset(TIER_FIELDS[1:])
 
 
 def _validate_handle(db: Session, user: DbUser, raw: Optional[str]) -> Optional[str]:
@@ -126,7 +128,7 @@ def _validate_handle(db: Session, user: DbUser, raw: Optional[str]) -> Optional[
     return handle
 
 
-def _proposed_tiers(user: DbUser, data: dict) -> dict:
+def _proposed_tiers(user: DbUser, data: dict, default_privacy: VisibilityTier) -> dict:
     """
     The nine tiers as they would stand after this request.
 
@@ -136,9 +138,16 @@ def _proposed_tiers(user: DbUser, data: dict) -> dict:
     """
     return {
         field: (
-            VisibilityTier(data[field])
-            if data.get(field) is not None
-            else coerce(getattr(user, field))
+            resolve_tier(
+                default_privacy,
+                data[field] if field in data else getattr(user, field),
+            )
+            if field in SHELF_TIER_FIELDS
+            else (
+                VisibilityTier(data[field])
+                if data.get(field) is not None
+                else coerce(getattr(user, field))
+            )
         )
         for field in TIER_FIELDS
     }
@@ -254,7 +263,12 @@ def _shelf_payload(  # pylint: disable=too-many-arguments, too-many-positional-a
         ],
     }
 
-    if not admits(ceiling, getattr(user, shelf.watchlist_visibility_tier)):
+    if not admits(
+        ceiling,
+        resolve_tier(
+            user.default_privacy, getattr(user, shelf.watchlist_visibility_tier)
+        ),
+    ):
         return payload
 
     watchlist_filter = (
@@ -315,21 +329,40 @@ def update_visibility(
     """
     user = current_user[0]
     data = request.model_dump(exclude_unset=True)
-    changes_visibility = 'handle' in data or any(field in data for field in TIER_FIELDS)
+    # ``share_activity`` is the one field that carries no handle or tier
+    # consequence, so a body containing only it skips the invariants — an
+    # account that has never claimed a handle can still opt out of the feed.
+    changes_visibility = (
+        'handle' in data
+        or 'default_privacy' in data
+        or any(field in data for field in TIER_FIELDS)
+    )
     if changes_visibility:
         handle = (
             _validate_handle(db, user, data['handle'])
             if 'handle' in data
             else user.handle
         )
-        tiers = _proposed_tiers(user, data)
+        default_privacy = (
+            VisibilityTier(data['default_privacy'])
+            if data.get('default_privacy') is not None
+            else coerce(user.default_privacy)
+        )
+        tiers = _proposed_tiers(user, data, default_privacy)
 
         _assert_handle_present(handle, tiers)
         _assert_profile_covers_shelves(tiers)
 
         user.handle = handle
-        for field, tier in tiers.items():
-            setattr(user, field, tier)
+        user.default_privacy = default_privacy
+        # Written from ``data``, not from the resolved ``tiers``: a null shelf
+        # field has to persist as null so the shelf keeps inheriting the
+        # global default instead of freezing today's resolved value.
+        for field in TIER_FIELDS:
+            if field == PROFILE_TIER_FIELD and data.get(field) is None:
+                continue
+            if field in data:
+                setattr(user, field, data[field])
     if 'share_activity' in data and data['share_activity'] is not None:
         user.share_activity = data['share_activity']
 
@@ -438,7 +471,10 @@ def public_profile(  # pylint: disable=too-many-arguments, too-many-positional-a
     shelves = [
         _shelf_payload(db, user, s, ceiling, *ranked_depth, *watchlist_depth)
         for s in candidates
-        if admits(ceiling, getattr(user, s.visibility_tier))
+        if admits(
+            ceiling,
+            resolve_tier(user.default_privacy, getattr(user, s.visibility_tier)),
+        )
     ]
 
     # A named shelf query (`?shelf=...`) that doesn't exist or isn't admitted

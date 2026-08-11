@@ -51,12 +51,54 @@ def _watchlist_a_movie(
     )
 
 
-def test_defaults_are_fully_friends(test_client: TestClient):
+def test_default_privacy_is_friends_and_shelves_start_without_overrides(
+    test_client: TestClient,
+):
     body = test_client.get(
         '/v1/users/me/visibility', headers=_auth(test_client.first_user.token)
     ).json()
     assert body['handle'] is None
-    assert [body[field] for field in TIER_FIELDS] == ['friends'] * len(TIER_FIELDS)
+    assert body['default_privacy'] == 'friends'
+    assert body['visibility_profile'] == 'friends'
+    assert [body[field] for field in TIER_FIELDS[1:]] == [None] * (len(TIER_FIELDS) - 1)
+
+
+def test_shelves_inherit_default_privacy_until_an_override_is_set(
+    test_client: TestClient,
+):
+    token = test_client.first_user.token
+    _rank_a_movie(test_client, token)
+    response = test_client.put(
+        '/v1/users/me/visibility',
+        headers=_auth(token),
+        json={
+            'handle': 'avery',
+            'visibility_profile': 'public',
+            'default_privacy': 'public',
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()['visibility_movies'] is None
+    assert test_client.get('/v1/public/avery?shelf=movies').status_code == 200
+
+    assert (
+        test_client.put(
+            '/v1/users/me/visibility',
+            headers=_auth(token),
+            json={'visibility_movies': 'private'},
+        ).status_code
+        == 200
+    )
+    assert test_client.get('/v1/public/avery?shelf=movies').status_code == 404
+
+    restored = test_client.put(
+        '/v1/users/me/visibility',
+        headers=_auth(token),
+        json={'visibility_movies': None},
+    )
+    assert restored.status_code == 200
+    assert restored.json()['visibility_movies'] is None
+    assert test_client.get('/v1/public/avery?shelf=movies').status_code == 200
 
 
 def test_leaving_private_requires_a_handle(test_client: TestClient):
@@ -268,7 +310,7 @@ def test_partial_updates_only_touch_sent_fields(test_client: TestClient):
     assert body['visibility_movies'] == 'public'
     assert body['visibility_books'] == 'friends'
     assert body['visibility_tv'] == 'friends'
-    assert body['visibility_games'] == 'friends'
+    assert body['visibility_games'] is None
 
 
 def test_visibility_update_cannot_be_redirected_to_another_user(
