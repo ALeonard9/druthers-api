@@ -16,8 +16,9 @@ from sqlalchemy.orm import Session
 
 from app.auth.oauth2 import get_current_user
 from app.db.database import get_db
+from app.db import db_follow
 from app.db.db_user import search_users
-from app.schemas.model_schemas import OutUserSearchResponse
+from app.schemas.model_schemas import OutUserSearchResponse, OutUserSearchResult
 from app.schemas.schemas_sandbox import GlobalSearchResponse
 from app.services.rate_limit import search_rate_limit
 from app.services.book_search import search_books
@@ -27,6 +28,7 @@ from app.services.search_correction import correct_query
 from app.services.search_ranking import rank_and_cap
 from app.services.tracked_status import attach_tracked_status
 from app.services.tv_search import search_tv_shows
+from app.services.visibility import is_public
 
 router = APIRouter(prefix='/v1', tags=['Search'])
 
@@ -115,4 +117,20 @@ def search_users_route(
     user_pk = current_user[0].pk
     hits = search_users(db, user_pk, q.strip(), limit=20)
 
-    return OutUserSearchResponse(query=q, corrected=None, users=hits)
+    return OutUserSearchResponse(
+        query=q,
+        corrected=None,
+        users=[
+            OutUserSearchResult(
+                id=user.id,
+                display_name=user.display_name,
+                handle=user.handle,
+                follower_count=(
+                    db_follow.count_followers(db, user.pk)
+                    if is_public(user.visibility_profile)
+                    else None
+                ),
+            )
+            for user in hits
+        ],
+    )

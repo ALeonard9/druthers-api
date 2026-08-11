@@ -30,7 +30,7 @@ from sqlalchemy.orm import Session
 from app.auth.oauth2 import get_current_user, get_optional_current_user
 from app.config import get_settings
 from app.db.database import get_db
-from app.db.db_follow import is_following
+from app.db.db_follow import count_followers, is_following
 from app.db.models import DbUser
 from app.schemas.model_schemas import InVisibilityUpdate, OutVisibility
 from app.services import handles
@@ -45,6 +45,7 @@ from app.services.visibility import (
     coerce,
     covers,
     most_open,
+    is_public,
 )
 
 router = APIRouter(prefix='/v1', tags=['Visibility'])
@@ -456,10 +457,16 @@ def public_profile(  # pylint: disable=too-many-arguments, too-many-positional-a
         or relationship is ViewerRelationship.FRIEND
     ) and is_following(db, viewer.pk, user.pk)
 
-    return {
+    payload = {
         'handle': user.handle,
         'display_name': user.display_name,
         'viewer': {'relationship': relationship.value, 'following': following},
         'shelves': shelves,
         'total_ranked': sum(s['ranked_count'] for s in shelves),
     }
+    # Follow rows survive a profile becoming non-public so the follower can
+    # later unfollow, but the row count is only public while the profile is.
+    # Do not return a zero or null here: the field itself is the disclosure.
+    if is_public(user.visibility_profile):
+        payload['follower_count'] = count_followers(db, user.pk)
+    return payload

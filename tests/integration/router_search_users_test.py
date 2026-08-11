@@ -1,6 +1,7 @@
 # pylint: disable=missing-module-docstring, missing-function-docstring
 from fastapi.testclient import TestClient
 from app.db.models import DbFriendship
+from app.db.models import DbFollow
 from app.services.friendships import FriendshipStatus
 from app.services.visibility import VisibilityTier
 
@@ -94,3 +95,39 @@ def test_user_search_anti_enumeration(test_client: TestClient, test_create_user)
     assert resp.status_code == 200
     # Should be empty, meaning existence is not revealed
     assert resp.json()['users'] == []
+
+
+def test_user_search_exposes_counts_for_public_profiles_only(
+    test_client: TestClient, test_create_user
+):
+    headers = {'Authorization': f'Bearer {test_client.first_user.token}'}
+    db = test_client.test_db_session
+    public_user, friend_user = test_create_user(test_client, user_count=2)
+    public_user.display_name = 'Counted Public'
+    public_user.handle = 'counted-public'
+    public_user.visibility_profile = VisibilityTier.PUBLIC.value
+    friend_user.display_name = 'Counted Friend'
+    friend_user.handle = 'counted-friend'
+    friend_user.visibility_profile = VisibilityTier.FRIENDS.value
+    db.add_all(
+        [
+            DbFriendship(
+                user_low_id=min(test_client.first_user.pk, friend_user.pk),
+                user_high_id=max(test_client.first_user.pk, friend_user.pk),
+                requested_by_id=friend_user.pk,
+                status=FriendshipStatus.ACCEPTED,
+            ),
+            DbFollow(follower_id=test_client.first_user.pk, followee_id=public_user.pk),
+            DbFollow(
+                follower_id=test_client.second_user.pk, followee_id=public_user.pk
+            ),
+            DbFollow(follower_id=test_client.first_user.pk, followee_id=friend_user.pk),
+        ]
+    )
+    db.commit()
+
+    response = test_client.get('/v1/search/users?q=Counted', headers=headers)
+    assert response.status_code == 200
+    results = {user['id']: user for user in response.json()['users']}
+    assert results[public_user.id]['follower_count'] == 2
+    assert results[friend_user.id]['follower_count'] is None
