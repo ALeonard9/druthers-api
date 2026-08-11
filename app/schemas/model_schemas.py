@@ -271,6 +271,24 @@ class OutFollow(BaseModel):
     followed_at: datetime
 
 
+class OutUserSearchResult(BaseModel):
+    """One user returned from search."""
+
+    id: str
+    display_name: str
+    handle: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OutUserSearchResponse(BaseModel):
+    """Response shape for user search, mirroring GlobalSearchResponse."""
+
+    query: str
+    corrected: Optional[str] = None
+    users: list[OutUserSearchResult]
+
+
 class InPreferencesUpdate(BaseModel):
     """Request body for display preferences (#122). Only sent fields change."""
 
