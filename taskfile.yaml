@@ -36,10 +36,56 @@ tasks:
       - task: du
         vars: { ENV: '{{.ENV}}' }
 
-  migrate:
-    desc: "Apply Alembic migrations (alembic upgrade head)"
+  dev:up:
+    desc: "Bring local dev up in the order that actually works: containers, migrations, then the API restart that lets the seed admin land. Follow with `task seed:dev`."
     cmds:
-      - alembic upgrade head
+      - task: du
+      - |
+        printf 'waiting for postgres'
+        for _ in $(seq 1 60); do
+          if docker compose -f dc-dev.yml --env-file env/dev.env exec -T postgres-dev pg_isready -q 2>/dev/null; then
+            printf ' ok\n'; exit 0
+          fi
+          printf '.'; sleep 1
+        done
+        printf '\npostgres never became ready\n' >&2; exit 1
+      - task: migrate
+      # The API bootstraps the seed admin during startup, so on a fresh volume
+      # it runs before the users table exists and silently gives up. Every
+      # later step then fails on a missing admin -- `task seed:dev` bails with
+      # "No local user with email ...", and there is nothing to sign in as.
+      # Restarting after the migration is what makes the rest of the session
+      # work, and it is the step nobody remembers.
+      - docker compose -f dc-dev.yml --env-file env/dev.env restart api-dev
+      - |
+        printf 'waiting for api'
+        for _ in $(seq 1 60); do
+          if curl -sf -o /dev/null http://localhost:8000/docs; then
+            printf ' ok\n'; exit 0
+          fi
+          printf '.'; sleep 1
+        done
+        printf '\napi never answered on :8000\n' >&2; exit 1
+      - "echo ''"
+      - "echo 'dev is up — API on http://localhost:8000'"
+      - "echo 'Seed the dev cast with:  task seed:dev'"
+
+  migrate:
+    desc: "Apply Alembic migrations to the running stack's Postgres (default: dev)"
+    vars:
+      ENV: '{{default "dev" .CLI_ARGS}}'
+    cmds:
+      # Runs inside the compose network, not on the host, and that is the
+      # whole point. On the host nothing sets ENV, so Settings.env falls back
+      # to 'local' and sqlalchemy_database_url quietly resolves to SQLite:
+      # migrations then "succeed" against a stray aleonard-api-local.db while
+      # the real Postgres stays un-migrated. The only reason anyone notices is
+      # that SQLite rejects ALTER CONSTRAINT a dozen revisions in.
+      #
+      # CI and prod do not come through here -- deploy_cloud_run.yaml and
+      # deploy_qa.yaml run `alembic upgrade head` directly with DATABASE_URL
+      # and ENV already set, which is why this can be dev-shaped.
+      - docker compose -f dc-{{.ENV}}.yml --env-file env/{{.ENV}}.env run --rm api-{{.ENV}} alembic upgrade head
 
   revision:
     desc: "Autogenerate a new Alembic migration. Usage: task revision -- \"message\""
