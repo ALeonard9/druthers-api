@@ -51,6 +51,22 @@ def tier_column(name: str) -> Column:
     )
 
 
+def tier_override_column(name: str) -> Column:
+    """One optional per-shelf override, falling back to ``default_privacy``."""
+    return Column(
+        name,
+        Enum(
+            VisibilityTier,
+            name=f'ck_users_{name}',
+            native_enum=False,
+            create_constraint=True,
+            length=16,
+            values_callable=lambda members: [member.value for member in members],
+        ),
+        nullable=True,
+    )
+
+
 class DBBaseModel(Base):
     """
     Base model that includes common fields for all tables.
@@ -92,18 +108,32 @@ class DbUser(DBBaseModel):
     # more closed than the shelf.
     visibility_profile = tier_column('visibility_profile')
 
-    visibility_movies = tier_column('visibility_movies')
-    visibility_tv = tier_column('visibility_tv')
-    visibility_books = tier_column('visibility_books')
-    visibility_games = tier_column('visibility_games')
+    # A shelf with no explicit override inherits this account-wide tier.
+    default_privacy = tier_column('default_privacy')
+
+    visibility_movies = tier_override_column('visibility_movies')
+    visibility_tv = tier_override_column('visibility_tv')
+    visibility_books = tier_override_column('visibility_books')
+    visibility_games = tier_override_column('visibility_games')
 
     # Watchlist visibility (#236): independent of the ranked-list tiers
     # above. A category's watchlist is only served when this tier AND the
     # matching ranked-list tier both admit the viewer.
-    visibility_watchlist_movies = tier_column('visibility_watchlist_movies')
-    visibility_watchlist_tv = tier_column('visibility_watchlist_tv')
-    visibility_watchlist_books = tier_column('visibility_watchlist_books')
-    visibility_watchlist_games = tier_column('visibility_watchlist_games')
+    visibility_watchlist_movies = tier_override_column('visibility_watchlist_movies')
+    visibility_watchlist_tv = tier_override_column('visibility_watchlist_tv')
+    visibility_watchlist_books = tier_override_column('visibility_watchlist_books')
+    visibility_watchlist_games = tier_override_column('visibility_watchlist_games')
+
+    # Sharing control for the friends/follows activity feed (#280). This is
+    # independent of shelf tiers: those still authorize every event at read
+    # time, while this switch lets the owner withdraw all contributions at
+    # once. Existing users participate until they explicitly opt out.
+    share_activity = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text('true'),
+    )
 
     # --- Display preferences (#122). Viewer-controlled, not visibility —
     # how much of a ranked list to read, remembered across sessions and

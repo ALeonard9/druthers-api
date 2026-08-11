@@ -133,16 +133,17 @@ class OutToken(BaseModel):
 
 class InVisibilityUpdate(BaseModel):
     """
-    Request body for visibility settings (#274). Every setting is a tier —
-    ``private``, ``friends`` or ``public`` — not a boolean.
+    Request body for visibility settings (#274) and activity sharing (#280).
+    Every shelf setting is a ``private``, ``friends`` or ``public`` tier;
+    ``share_activity`` is the independent whole-feed opt-out.
 
     Only sent fields change; a null handle clears it (allowed only while
-    everything is private). An unsent field and an explicit null are both
-    left alone, so a client can PUT one radio button without echoing the
-    other eight.
+    everything is private). A null shelf tier clears its override and resumes
+    using ``default_privacy``; an omitted field is left alone.
     """
 
     handle: Optional[str] = None
+    default_privacy: Optional[VisibilityTier] = None
     visibility_profile: Optional[VisibilityTier] = None
     visibility_movies: Optional[VisibilityTier] = None
     visibility_tv: Optional[VisibilityTier] = None
@@ -152,23 +153,26 @@ class InVisibilityUpdate(BaseModel):
     visibility_watchlist_tv: Optional[VisibilityTier] = None
     visibility_watchlist_books: Optional[VisibilityTier] = None
     visibility_watchlist_games: Optional[VisibilityTier] = None
+    share_activity: Optional[bool] = None
 
 
 class OutVisibility(BaseModel):
     """
-    The caller's visibility settings, one tier per setting.
+    The caller's shelf tiers and activity-sharing setting.
     """
 
     handle: Optional[str] = None
+    default_privacy: VisibilityTier = VisibilityTier.FRIENDS
     visibility_profile: VisibilityTier = VisibilityTier.PRIVATE
-    visibility_movies: VisibilityTier = VisibilityTier.PRIVATE
-    visibility_tv: VisibilityTier = VisibilityTier.PRIVATE
-    visibility_books: VisibilityTier = VisibilityTier.PRIVATE
-    visibility_games: VisibilityTier = VisibilityTier.PRIVATE
-    visibility_watchlist_movies: VisibilityTier = VisibilityTier.PRIVATE
-    visibility_watchlist_tv: VisibilityTier = VisibilityTier.PRIVATE
-    visibility_watchlist_books: VisibilityTier = VisibilityTier.PRIVATE
-    visibility_watchlist_games: VisibilityTier = VisibilityTier.PRIVATE
+    visibility_movies: Optional[VisibilityTier] = None
+    visibility_tv: Optional[VisibilityTier] = None
+    visibility_books: Optional[VisibilityTier] = None
+    visibility_games: Optional[VisibilityTier] = None
+    visibility_watchlist_movies: Optional[VisibilityTier] = None
+    visibility_watchlist_tv: Optional[VisibilityTier] = None
+    visibility_watchlist_books: Optional[VisibilityTier] = None
+    visibility_watchlist_games: Optional[VisibilityTier] = None
+    share_activity: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -277,6 +281,10 @@ class OutUserSearchResult(BaseModel):
     id: str
     display_name: str
     handle: Optional[str] = None
+    # Public profiles alone disclose their audience size. Friends-only
+    # results carry null, matching the existing optional-handle convention
+    # without turning a friend search into a follower-enumeration side channel.
+    follower_count: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 

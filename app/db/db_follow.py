@@ -50,6 +50,11 @@ def is_following(db: Session, follower_pk: int, followee_pk: int) -> bool:
     )
 
 
+def count_followers(db: Session, followee_pk: int) -> int:
+    """Return the number of follow rows directed at ``followee_pk``."""
+    return db.query(DbFollow).filter(DbFollow.followee_id == followee_pk).count()
+
+
 def list_following(db: Session, user_pk: int) -> List[Tuple[DbFollow, DbUser]]:
     """Everyone this user follows, each paired with the followee's row."""
     return (

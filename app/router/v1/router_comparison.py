@@ -13,7 +13,7 @@ from app.services.comparison import compare_shelf
 from app.services.profile_access import viewer_relationship
 from app.services.shelves import SHELVES, Shelf
 from app.services.tracker_rules import default_completed_at
-from app.services.visibility import admits, ceiling_for
+from app.services.visibility import admits, ceiling_for, resolve_tier
 
 router = APIRouter(prefix='/v1', tags=['Comparison'])
 
@@ -43,7 +43,12 @@ def _target_access(db: Session, viewer: DbUser, handle: str):
     visible = [
         shelf
         for shelf in SHELVES
-        if admits(ceiling, getattr(target, shelf.visibility_tier))
+        if admits(
+            ceiling,
+            resolve_tier(
+                target.default_privacy, getattr(target, shelf.visibility_tier)
+            ),
+        )
     ]
     if not visible:
         raise _not_found()
@@ -92,7 +97,10 @@ def save_recommendation(  # pylint: disable=too-many-arguments,too-many-position
     viewer = current_user[0]
     target, _, ceiling = _target_access(db, viewer, handle)
     shelf = _shelf(category)
-    if not admits(ceiling, getattr(target, shelf.visibility_tier)):
+    if not admits(
+        ceiling,
+        resolve_tier(target.default_privacy, getattr(target, shelf.visibility_tier)),
+    ):
         raise _not_found()
 
     tracker_model, catalog_model = shelf.tracker_model, shelf.catalog_model

@@ -11,6 +11,7 @@ from app.services.visibility import (
     is_public,
     most_open,
     openness,
+    resolve_tier,
 )
 
 
@@ -32,6 +33,13 @@ def test_only_public_is_public():
     assert is_public(VisibilityTier.PRIVATE) is False
     # Strings off the wire resolve the same way as enum members.
     assert is_public('public') is True
+
+
+def test_shelf_override_resolution_uses_default_only_when_absent():
+    assert resolve_tier('friends', None) is VisibilityTier.FRIENDS
+    assert resolve_tier('private', 'public') is VisibilityTier.PUBLIC
+    # A malformed override must still resolve closed, never to the default.
+    assert resolve_tier('public', 'everyone') is VisibilityTier.PRIVATE
 
 
 def test_most_open_picks_the_widest_tier():

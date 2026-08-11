@@ -3,7 +3,7 @@
 from sqlalchemy.orm import Session
 
 from app.services.shelves import Shelf
-from app.services.visibility import VisibilityTier, admits
+from app.services.visibility import VisibilityTier, admits, resolve_tier
 
 MIN_SHARED_FOR_SCORE = 5
 RESULT_LIMIT = 5
@@ -43,9 +43,15 @@ def compare_shelf(  # pylint: disable=too-many-locals
     ceiling: VisibilityTier,
 ) -> dict:
     """Compare one shelf without ever reading target data above the ceiling."""
-    ranked_visible = admits(ceiling, getattr(target, shelf.visibility_tier))
+    ranked_visible = admits(
+        ceiling,
+        resolve_tier(target.default_privacy, getattr(target, shelf.visibility_tier)),
+    )
     watchlist_visible = ranked_visible and admits(
-        ceiling, getattr(target, shelf.watchlist_visibility_tier)
+        ceiling,
+        resolve_tier(
+            target.default_privacy, getattr(target, shelf.watchlist_visibility_tier)
+        ),
     )
     base = {
         'category': shelf.category,

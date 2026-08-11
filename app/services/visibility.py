@@ -75,6 +75,11 @@ def coerce(value) -> VisibilityTier:
         return VisibilityTier.PRIVATE
 
 
+def resolve_tier(default_privacy, override) -> VisibilityTier:
+    """Return a shelf override or, when absent, its global default tier."""
+    return coerce(default_privacy if override is None else override)
+
+
 def openness(value) -> int:
     """Comparable rank of a tier: private 0, friends 1, public 2."""
     return _OPENNESS[coerce(value)]
