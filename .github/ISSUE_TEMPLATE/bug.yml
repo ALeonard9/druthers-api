@@ -1,0 +1,95 @@
+name: Bug
+description: Something behaves incorrectly.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The **Estimate** block is read by the fleet dispatcher to route the
+        work — fill it honestly.
+
+  - type: textarea
+    id: story
+    attributes:
+      label: Story
+      description: As a <who>, when I <do this>, I want <correct behavior>, so I can <why it matters>.
+      placeholder: As a user, when I delete an item from my list, I want it removed from public rankings immediately, so deleted titles do not persist.
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What actually happens, and the cause if known. Include repro steps and the affected version/environment.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: What "fixed" means. Include the regression test that would have caught this.
+      value: |
+        - [ ]
+        - [ ] Tests: a regression case covering
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Raw capture, logs, related issues (use owner/repo#n across repos).
+    validations:
+      required: true
+
+  - type: textarea
+    id: channel-impact
+    attributes:
+      label: Channel Impact
+      description: Every channel gets a line — in this issue, companion issue, or no impact and why.
+      value: |
+        - **API:**
+        - **Web:**
+        - **iOS:**
+        - **MCP:**
+    validations:
+      required: true
+
+  - type: dropdown
+    id: recommended-model
+    attributes:
+      label: Recommended model
+      description: Difficulty tier. Drives fleet routing — see `druthers-infra/fleet/README.md`.
+      options:
+        - Haiku 4.5 — trivial, mechanical, low-risk
+        - Sonnet 5 — standard fix with a regression test (default)
+        - Opus 4.8 — data integrity, security, caching, or cross-repo
+        - Fable 5 — writing/content-shaped work
+      default: 1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: human-effort
+    attributes:
+      label: Human effort
+      description: Your involvement — decisions, review, manual steps. Not AI implementation time.
+      options:
+        - XS
+        - S
+        - M
+        - L
+        - XL
+      default: 1
+    validations:
+      required: true
+
+  - type: textarea
+    id: estimate-rationale
+    attributes:
+      label: Estimate rationale
+      description: One clause for the model tier, one for what drives the human effort.
+    validations:
+      required: true

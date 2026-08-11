@@ -1,0 +1,106 @@
+name: Story
+description: A user-facing capability, groomed and ready to implement.
+labels: ["story"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Sections below match what `story-intake` emits, so hand-filed and
+        dictated stories land in the same shape. The **Estimate** block is
+        read by the fleet dispatcher to route the work — fill it honestly.
+
+  - type: textarea
+    id: story
+    attributes:
+      label: Story
+      description: As a <who>, I want <what>, so I can <why>.
+      placeholder: As a druthers user, I want ..., so I can ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Optional. What is broken or missing today, in concrete terms.
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Checklist. Each item independently verifiable. Include the tests this needs.
+      value: |
+        - [ ]
+        - [ ]
+        - [ ] Tests:
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Raw capture, related issues (use owner/repo#n across repos), prior art.
+    validations:
+      required: true
+
+  - type: textarea
+    id: channel-impact
+    attributes:
+      label: Channel Impact
+      description: Every channel gets a line — in this issue, companion issue, or no impact and why.
+      value: |
+        - **API:**
+        - **Web:**
+        - **iOS:**
+        - **MCP:**
+    validations:
+      required: true
+
+  - type: dropdown
+    id: recommended-model
+    attributes:
+      label: Recommended model
+      description: Difficulty tier. Drives fleet routing — see `druthers-infra/fleet/README.md`.
+      options:
+        - Haiku 4.5 — trivial, mechanical, low-risk
+        - Sonnet 5 — standard feature work (default)
+        - Opus 4.8 — architecturally complex, high-risk, or cross-repo
+        - Fable 5 — writing/content-shaped work
+      default: 1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: human-effort
+    attributes:
+      label: Human effort
+      description: Your involvement — decisions, review, manual steps. Not AI implementation time.
+      options:
+        - XS
+        - S
+        - M
+        - L
+        - XL
+      default: 2
+    validations:
+      required: true
+
+  - type: textarea
+    id: estimate-rationale
+    attributes:
+      label: Estimate rationale
+      description: One clause for the model tier, one for what drives the human effort.
+      placeholder: Sonnet 5 — one visibility rule plus a count endpoint with tests. Human effort M — a decision is needed on what happens to existing followers.
+    validations:
+      required: true
+
+  - type: textarea
+    id: implementation-notes
+    attributes:
+      label: Notes for Implementation
+      description: Optional. Files to touch, constraints, decisions already made.
+    validations:
+      required: false

@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Dictate a story instead
+    url: https://github.com/ALeonard9/druthers-infra/blob/main/fleet/README.md
+    about: Spoken or rough ideas go through the story-intake skill, which grooms them into this same format and files them for you.
