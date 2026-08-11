@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "druthers-dev": {
+      "type": "stdio",
+      "command": "/Users/adam/dev/druthers-mcp/bin/druthers-mcp",
+      "env": { "MCP_ENV": "dev" }
+    },
+    "druthers-qa": {
+      "type": "stdio",
+      "command": "/Users/adam/dev/druthers-mcp/bin/druthers-mcp",
+      "env": { "MCP_ENV": "qa" }
+    }
+  }
+}
