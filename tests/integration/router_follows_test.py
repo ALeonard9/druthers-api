@@ -124,6 +124,49 @@ def test_following_is_asymmetric(test_client: TestClient):
     )
 
 
+def test_follow_lists_and_deletion_are_scoped_to_the_caller(test_client: TestClient):
+    """
+    Knowing another user's follow id or followee handle must not expose the
+    row through an outsider's lists or let the outsider delete it.
+    """
+    _claim_public_handle(test_client, test_client.second_user.token, 'blake')
+    created = test_client.put(
+        '/v1/users/me/following/blake', headers=_auth(test_client.first_user.token)
+    )
+    assert created.status_code == 200
+    follow_id = created.json()['id']
+    outsider = test_client.admin_user.token
+
+    assert (
+        test_client.get('/v1/users/me/following', headers=_auth(outsider)).json() == []
+    )
+    assert (
+        test_client.get('/v1/users/me/followers', headers=_auth(outsider)).json() == []
+    )
+    assert (
+        test_client.delete(
+            '/v1/users/me/following/blake', headers=_auth(outsider)
+        ).status_code
+        == 404
+    )
+    assert (
+        test_client.delete(
+            f'/v1/users/me/following/{follow_id}', headers=_auth(outsider)
+        ).status_code
+        == 404
+    )
+
+    following = test_client.get(
+        '/v1/users/me/following', headers=_auth(test_client.first_user.token)
+    ).json()
+    assert [row['id'] for row in following] == [follow_id]
+    assert is_following(
+        test_client.test_db_session,
+        test_client.first_user.pk,
+        test_client.second_user.pk,
+    )
+
+
 def test_following_requires_no_approval(test_client: TestClient):
     """Unlike a friend request, the row exists immediately — no accept step."""
     _claim_public_handle(test_client, test_client.second_user.token, 'blake')

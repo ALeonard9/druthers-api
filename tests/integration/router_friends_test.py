@@ -306,6 +306,81 @@ def test_each_side_gets_only_its_own_verb(test_client: TestClient):
     )
 
 
+def test_an_outsider_cannot_read_or_mutate_another_pairs_request(
+    test_client: TestClient,
+):
+    """
+    A leaked or guessed request id gives an uninvolved user no pending data
+    and no accept, decline, cancel, or unfriend path into the pair's row.
+    """
+    _claim_handle(test_client, test_client.second_user.token, 'blake')
+    sender = test_client.first_user.token
+    recipient = test_client.second_user.token
+    outsider = test_client.admin_user.token
+    assert _send(test_client, sender, 'blake').status_code == 202
+    request_id = test_client.get(
+        '/v1/users/me/friends/requests', headers=_auth(sender)
+    ).json()['outgoing'][0]['id']
+
+    assert test_client.get(
+        '/v1/users/me/friends/requests', headers=_auth(outsider)
+    ).json() == {'incoming': [], 'outgoing': []}
+
+    for suffix in ('accept', 'decline'):
+        guessed = test_client.put(
+            f'/v1/users/me/friends/requests/{request_id}/{suffix}',
+            headers=_auth(outsider),
+        )
+        nonexistent = test_client.put(
+            f'/v1/users/me/friends/requests/not-a-real-id/{suffix}',
+            headers=_auth(outsider),
+        )
+        assert guessed.status_code == nonexistent.status_code == 404
+        assert guessed.json() == nonexistent.json()
+
+    guessed_cancel = test_client.delete(
+        f'/v1/users/me/friends/requests/{request_id}', headers=_auth(outsider)
+    )
+    nonexistent_cancel = test_client.delete(
+        '/v1/users/me/friends/requests/not-a-real-id', headers=_auth(outsider)
+    )
+    assert guessed_cancel.status_code == nonexistent_cancel.status_code == 404
+    assert guessed_cancel.json() == nonexistent_cancel.json()
+
+    assert (
+        test_client.delete(
+            f'/v1/users/me/friends/{request_id}', headers=_auth(outsider)
+        ).status_code
+        == 404
+    )
+    pending = test_client.get(
+        '/v1/users/me/friends/requests', headers=_auth(recipient)
+    ).json()
+    assert [row['id'] for row in pending['incoming']] == [request_id]
+
+
+def test_an_outsider_cannot_unfriend_another_pair_by_id(test_client: TestClient):
+    friendship_id = _become_friends(test_client)
+    outsider = test_client.admin_user.token
+
+    guessed = test_client.delete(
+        f'/v1/users/me/friends/{friendship_id}', headers=_auth(outsider)
+    )
+    nonexistent = test_client.delete(
+        '/v1/users/me/friends/not-a-real-id', headers=_auth(outsider)
+    )
+    assert guessed.status_code == nonexistent.status_code == 404
+    assert guessed.json() == nonexistent.json()
+    assert test_client.get('/v1/users/me/friends', headers=_auth(outsider)).json() == []
+    for token in (test_client.first_user.token, test_client.second_user.token):
+        assert [
+            row['id']
+            for row in test_client.get(
+                '/v1/users/me/friends', headers=_auth(token)
+            ).json()
+        ] == [friendship_id]
+
+
 def test_either_side_can_unfriend(test_client: TestClient):
     friendship_id = _become_friends(test_client)
     # The recipient of the original request ends it.

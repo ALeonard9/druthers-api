@@ -271,6 +271,43 @@ def test_partial_updates_only_touch_sent_fields(test_client: TestClient):
     assert body['visibility_games'] == 'friends'
 
 
+def test_visibility_update_cannot_be_redirected_to_another_user(
+    test_client: TestClient,
+):
+    """
+    Guessed account identifiers in the body must not turn the ``me`` route
+    into a mass-assignment path for somebody else's visibility row.
+    """
+    victim_token = test_client.first_user.token
+    attacker_token = test_client.second_user.token
+    victim_before = test_client.get(
+        '/v1/users/me/visibility', headers=_auth(victim_token)
+    ).json()
+
+    attempted = test_client.put(
+        '/v1/users/me/visibility',
+        headers=_auth(attacker_token),
+        json={
+            'id': test_client.first_user.id,
+            'user_id': test_client.first_user.id,
+            'user_pk': test_client.first_user.pk,
+            'handle': 'attacker',
+            'visibility_profile': 'public',
+        },
+    )
+
+    # Ignoring unknown selectors and rejecting them are both safe. The
+    # authorization property is that neither outcome targets the victim.
+    assert attempted.status_code in (200, 422), attempted.text
+    if attempted.status_code == 200:
+        assert attempted.json()['handle'] == 'attacker'
+        assert attempted.json()['visibility_profile'] == 'public'
+    assert (
+        test_client.get('/v1/users/me/visibility', headers=_auth(victim_token)).json()
+        == victim_before
+    )
+
+
 def test_public_profile_exposes_only_public_ranked_lists(test_client: TestClient):
     token = test_client.first_user.token
     _rank_a_movie(test_client, token)
