@@ -1,0 +1,90 @@
+name: Chore
+description: Maintenance, tooling, tests, infra, or docs — no user-facing behavior change.
+labels: ["chore"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For work with no user-facing behavior change. If a user would notice
+        the difference, file a Story or Bug instead.
+
+  - type: textarea
+    id: story
+    attributes:
+      label: Story
+      description: As a <who>, I want <what>, so I can <why>. Developers and operators count as users here.
+      placeholder: As a developer testing social features, I want the dev environment seeded with a fixed cast of users, so I can develop against real scenarios.
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is painful, missing, or at risk today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Checklist. Each item independently verifiable.
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Raw capture, related issues (use owner/repo#n across repos), prior art.
+    validations:
+      required: true
+
+  - type: textarea
+    id: channel-impact
+    attributes:
+      label: Channel Impact
+      description: Usually one repo. State it plainly, e.g. "API only — seed tooling, no API surface change."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: recommended-model
+    attributes:
+      label: Recommended model
+      description: Difficulty tier. Drives fleet routing — see `druthers-infra/fleet/README.md`.
+      options:
+        - Haiku 4.5 — trivial, mechanical, low-risk
+        - Sonnet 5 — standard chore work (default)
+        - Opus 4.8 — infra with real prod or cost impact, or cross-repo
+        - Fable 5 — writing/content-shaped work
+      default: 1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: human-effort
+    attributes:
+      label: Human effort
+      description: Your involvement — decisions, review, manual steps. Not AI implementation time.
+      options:
+        - XS
+        - S
+        - M
+        - L
+        - XL
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: estimate-rationale
+    attributes:
+      label: Estimate rationale
+      description: One clause for the model tier, one for what drives the human effort.
+    validations:
+      required: true
