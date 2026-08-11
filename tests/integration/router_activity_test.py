@@ -297,6 +297,53 @@ def test_lowering_current_shelf_tier_retroactively_removes_activity(
     }
 
 
+def test_feed_resolves_a_shelf_with_no_override_against_the_default(
+    test_client: TestClient,
+):
+    """
+    A shelf with no override inherits ``default_privacy`` (api#298), so the
+    feed has to resolve inheritance the way the profile reads do. Comparing
+    the raw column instead drops every inherited shelf out of every feed,
+    because ``NULL = 'friends'`` is null rather than false.
+    """
+    _friend_users(test_client)
+    owner_token = test_client.second_user.token
+    _claim_handle(test_client, owner_token)
+    movie_id = _make_movie(test_client)
+    _track(test_client, owner_token, 'movies', movie_id, 'ranked')
+    viewer_headers = _auth(test_client.first_user.token)
+
+    inherited = test_client.put(
+        '/v1/users/me/visibility',
+        headers=_auth(owner_token),
+        json={
+            'default_privacy': 'friends',
+            'visibility_profile': 'friends',
+            'visibility_movies': None,
+        },
+    )
+    assert inherited.status_code == 200, inherited.text
+    assert inherited.json()['visibility_movies'] is None
+    assert [
+        item['title']
+        for item in test_client.get('/v1/users/me/feed', headers=viewer_headers).json()[
+            'items'
+        ]
+    ] == ['Inception']
+
+    # Closing the global default has to close the inherited shelf with it.
+    closed = test_client.put(
+        '/v1/users/me/visibility',
+        headers=_auth(owner_token),
+        json={'default_privacy': 'private'},
+    )
+    assert closed.status_code == 200, closed.text
+    assert test_client.get('/v1/users/me/feed', headers=viewer_headers).json() == {
+        'items': [],
+        'next_cursor': None,
+    }
+
+
 def test_watchlist_event_requires_current_ranked_and_watchlist_tiers(
     test_client: TestClient,
 ):

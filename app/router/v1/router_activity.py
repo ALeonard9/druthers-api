@@ -165,33 +165,29 @@ def _social_shelf_rows(  # pylint: disable=too-many-arguments, too-many-position
     )
 
     friend = relationships.c.is_friend == 1
-    profile_visible = or_(
-        DbUser.visibility_profile == VisibilityTier.PUBLIC,
-        and_(
-            friend,
-            DbUser.visibility_profile == VisibilityTier.FRIENDS,
-        ),
-    )
+
+    # The SQL mirror of ``visibility.resolve_tier``: since api#298 a shelf tier
+    # is nullable, and null means "inherit ``default_privacy``" rather than
+    # "private". Comparing the raw column would make every inherited shelf
+    # vanish from the feed, because ``NULL = 'friends'`` is null, not false.
+    def _resolved(field: str):
+        return func.coalesce(getattr(DbUser, field), DbUser.default_privacy)
+
+    def _admits(tier):
+        return or_(
+            tier == VisibilityTier.PUBLIC,
+            and_(friend, tier == VisibilityTier.FRIENDS),
+        )
+
+    # The profile tier stays explicit and non-null, so it is compared directly.
+    profile_visible = _admits(DbUser.visibility_profile)
     ranked_visible = and_(
         profile_visible,
-        or_(
-            getattr(DbUser, shelf.visibility_tier) == VisibilityTier.PUBLIC,
-            and_(
-                friend,
-                getattr(DbUser, shelf.visibility_tier) == VisibilityTier.FRIENDS,
-            ),
-        ),
+        _admits(_resolved(shelf.visibility_tier)),
     )
     watchlist_visible = and_(
         ranked_visible,
-        or_(
-            getattr(DbUser, shelf.watchlist_visibility_tier) == VisibilityTier.PUBLIC,
-            and_(
-                friend,
-                getattr(DbUser, shelf.watchlist_visibility_tier)
-                == VisibilityTier.FRIENDS,
-            ),
-        ),
+        _admits(_resolved(shelf.watchlist_visibility_tier)),
     )
     event_visible = or_(
         and_(ranked, ranked_visible),
