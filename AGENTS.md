@@ -97,10 +97,22 @@ working in parallel, each in its own git worktree. Additional rules apply:
 - **Never start the local dev stack.** Ports 5432/8000/3000 and the Docker
   compose project belong to the orchestrator, which runs the batched demo.
   Starting them collides with other workers and with the demo.
-- **Write tests, do not run them.** Author the test files your change
-  requires (see Testing below), but leave `pytest`/`vitest`/`lint` to the
-  orchestrator's post-approval sweep. A worker that runs the suite burns
-  budget re-proving what the sweep will prove anyway.
+- **Write tests _and run them_.** Author the test files your change requires
+  (see Testing below), then run the whole suite — `pytest -q` or `npm test` —
+  in your worktree before committing. Neither needs the dev stack.
+
+  This rule used to say the opposite, on the theory that a worker running the
+  suite burns budget re-proving what the orchestrator's post-approval sweep
+  will prove anyway. That theory has one hole, and it is not hypothetical: a
+  test file that fails to **load** takes every existing test in that file with
+  it, silently, and a suite that never runs cannot tell you. web#212 shipped a
+  new test block whose mock was evaluated before its own `const` was
+  initialised; the file could not import, four unrelated passing tests
+  disappeared with it, and none of that surfaced until land — after the demo,
+  when the fix was most expensive. Thirty seconds in the worktree beats that
+  every time.
+
+  Lint and formatting still stay with the pre-commit hook and the sweep.
 - **Stay in your worktree.** Do not touch other branches, other repos, or
   anything outside the issue you were dispatched for. Out-of-scope problems
   you notice go in `WORKER_REPORT.md`, not in the diff.
