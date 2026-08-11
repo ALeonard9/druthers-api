@@ -96,39 +96,68 @@ def find_duplicate_slots(db, show_pk):
     return out
 
 
-def _repair_slot(db, user_pk, rows, watched):
+def _repair_slot(db, rows):
     """
     Collapse a duplicated slot onto its oldest row.
 
     The oldest row (lowest pk) is the original — the one carrying history.
-    Any watch marks on the newer rows are moved to it before they're deleted,
-    so a fix is never a data loss even if the user marked the duplicate.
+    Every user's watch and favorite state on the newer rows is merged onto it
+    before they're deleted, so a fix never loses another user's history.
     """
     keeper, orphans = rows[0], rows[1:]
-    keeper_watched = keeper.pk in watched
-    moved = False
+    row_pks = [row.pk for row in rows]
+    marks_by_user = defaultdict(list)
+    for mark in (
+        db.query(DbUserTVEpisode)
+        .filter(DbUserTVEpisode.episode_id.in_(row_pks))
+        .order_by(DbUserTVEpisode.pk)
+        .all()
+    ):
+        marks_by_user[mark.user_id].append(mark)
 
-    for orphan in orphans:
-        marks = (
-            db.query(DbUserTVEpisode)
-            .filter(DbUserTVEpisode.episode_id == orphan.pk)
-            .all()
+    moved = False
+    for marks in marks_by_user.values():
+        keeper_mark = next(
+            (mark for mark in marks if mark.episode_id == keeper.pk), None
         )
-        for mark in marks:
-            if mark.user_id == user_pk and not keeper_watched and mark.watched == 1:
-                mark.episode_id = keeper.pk
-                keeper_watched = True
-                moved = True
-            else:
-                db.delete(mark)
+        orphan_marks = [mark for mark in marks if mark.episode_id != keeper.pk]
+
+        if keeper_mark is None:
+            keeper_mark = orphan_marks.pop(0)
+            moved = moved or keeper_mark.watched == 1
+            keeper_mark.episode_id = keeper.pk
+
+        if any(mark.watched == 1 for mark in orphan_marks):
+            moved = moved or keeper_mark.watched != 1
+        watched_at = [
+            mark.watched_at
+            for mark in marks
+            if mark.watched == 1 and mark.watched_at is not None
+        ]
+        favorited_at = [
+            mark.favorited_at
+            for mark in marks
+            if mark.favorited and mark.favorited_at is not None
+        ]
+        keeper_mark.watched = int(any(mark.watched == 1 for mark in marks))
+        keeper_mark.watched_at = min(watched_at) if watched_at else None
+        keeper_mark.favorited = any(mark.favorited for mark in marks)
+        keeper_mark.favorited_at = min(favorited_at) if favorited_at else None
+
+        for mark in orphan_marks:
+            db.delete(mark)
+
+    # Persist tracker moves before deleting their old episode rows; otherwise
+    # the relationship's delete-orphan cascade can remove a reassigned mark.
+    db.flush()
+    for orphan in orphans:
         db.delete(orphan)
 
     return keeper, len(orphans), moved
 
 
-def _audit_duplicates(db, user_pk, state, fix, findings):
+def _audit_duplicates(db, show, fix, findings):
     """Report or repair duplicated slots. Returns the slots it looked at."""
-    show, watched = state
     dupes = find_duplicate_slots(db, show.pk)
     for slot, rows in dupes.items():
         label = f'{show.title} S{slot[0]}E{slot[1]}'
@@ -136,7 +165,7 @@ def _audit_duplicates(db, user_pk, state, fix, findings):
             ids = ', '.join(f'pk={r.pk}/tvmaze={r.tvmaze}' for r in rows)
             findings['duplicates'].append(f'{label}: {ids}')
             continue
-        keeper, removed, moved = _repair_slot(db, user_pk, rows, watched)
+        keeper, removed, moved = _repair_slot(db, rows)
         # Flush so the rest of this pass (and the caller) queries against the
         # repaired state rather than the pending one.
         db.flush()
@@ -191,7 +220,7 @@ def audit(db, email=None, fix=False, max_gap=1):
             watched = _watched_episode_pks(db, user.pk, show.pk)
             if not watched:
                 continue  # never started — not a gap
-            dupes = _audit_duplicates(db, user.pk, (show, watched), fix, findings)
+            dupes = _audit_duplicates(db, show, fix, findings)
             _audit_gaps(db, (show, watched, dupes), max_gap, findings)
 
     return findings

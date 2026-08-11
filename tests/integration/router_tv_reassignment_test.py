@@ -1,10 +1,10 @@
 # pylint: disable=missing-module-docstring, missing-function-docstring
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.db.models_sandbox import DbTVEpisode
+from app.db.models_sandbox import DbTVEpisode, DbUserTVEpisode
 from app.jobs.audit_watch_gaps import audit, find_duplicate_slots
 
 EPISODE = {
@@ -22,6 +22,10 @@ def _admin(test_client: TestClient) -> dict:
 
 def _user(test_client: TestClient) -> dict:
     return {'Authorization': f'Bearer {test_client.first_user.token}'}
+
+
+def _second_user(test_client: TestClient) -> dict:
+    return {'Authorization': f'Bearer {test_client.second_user.token}'}
 
 
 def _make_show(test_client: TestClient, tvmaze=180):
@@ -134,6 +138,78 @@ def test_audit_finds_and_repairs_a_duplicate_slot(test_client: TestClient):
         f'/v1/users/me/tv-shows/{show_id}/episodes', headers=_user(test_client)
     ).json()
     assert [e['watched'] for e in watched] == [1]
+
+
+def test_audit_fix_preserves_every_users_state(test_client: TestClient):
+    session = test_client.test_db_session
+    show_id = _make_show(test_client)
+    _track(test_client, show_id)
+    test_client.post(
+        f'/v1/users/me/tv-shows/{show_id}',
+        headers=_second_user(test_client),
+        json={'on_watchlist': True},
+    )
+    show_pk = _show_pk(test_client, show_id)
+    keeper = DbTVEpisode(tv_show_id=show_pk, **EPISODE)
+    orphan = DbTVEpisode(
+        tv_show_id=show_pk, **{**EPISODE, 'tvmaze': EPISODE['tvmaze'] + 1}
+    )
+    session.add_all((keeper, orphan))
+    session.flush()
+
+    first_watched_at = datetime(2020, 1, 2)
+    second_watched_at = datetime(2021, 2, 3)
+    second_favorited_at = datetime(2022, 3, 4)
+    session.add_all(
+        (
+            DbUserTVEpisode(
+                user_id=test_client.first_user.pk,
+                episode_id=keeper.pk,
+                watched=1,
+                watched_at=first_watched_at,
+            ),
+            DbUserTVEpisode(
+                user_id=test_client.second_user.pk,
+                episode_id=keeper.pk,
+                watched=0,
+                favorited=True,
+                favorited_at=second_favorited_at,
+            ),
+            DbUserTVEpisode(
+                user_id=test_client.second_user.pk,
+                episode_id=orphan.pk,
+                watched=1,
+                watched_at=second_watched_at,
+            ),
+        )
+    )
+    session.commit()
+
+    repaired = audit(session, fix=True)
+
+    assert any('Firefly S1E12' in row for row in repaired['repaired'])
+    assert not find_duplicate_slots(session, show_pk)
+    marks = (
+        session.query(DbUserTVEpisode)
+        .filter(DbUserTVEpisode.episode_id == keeper.pk)
+        .order_by(DbUserTVEpisode.user_id)
+        .all()
+    )
+    assert [mark.user_id for mark in marks] == sorted(
+        (test_client.first_user.pk, test_client.second_user.pk)
+    )
+    first_mark = next(
+        mark for mark in marks if mark.user_id == test_client.first_user.pk
+    )
+    second_mark = next(
+        mark for mark in marks if mark.user_id == test_client.second_user.pk
+    )
+    assert first_mark.watched == 1
+    assert first_mark.watched_at == first_watched_at
+    assert second_mark.watched == 1
+    assert second_mark.watched_at == second_watched_at
+    assert second_mark.favorited is True
+    assert second_mark.favorited_at == second_favorited_at
 
 
 def test_audit_reports_a_lone_gap_without_touching_it(test_client: TestClient):
