@@ -8,6 +8,7 @@ from email_validator import EmailNotValidError, validate_email
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 from app.db.hash import Hash
 from app.db.models import DbUser
@@ -238,3 +239,37 @@ def delete_user(db: Session, user_id: str) -> list[DbUser]:
     response = []
     response.append(user)
     return response
+
+
+def search_users(
+    db: Session, current_user_pk: int, query: str, limit: int = 20
+) -> list[DbUser]:
+    """
+    Search users by handle or display name, case-insensitive.
+    Returns only public profiles and accepted friends.
+    """
+    if not query:
+        return []
+
+    # pylint: disable=import-outside-toplevel
+    from app.db.db_friendship import friend_pks
+    from app.services.visibility import VisibilityTier
+
+    f_pks = friend_pks(db, current_user_pk)
+    q_str = f"%{query}%"
+
+    return (
+        db.query(DbUser)
+        .filter(
+            or_(
+                DbUser.display_name.ilike(q_str),
+                DbUser.handle.ilike(q_str),
+            ),
+            or_(
+                DbUser.visibility_profile == VisibilityTier.PUBLIC.value,
+                DbUser.pk.in_(f_pks),
+            ),
+        )
+        .limit(limit)
+        .all()
+    )

@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.auth.oauth2 import get_current_user
 from app.db.database import get_db
+from app.db.db_user import search_users
+from app.schemas.model_schemas import OutUserSearchResponse
 from app.schemas.schemas_sandbox import GlobalSearchResponse
 from app.services.rate_limit import search_rate_limit
 from app.services.book_search import search_books
@@ -95,3 +97,22 @@ def global_search(
     for domain, hits in results.items():
         attach_tracked_status(db, user_pk, hits, domain)
     return GlobalSearchResponse(query=q, corrected=corrected, **results)
+
+
+@router.get(
+    '/search/users',
+    response_model=OutUserSearchResponse,
+    dependencies=[Depends(search_rate_limit)],
+)
+def search_users_route(
+    q: str,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    if not q or not q.strip():
+        return OutUserSearchResponse(query=q, corrected=None, users=[])
+
+    user_pk = current_user[0].pk
+    hits = search_users(db, user_pk, q.strip(), limit=20)
+
+    return OutUserSearchResponse(query=q, corrected=None, users=hits)
