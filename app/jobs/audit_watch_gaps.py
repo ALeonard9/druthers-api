@@ -156,23 +156,40 @@ def _repair_slot(db, rows):
     return keeper, len(orphans), moved
 
 
-def _audit_duplicates(db, show, fix, findings):
-    """Report or repair duplicated slots. Returns the slots it looked at."""
-    dupes = find_duplicate_slots(db, show.pk)
-    for slot, rows in dupes.items():
-        label = f'{show.title} S{slot[0]}E{slot[1]}'
-        if not fix:
-            ids = ', '.join(f'pk={r.pk}/tvmaze={r.tvmaze}' for r in rows)
-            findings['duplicates'].append(f'{label}: {ids}')
-            continue
+def repair_duplicate_slots(db, show):
+    """
+    Collapse every ambiguous slot on one show. Returns a label per repair.
+
+    Public because ``refresh_tv`` is the only thing that creates these: its
+    ``sync_episodes`` pass refuses to merge into an already-ambiguous slot
+    (guessing which row owns the history is worse than leaving it), so a
+    TVMaze id reassignment leaves two rows behind. Repairing in the same pass
+    that caused it means a slot never survives long enough for the Schedule
+    and the show detail page to start disagreeing about it.
+    """
+    repaired = []
+    for slot, rows in find_duplicate_slots(db, show.pk).items():
         keeper, removed, moved = _repair_slot(db, rows)
         # Flush so the rest of this pass (and the caller) queries against the
         # repaired state rather than the pending one.
         db.flush()
-        findings['repaired'].append(
-            f'{label}: kept pk={keeper.pk}, removed {removed} '
-            f'duplicate row(s){", moved watch mark" if moved else ""}'
+        repaired.append(
+            f'{show.title} S{slot[0]}E{slot[1]}: kept pk={keeper.pk}, '
+            f'removed {removed} duplicate row(s)'
+            f'{", moved watch mark" if moved else ""}'
         )
+    return repaired
+
+
+def _audit_duplicates(db, show, fix, findings):
+    """Report or repair duplicated slots. Returns the slots it looked at."""
+    dupes = find_duplicate_slots(db, show.pk)
+    if fix:
+        findings['repaired'].extend(repair_duplicate_slots(db, show))
+        return dupes
+    for slot, rows in dupes.items():
+        ids = ', '.join(f'pk={r.pk}/tvmaze={r.tvmaze}' for r in rows)
+        findings['duplicates'].append(f'{show.title} S{slot[0]}E{slot[1]}: {ids}')
     return dupes
 
 
