@@ -304,7 +304,7 @@ def update_visibility(
     current_user: list = Depends(get_current_user),
 ):
     """
-    Update the handle and/or any of the nine visibility tiers.
+    Update the handle, activity sharing, and/or any of the nine visibility tiers.
 
     Only fields present in the body change. The result has to satisfy both
     invariants — a handle for anything non-private, and a profile at least as
@@ -314,18 +314,23 @@ def update_visibility(
     """
     user = current_user[0]
     data = request.model_dump(exclude_unset=True)
+    changes_visibility = 'handle' in data or any(field in data for field in TIER_FIELDS)
+    if changes_visibility:
+        handle = (
+            _validate_handle(db, user, data['handle'])
+            if 'handle' in data
+            else user.handle
+        )
+        tiers = _proposed_tiers(user, data)
 
-    handle = (
-        _validate_handle(db, user, data['handle']) if 'handle' in data else user.handle
-    )
-    tiers = _proposed_tiers(user, data)
+        _assert_handle_present(handle, tiers)
+        _assert_profile_covers_shelves(tiers)
 
-    _assert_handle_present(handle, tiers)
-    _assert_profile_covers_shelves(tiers)
-
-    user.handle = handle
-    for field, tier in tiers.items():
-        setattr(user, field, tier)
+        user.handle = handle
+        for field, tier in tiers.items():
+            setattr(user, field, tier)
+    if 'share_activity' in data and data['share_activity'] is not None:
+        user.share_activity = data['share_activity']
 
     db.commit()
     db.refresh(user)

@@ -105,6 +105,17 @@ class DbUser(DBBaseModel):
     visibility_watchlist_books = tier_column('visibility_watchlist_books')
     visibility_watchlist_games = tier_column('visibility_watchlist_games')
 
+    # Sharing control for the friends/follows activity feed (#280). This is
+    # independent of shelf tiers: those still authorize every event at read
+    # time, while this switch lets the owner withdraw all contributions at
+    # once. Existing users participate until they explicitly opt out.
+    share_activity = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text('true'),
+    )
+
     # --- Display preferences (#122). Viewer-controlled, not visibility —
     # how much of a ranked list to read, remembered across sessions and
     # devices. NULL means "unset", read as the default (25) everywhere.

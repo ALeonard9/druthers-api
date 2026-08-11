@@ -618,6 +618,27 @@ class ActivityItem(BaseModel):
     occurred_at: datetime
 
 
+class ActivityActor(BaseModel):
+    """The person whose tracker change produced a social-feed event."""
+
+    id: str
+    handle: Optional[str] = None
+    display_name: Optional[str] = None
+
+
+class SocialActivityItem(ActivityItem):
+    """One authorized activity event from a friend or followed user."""
+
+    actor: ActivityActor
+
+
+class SocialActivityPage(BaseModel):
+    """One bounded keyset page of the caller's social activity feed."""
+
+    items: List[SocialActivityItem]
+    next_cursor: Optional[str] = None
+
+
 class BoredItem(BaseModel):
     """One candidate pulled from a to-be-consumed (watchlist/bucket) list."""
 

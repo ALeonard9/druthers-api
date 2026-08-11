@@ -133,8 +133,9 @@ class OutToken(BaseModel):
 
 class InVisibilityUpdate(BaseModel):
     """
-    Request body for visibility settings (#274). Every setting is a tier —
-    ``private``, ``friends`` or ``public`` — not a boolean.
+    Request body for visibility settings (#274) and activity sharing (#280).
+    Every shelf setting is a ``private``, ``friends`` or ``public`` tier;
+    ``share_activity`` is the independent whole-feed opt-out.
 
     Only sent fields change; a null handle clears it (allowed only while
     everything is private). An unsent field and an explicit null are both
@@ -152,11 +153,12 @@ class InVisibilityUpdate(BaseModel):
     visibility_watchlist_tv: Optional[VisibilityTier] = None
     visibility_watchlist_books: Optional[VisibilityTier] = None
     visibility_watchlist_games: Optional[VisibilityTier] = None
+    share_activity: Optional[bool] = None
 
 
 class OutVisibility(BaseModel):
     """
-    The caller's visibility settings, one tier per setting.
+    The caller's shelf tiers and activity-sharing setting.
     """
 
     handle: Optional[str] = None
@@ -169,6 +171,7 @@ class OutVisibility(BaseModel):
     visibility_watchlist_tv: VisibilityTier = VisibilityTier.PRIVATE
     visibility_watchlist_books: VisibilityTier = VisibilityTier.PRIVATE
     visibility_watchlist_games: VisibilityTier = VisibilityTier.PRIVATE
+    share_activity: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 
