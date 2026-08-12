@@ -13,6 +13,12 @@ Usage::
 
 Idempotent: ``sync_episodes`` upserts on the TVMaze episode id, so re-running
 only ever adds new episodes and refreshes existing titles/airdates.
+
+Each show is also reconciled for duplicated episode slots immediately after
+its sync — see ``audit_watch_gaps.repair_duplicate_slots``. This job is the
+only thing that creates them, so it is the only thing that has to clean them
+up; ``app.jobs.audit_watch_gaps`` remains the by-hand entry point for
+auditing gaps and for repairing a backlog that predates this.
 """
 
 import argparse
@@ -25,6 +31,7 @@ from app.db.models_sandbox import (
     DbTVShow,
     DbUserTVShow,
 )
+from app.jobs.audit_watch_gaps import repair_duplicate_slots
 from app.log.logging_config import logger
 from app.services.tv_search import (
     apply_detail_to_show,
@@ -68,7 +75,13 @@ def _shows_to_refresh(db, include_ended: bool):
 def run(include_ended: bool = False, limit: int = 0) -> dict:
     """Refresh tracked shows. Returns a small report dict."""
     db = SessionLocal()
-    report = {'shows': 0, 'episodes_created': 0, 'detail_updated': 0, 'misses': 0}
+    report = {
+        'shows': 0,
+        'episodes_created': 0,
+        'detail_updated': 0,
+        'misses': 0,
+        'slots_repaired': 0,
+    }
     try:
         shows = _shows_to_refresh(db, include_ended)
         if limit:
@@ -95,6 +108,13 @@ def run(include_ended: bool = False, limit: int = 0) -> dict:
 
             created = sync_episodes(db, show)
             report['episodes_created'] += created
+            # sync_episodes just refused to merge any slot that was already
+            # ambiguous, so this is where duplicates are born. Reconcile the
+            # show now rather than leaving the slot for whoever next notices
+            # the Schedule and the detail page disagreeing (#240, #169).
+            for repair in repair_duplicate_slots(db, show):
+                logger.info('refresh_tv: repaired duplicate slot — %s', repair)
+                report['slots_repaired'] += 1
             report['shows'] += 1
             # Commit per show so an early stop still keeps completed work.
             db.commit()
@@ -104,7 +124,8 @@ def run(include_ended: bool = False, limit: int = 0) -> dict:
 
     logger.info(
         'refresh_tv: shows=%(shows)d episodes_created=%(episodes_created)d '
-        'detail_updated=%(detail_updated)d misses=%(misses)d',
+        'detail_updated=%(detail_updated)d misses=%(misses)d '
+        'slots_repaired=%(slots_repaired)d',
         report,
     )
     return report
@@ -129,7 +150,8 @@ def main() -> None:
     report = run(include_ended=args.include_ended, limit=args.limit)
     print(
         'refresh_tv: shows={shows} episodes_created={episodes_created} '
-        'detail_updated={detail_updated} misses={misses}'.format(**report)
+        'detail_updated={detail_updated} misses={misses} '
+        'slots_repaired={slots_repaired}'.format(**report)
     )
 
 

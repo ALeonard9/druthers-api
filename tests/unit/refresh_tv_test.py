@@ -1,13 +1,19 @@
 """
-Test the recurring TV refresh job's show-selection rules.
+Test the recurring TV refresh job's show-selection and slot-repair rules.
 """
 
 # The selection helper is the contract worth pinning here, private or not.
 # pylint: disable=protected-access
 
+from datetime import datetime
 from unittest.mock import patch
 
-from app.db.models_sandbox import DbTVShow, DbUserTVShow
+from app.db.models_sandbox import (
+    DbTVEpisode,
+    DbTVShow,
+    DbUserTVEpisode,
+    DbUserTVShow,
+)
 from app.jobs import refresh_tv
 
 
@@ -79,3 +85,99 @@ def test_stops_early_after_consecutive_misses(_sleep, _detail, _sync, test_db_se
     assert report['misses'] == refresh_tv.STOP_AFTER_CONSECUTIVE_MISSES
     # Stopped before touching every show
     assert report['shows'] < refresh_tv.STOP_AFTER_CONSECUTIVE_MISSES + 5
+
+
+@patch('app.jobs.refresh_tv.sync_episodes', return_value=0)
+@patch('app.jobs.refresh_tv.get_tv_show_detail', return_value=None)
+@patch('app.jobs.refresh_tv.time.sleep')
+def test_run_repairs_duplicate_slots_left_by_the_sync(
+    _sleep, _detail, _sync, test_db_session
+):
+    """
+    The nightly sync is the only thing that creates ambiguous slots, so it has
+    to be the thing that clears them — otherwise the Schedule and the detail
+    page disagree until someone runs the CLI by hand (#240).
+    """
+    show = _show(test_db_session, 'Reassigned', 401, 'Running')
+    test_db_session.add(DbUserTVShow(user_id=1, tv_show_id=show.pk))
+    aired = datetime(2026, 8, 1)
+    keeper = DbTVEpisode(
+        title='Keeper',
+        tvmaze=4010,
+        tv_show_id=show.pk,
+        airdate=aired,
+        season=1,
+        season_number=1,
+    )
+    newer = DbTVEpisode(
+        title='Reassigned id',
+        tvmaze=4011,
+        tv_show_id=show.pk,
+        airdate=aired,
+        season=1,
+        season_number=1,
+    )
+    test_db_session.add_all([keeper, newer])
+    test_db_session.flush()
+    # Two users, state split across both rows — the case where a user-scoped
+    # repair would drop whoever it was not looking at.
+    test_db_session.add_all(
+        [
+            DbUserTVEpisode(episode_id=keeper.pk, user_id=1, watched=0, favorited=True),
+            DbUserTVEpisode(episode_id=newer.pk, user_id=1, watched=1, favorited=False),
+            DbUserTVEpisode(episode_id=newer.pk, user_id=2, watched=1, favorited=True),
+        ]
+    )
+    test_db_session.flush()
+    # run() closes the session, detaching these — keep the ids as plain ints.
+    show_pk, keeper_pk = show.pk, keeper.pk
+
+    with patch('app.jobs.refresh_tv.SessionLocal', return_value=test_db_session):
+        report = refresh_tv.run()
+
+    assert report['slots_repaired'] == 1
+    survivors = (
+        test_db_session.query(DbTVEpisode)
+        .filter(DbTVEpisode.tv_show_id == show_pk)
+        .all()
+    )
+    assert [e.pk for e in survivors] == [keeper_pk]
+    marks = {
+        m.user_id: m
+        for m in test_db_session.query(DbUserTVEpisode)
+        .filter(DbUserTVEpisode.episode_id == keeper_pk)
+        .all()
+    }
+    # Both users keep watch *and* favorite, merged onto the surviving row.
+    assert set(marks) == {1, 2}
+    assert marks[1].watched == 1 and marks[1].favorited is True
+    assert marks[2].watched == 1 and marks[2].favorited is True
+
+
+@patch('app.jobs.refresh_tv.sync_episodes', return_value=0)
+@patch('app.jobs.refresh_tv.get_tv_show_detail', return_value=None)
+@patch('app.jobs.refresh_tv.time.sleep')
+def test_run_leaves_clean_shows_alone(_sleep, _detail, _sync, test_db_session):
+    """
+    A show with no duplicated slot must not report a repair — otherwise the
+    nightly log cries wolf and nobody reads it.
+    """
+    show = _show(test_db_session, 'Clean', 402, 'Running')
+    test_db_session.add(DbUserTVShow(user_id=1, tv_show_id=show.pk))
+    test_db_session.add(
+        DbTVEpisode(
+            title='Only',
+            tvmaze=4020,
+            tv_show_id=show.pk,
+            airdate=datetime(2026, 8, 1),
+            season=1,
+            season_number=1,
+        )
+    )
+    test_db_session.flush()
+
+    with patch('app.jobs.refresh_tv.SessionLocal', return_value=test_db_session):
+        report = refresh_tv.run()
+
+    assert report['slots_repaired'] == 0
+    assert test_db_session.query(DbTVEpisode).count() == 1

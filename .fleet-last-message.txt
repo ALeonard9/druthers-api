@@ -1,0 +1,11 @@
+Implemented and committed API-side safety work for #240.
+
+- Commit: `9d0a501 fix: preserve all users during duplicate episode repair`
+- Duplicate repair now preserves every user’s watch/favorite state and timestamps.
+- Added a two-user regression test.
+- Full suite: `867 passed, 17 warnings`.
+- Pre-commit, Black, and pylint passed.
+- Left [WORKER_REPORT.md](/Users/adam/dev/.worktrees/druthers-api/240/WORKER_REPORT.md) untracked as required.
+- Did not push or open a PR.
+
+The cron script, crontab entry, and `CRONS.md` update remain for the `druthers-infra` worker; they are outside this worktree’s boundary.
