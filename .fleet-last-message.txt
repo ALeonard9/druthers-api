@@ -1,11 +1,12 @@
-Implemented and committed API-side safety work for #240.
+Implemented and committed both halves locally; nothing was pushed.
 
-- Commit: `9d0a501 fix: preserve all users during duplicate episode repair`
-- Duplicate repair now preserves every user’s watch/favorite state and timestamps.
-- Added a two-user regression test.
-- Full suite: `867 passed, 17 warnings`.
-- Pre-commit, Black, and pylint passed.
-- Left [WORKER_REPORT.md](/Users/adam/dev/.worktrees/druthers-api/240/WORKER_REPORT.md) untracked as required.
-- Did not push or open a PR.
+- API: `5c206f7 feat: default new accounts to eastern time`
+- Web: `1f72a7a feat: set empty account zones from the device`
 
-The cron script, crontab entry, and `CRONS.md` update remain for the `druthers-infra` worker; they are outside this worktree’s boundary.
+Verification passed:
+
+- `pytest -q`: 870 passed
+- `npm test`: 283 passed
+- Commit hooks passed, including Black/Pylint and ESLint/typecheck.
+
+The handoff report is at [WORKER_REPORT.md](/Users/adam/dev/.worktrees/druthers-api/328/WORKER_REPORT.md). Note: that file was already tracked in this worktree from an old #240 report, so it is intentionally uncommitted but appears as modified rather than untracked. The API graph update was attempted but blocked by filesystem permissions; documented in the report.
