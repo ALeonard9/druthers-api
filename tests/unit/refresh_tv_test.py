@@ -102,12 +102,20 @@ def test_run_repairs_duplicate_slots_left_by_the_sync(
     test_db_session.add(DbUserTVShow(user_id=1, tv_show_id=show.pk))
     aired = datetime(2026, 8, 1)
     keeper = DbTVEpisode(
-        title='Keeper', tvmaze=4010, tv_show_id=show.pk, airdate=aired,
-        season=1, season_number=1,
+        title='Keeper',
+        tvmaze=4010,
+        tv_show_id=show.pk,
+        airdate=aired,
+        season=1,
+        season_number=1,
     )
     newer = DbTVEpisode(
-        title='Reassigned id', tvmaze=4011, tv_show_id=show.pk, airdate=aired,
-        season=1, season_number=1,
+        title='Reassigned id',
+        tvmaze=4011,
+        tv_show_id=show.pk,
+        airdate=aired,
+        season=1,
+        season_number=1,
     )
     test_db_session.add_all([keeper, newer])
     test_db_session.flush()
@@ -158,8 +166,12 @@ def test_run_leaves_clean_shows_alone(_sleep, _detail, _sync, test_db_session):
     test_db_session.add(DbUserTVShow(user_id=1, tv_show_id=show.pk))
     test_db_session.add(
         DbTVEpisode(
-            title='Only', tvmaze=4020, tv_show_id=show.pk,
-            airdate=datetime(2026, 8, 1), season=1, season_number=1,
+            title='Only',
+            tvmaze=4020,
+            tv_show_id=show.pk,
+            airdate=datetime(2026, 8, 1),
+            season=1,
+            season_number=1,
         )
     )
     test_db_session.flush()
