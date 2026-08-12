@@ -347,8 +347,8 @@ class OutPreferences(BaseModel):
     # Always a concrete zone, never null: an unset column reads as the
     # deployment default, so no client has to own that fallback itself.
     time_zone: str = 'UTC'
-    shelf_order: list[str] = ['movies', 'tv', 'books', 'games']
-    enabled_shelves: list[str] = ['movies', 'tv', 'books', 'games']
+    shelf_order: list[str] = ['movies', 'tv', 'games', 'books']
+    enabled_shelves: list[str] = ['movies', 'tv', 'games', 'books']
 
     model_config = ConfigDict(from_attributes=True)
 

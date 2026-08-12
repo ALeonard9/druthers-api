@@ -15,7 +15,7 @@ from app.services import preferences
 
 router = APIRouter(prefix='/v1', tags=['Preferences'])
 
-DEFAULT_SHELF_ORDER = ['movies', 'tv', 'books', 'games']
+DEFAULT_SHELF_ORDER = ['movies', 'tv', 'games', 'books']
 
 
 def _out(user) -> OutPreferences:

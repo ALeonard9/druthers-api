@@ -22,8 +22,8 @@ def _defaults(**overrides) -> dict:
         'ranked_list_length': '25',
         'onboarding_completed': False,
         'time_zone': get_settings().time_zone,
-        'shelf_order': ['movies', 'tv', 'books', 'games'],
-        'enabled_shelves': ['movies', 'tv', 'books', 'games'],
+        'shelf_order': ['movies', 'tv', 'games', 'books'],
+        'enabled_shelves': ['movies', 'tv', 'games', 'books'],
     }
     body.update(overrides)
     return body
@@ -34,6 +34,8 @@ def test_default_is_25(test_client: TestClient):
         '/v1/users/me/preferences', headers=_auth(test_client.first_user.token)
     ).json()
     assert body == _defaults()
+    assert body['shelf_order'] == ['movies', 'tv', 'games', 'books']
+    assert body['enabled_shelves'] == ['movies', 'tv', 'games', 'books']
 
 
 def test_set_and_read_back(test_client: TestClient):
