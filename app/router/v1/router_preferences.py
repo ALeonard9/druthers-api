@@ -15,6 +15,8 @@ from app.services import preferences
 
 router = APIRouter(prefix='/v1', tags=['Preferences'])
 
+DEFAULT_SHELF_ORDER = ['movies', 'tv', 'games', 'books']
+
 
 def _out(user) -> OutPreferences:
     """One place that decides how a stored row reads, so GET and PUT cannot drift."""
@@ -22,6 +24,8 @@ def _out(user) -> OutPreferences:
         ranked_list_length=preferences.coerce(user.ranked_list_length),
         onboarding_completed=user.onboarding_completed,
         time_zone=preferences.coerce_time_zone(user.time_zone),
+        shelf_order=user.shelf_order or DEFAULT_SHELF_ORDER,
+        enabled_shelves=user.enabled_shelves or DEFAULT_SHELF_ORDER,
     )
 
 
@@ -44,6 +48,10 @@ def update_preferences(
         user.onboarding_completed = data['onboarding_completed']
     if 'time_zone' in data and data['time_zone'] is not None:
         user.time_zone = data['time_zone']
+    if 'shelf_order' in data and data['shelf_order'] is not None:
+        user.shelf_order = data['shelf_order']
+    if 'enabled_shelves' in data and data['enabled_shelves'] is not None:
+        user.enabled_shelves = data['enabled_shelves']
 
     if data:
         db.commit()

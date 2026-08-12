@@ -303,6 +303,8 @@ class InPreferencesUpdate(BaseModel):
     ranked_list_length: Optional[RankedListLength] = None
     onboarding_completed: Optional[bool] = None
     time_zone: Optional[str] = None
+    shelf_order: Optional[list[str]] = None
+    enabled_shelves: Optional[list[str]] = None
 
     @field_validator('time_zone')
     @classmethod
@@ -314,6 +316,28 @@ class InPreferencesUpdate(BaseModel):
             raise ValueError(f'Unknown IANA time zone: {value}')
         return value
 
+    @field_validator('shelf_order', 'enabled_shelves')
+    @classmethod
+    def validate_shelf_ids(cls, value: Optional[list[str]]) -> Optional[list[str]]:
+        """Reject invalid shelf identifiers before they reach the user row."""
+        if value is None:
+            return None
+        shelf_ids = {'movies', 'tv', 'books', 'games'}
+        unknown = set(value) - shelf_ids
+        if unknown:
+            raise ValueError(f'Unknown shelf id: {sorted(unknown)[0]}')
+        if len(value) != len(set(value)):
+            raise ValueError('Shelf ids must not contain duplicates')
+        return value
+
+    @field_validator('shelf_order')
+    @classmethod
+    def validate_shelf_order(cls, value: Optional[list[str]]) -> Optional[list[str]]:
+        """Require a complete order so no known shelf silently disappears."""
+        if value is not None and set(value) != {'movies', 'tv', 'books', 'games'}:
+            raise ValueError('Shelf order must include every shelf exactly once')
+        return value
+
 
 class OutPreferences(BaseModel):
     """The caller's display preferences, defaulted where unset."""
@@ -323,6 +347,8 @@ class OutPreferences(BaseModel):
     # Always a concrete zone, never null: an unset column reads as the
     # deployment default, so no client has to own that fallback itself.
     time_zone: str = 'UTC'
+    shelf_order: list[str] = ['movies', 'tv', 'games', 'books']
+    enabled_shelves: list[str] = ['movies', 'tv', 'games', 'books']
 
     model_config = ConfigDict(from_attributes=True)
 
