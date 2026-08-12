@@ -13,6 +13,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Integer,
+    JSON,
     String,
     UniqueConstraint,
     text,
@@ -157,6 +158,12 @@ class DbUser(DBBaseModel):
     # Unconstrained on purpose: the tzdb gains and drops zone names between
     # releases, and a CHECK would turn that into failed writes.
     time_zone = Column(String(64), nullable=True)
+
+    # Shelf presentation is account-owned. NULL preserves the original layout:
+    # movies, TV, books, games, all enabled. The preferences router owns the
+    # validation and defaulting so migrations never need to rewrite users.
+    shelf_order = Column(JSON, nullable=True)
+    enabled_shelves = Column(JSON, nullable=True)
 
     # First-time onboarding state (#135).
     onboarding_completed = Column(

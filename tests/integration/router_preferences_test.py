@@ -22,6 +22,8 @@ def _defaults(**overrides) -> dict:
         'ranked_list_length': '25',
         'onboarding_completed': False,
         'time_zone': get_settings().time_zone,
+        'shelf_order': ['movies', 'tv', 'books', 'games'],
+        'enabled_shelves': ['movies', 'tv', 'books', 'games'],
     }
     body.update(overrides)
     return body
@@ -81,6 +83,38 @@ def test_preferences_are_per_user(test_client: TestClient):
         '/v1/users/me/preferences', headers=_auth(test_client.second_user.token)
     ).json()
     assert other == _defaults()
+
+
+def test_set_and_read_back_shelf_preferences(test_client: TestClient):
+    token = test_client.first_user.token
+    preferences = {
+        'shelf_order': ['games', 'books', 'movies', 'tv'],
+        'enabled_shelves': ['games', 'movies'],
+    }
+    updated = test_client.put(
+        '/v1/users/me/preferences', headers=_auth(token), json=preferences
+    )
+    assert updated.status_code == 200
+    assert updated.json() == _defaults(**preferences)
+
+    fetched = test_client.get('/v1/users/me/preferences', headers=_auth(token))
+    assert fetched.json() == _defaults(**preferences)
+
+
+def test_unknown_or_duplicate_shelf_id_rejected(test_client: TestClient):
+    token = test_client.first_user.token
+    unknown = test_client.put(
+        '/v1/users/me/preferences',
+        headers=_auth(token),
+        json={'enabled_shelves': ['movies', 'podcasts']},
+    )
+    duplicate = test_client.put(
+        '/v1/users/me/preferences',
+        headers=_auth(token),
+        json={'shelf_order': ['movies', 'tv', 'books', 'books']},
+    )
+    assert unknown.status_code == 422
+    assert duplicate.status_code == 422
 
 
 def test_preferences_require_auth(test_client: TestClient):
