@@ -34,6 +34,15 @@ def test_default_is_25(test_client: TestClient):
     assert body == _defaults()
 
 
+def test_unset_time_zone_defaults_to_new_york(test_client: TestClient):
+    """An untouched account reads in Eastern time, without storing a zone."""
+    response = test_client.get(
+        '/v1/users/me/preferences', headers=_auth(test_client.first_user.token)
+    )
+    assert response.status_code == 200
+    assert response.json()['time_zone'] == 'America/New_York'
+
+
 def test_set_and_read_back(test_client: TestClient):
     token = test_client.first_user.token
     updated = test_client.put(

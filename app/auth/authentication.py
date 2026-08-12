@@ -41,6 +41,7 @@ def _token_response(user: models.DbUser, refresh_token: str) -> dict:
         'user_id': user.id,
         'user_group': user.user_group,
         'email': user.email,
+        'time_zone': user.time_zone,
     }
 
 
