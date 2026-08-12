@@ -129,6 +129,10 @@ class OutToken(BaseModel):
     user_id: str
     user_group: str
     email: str
+    # Raw account state, unlike OutPreferences.time_zone which resolves NULL
+    # to the deployment fallback for display. The web client uses this only
+    # immediately after sign-in to fill a never-chosen preference.
+    time_zone: Optional[str] = None
 
 
 class InVisibilityUpdate(BaseModel):

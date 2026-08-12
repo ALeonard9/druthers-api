@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     env: str = 'local'
     lz: Optional[str] = None
     log_level: str = 'INFO'
-    time_zone: str = 'America/Chicago'
+    time_zone: str = 'America/New_York'
     # Baked in at image build time (see Dockerfile ARG/ENV GIT_SHA). Lets a
     # running container be checked against the working tree instead of
     # silently serving a stale build (api#232).

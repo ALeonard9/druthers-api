@@ -146,6 +146,7 @@ def test_api_user_get_token(
     assert response_data['user_id'] == test_client.first_user.id
     assert response_data['email'] == test_client.first_user.email
     assert response_data['user_group'] == 'user'
+    assert response_data['time_zone'] is None
 
 
 def test_api_user_token_bad_password(
