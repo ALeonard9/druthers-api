@@ -1,47 +1,39 @@
-# druthers-api#328 — Set a new account's time zone from the device
+# druthers-api#240 — Run the TV duplicate-slot audit automatically instead of by hand
 
 ## What changed
 
-- **API:** Unset `TIME_ZONE` used Central time, so configuration and both deployment templates now default to `America/New_York`. Existing `users.time_zone` values and `NULL` rows are unchanged.
-- **API:** The sign-in token response now carries the raw nullable `time_zone`. This preserves the distinction hidden by the preferences endpoint's effective-zone fallback, so the web app can safely tell an empty value from an intentional `America/New_York` choice.
-- **Web:** Successful password and Google sign-ins detect and save the browser's IANA zone exactly when that raw value is empty. The shared detector is also used by Settings' existing “Use this device's zone” control.
-- **Web:** A chosen zone makes detection a no-op; a rejected or failed detection is ignored after authentication, so the signed-in session continues.
+- The existing repair operated on globally shared episode rows but only preserved the user whose audit pass found the duplicate, so an unattended all-user run could delete another user's watch or favorite state.
+- The duplicate-slot repair now merges every user's watched/favorited flags and original timestamps onto the oldest episode row, flushes tracker moves before the delete-orphan cascade, and only then deletes duplicate episode rows.
+- Added a two-user regression proving that a global `audit(..., fix=True)` run collapses the slot while retaining both users' watch history and the second user's independent favorite.
 
 ## Tests
 
-- `tests/integration/router_preferences_test.py`: an untouched account's effective preference is specifically `America/New_York`.
-- `tests/integration/router_auth_test.py`: a token response exposes `None` for an account whose stored column is empty.
-- `src/lib/deviceTimeZoneDetection.test.ts`: a `NULL` zone sends one device-zone `PUT`; an already chosen zone neither reads the device nor writes; a 422 resolves without failing the sign-in flow.
-- `pytest -q`: **870 passed, 17 warnings** in 12.38s. The warnings are existing FastAPI TestClient deprecations and SQLAlchemy transaction warnings.
-- `npm test`: **61 test files passed, 283 tests passed** in 4.80s.
-- Commit hooks also passed: API Black/Pylint and web ESLint/typecheck.
+- `tests/integration/router_tv_reassignment_test.py::test_audit_fix_preserves_every_users_state` asserts that an unfiltered fix repairs one shared duplicate slot for two tracked users, leaves one mark per user on the keeper, and preserves `watched`, `watched_at`, `favorited`, and `favorited_at` state combined across keeper/orphan rows.
+- Existing `test_ambiguous_slot_is_left_alone` remains unchanged and passed, so ingest still refuses to guess when a slot is already ambiguous.
+- Focused run: `6 passed, 9 warnings in 2.11s`.
+- Whole suite: `867 passed, 17 warnings in 8.07s`.
+- Pre-commit hooks passed, including Black and pylint.
 
 ## Demo notes
 
-### Detect an empty zone
+This is an operator CLI job; there is no HTTP URL or user seat to exercise. In the orchestrator-owned local stack, prepare one show with two episode rows sharing `(tv_show_id, season, season_number)`, put one user's favorite on the oldest row and that user's watch mark on the newer row, then run:
 
-1. **Sign in as** — `$ADMIN_EMAIL` / `$ADMIN_PASSWORD` from `env/dev.env`; this seeded `you` account is the local account whose time zone starts unset.
-2. **Go to** — <http://localhost:3000/login>.
-3. **Do this** — Set the browser/device zone to a recognizable IANA zone different from Eastern (for example `America/Los_Angeles`), choose **Other sign-in options**, sign in, then open <http://localhost:3000/settings>.
-4. **You should see** — Settings → **Time zone** is `America/Los_Angeles`; a `GET /v1/users/me/preferences` for that session returns `"time_zone": "America/Los_Angeles"`.
-5. **What it looked like before** — the column stayed `NULL` and Settings showed the deployment fallback instead of the device zone.
+```bash
+python -m app.jobs.audit_watch_gaps --fix
+```
 
-For a repeatable fresh-state demo, clear only the local `you` account's `users.time_zone` back to `NULL` before signing in; reseeding is additive and does not clear a zone detection already saved.
+The command should print a `Repaired: 1` section naming the slot and `Committed.`. The database should then contain one episode row for the slot and one combined tracker row for that user with both the original favorite and watch state. A separate aired lone gap should appear under `Lone unwatched episodes (review by hand)` and remain unwatched.
 
-### Prove a chosen zone is never overwritten
-
-1. **Sign in as** — `friend@example.com` / `change-me`; its seeded stored zone is `Europe/London`.
-2. **Go to** — <http://localhost:3000/login>.
-3. **Do this** — With the same browser/device zone set to `America/Los_Angeles`, choose **Other sign-in options**, sign in, then open <http://localhost:3000/settings>.
-4. **You should see** — Settings → **Time zone** remains `Europe/London`, not `America/Los_Angeles`; no preferences `PUT` is sent after the successful sign-in.
-5. **What it looked like before** — there was no automatic sign-in detection; a naive detector would have silently replaced the saved London preference while travelling.
+For the actual scheduled-job demo, inspect the infra cron log under `~/dev/druthers/cron/log/` after invoking the new infra script; repaired slots and lone gaps are already printed by this CLI and should be captured there.
 
 ## Decisions I made
 
-- Added the raw nullable zone to the existing auth response rather than changing the effective preferences response. That response must remain concrete for greetings and schedule rendering, while the sign-in flow needs the raw state to uphold the never-overwrite rule.
-- Kept all HTTP outcomes from the best-effort detection non-fatal. In particular, 422 leaves the database column unchanged and still completes navigation into the signed-in app.
+- I changed the existing API repair because scheduling its current unfiltered `--fix` path would otherwise risk cross-user data loss. This is a prerequisite safety fix, not a second scheduling mechanism.
+- When duplicate tracker rows contain state on both episode rows, the merged tracker uses logical OR for watched/favorited and retains the earliest non-null timestamp for each active state.
+- This is TV-only. Movies, books, and games do not have shared episode slots or an equivalent per-episode duplicate audit, so no matching domain change applies.
 
 ## Not done / uncertain
 
-- Per fleet-worker instructions, I did not start the local stack or perform the browser demo; the orchestrator should run the steps above.
-- Ran `graphify update .` in the API worktree as required by its `AGENTS.md`, but graphify could not rebuild due to `Operation not permitted`; no graph output was changed.
+- I did not create `druthers-infra/cron/audit-watch-gaps.sh`, edit the hephaestus crontab, or update `druthers-infra/docs/CRONS.md`; those are the actual scheduling changes and are outside this worktree/repository boundary.
+- I did not access Docker, the local dev stack, hephaestus, Neon production, or cron logs, per fleet-worker constraints. The orchestrator must verify the infra script cadence, image/env wiring, all-user invocation (no `--email`), and log redirection.
+- Existing CLI output already reports repaired duplicate slots and lone gaps, so no logging-format change was necessary here.
