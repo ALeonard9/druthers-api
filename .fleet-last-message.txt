@@ -1,11 +1,9 @@
-Implemented and committed API-side safety work for #240.
+Implemented and committed the multi-stage Docker build.
 
-- Commit: `9d0a501 fix: preserve all users during duplicate episode repair`
-- Duplicate repair now preserves every user’s watch/favorite state and timestamps.
-- Added a two-user regression test.
-- Full suite: `867 passed, 17 warnings`.
-- Pre-commit, Black, and pylint passed.
-- Left [WORKER_REPORT.md](/Users/adam/dev/.worktrees/druthers-api/240/WORKER_REPORT.md) untracked as required.
-- Did not push or open a PR.
+- Commit: `042f864 chore: convert api dockerfile to a multi-stage build`
+- Runtime keeps only built wheels, app code, and `libpq`; builder retains gcc/Rust/Cargo/PostgreSQL headers.
+- Healthcheck now targets `/health`.
+- Added Dockerfile regression tests.
+- `pytest -q`: `874 passed, 17 warnings`.
 
-The cron script, crontab entry, and `CRONS.md` update remain for the `druthers-infra` worker; they are outside this worktree’s boundary.
+`WORKER_REPORT.md` is updated but not committed. Docker boot and image-size verification were not run per fleet-worker boundaries; demo steps are in the report.
