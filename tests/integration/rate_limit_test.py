@@ -51,6 +51,46 @@ def test_auth_attempts_are_rate_limited_per_ip(mock_settings, test_client: TestC
     rate_limit.reset()
 
 
+@patch('app.services.rate_limit.get_settings')
+def test_auth_limit_uses_cloud_runs_rightmost_xff_hop(mock_settings, test_client):
+    """
+    Forging a different leftmost XFF value does not create a new auth bucket.
+    Cloud Run's appended, rightmost client IP remains the bucket key.
+    """
+    rate_limit.reset()
+    mock_settings.return_value = Settings(**ENABLED, rate_limit_auth=3)
+    for forged_ip in ('198.51.100.1', '198.51.100.2', '198.51.100.3'):
+        response = test_client.post(
+            '/v1/auth/token',
+            data={'username': 'x@y.z', 'password': 'wrong'},
+            headers={'X-Forwarded-For': f'{forged_ip}, 203.0.113.10'},
+        )
+        assert response.status_code == 404
+    response = test_client.post(
+        '/v1/auth/token',
+        data={'username': 'x@y.z', 'password': 'wrong'},
+        headers={'X-Forwarded-For': '198.51.100.4, 203.0.113.10'},
+    )
+    assert response.status_code == 429
+    rate_limit.reset()
+
+
+@patch('app.services.rate_limit.time.monotonic')
+# pylint: disable=protected-access
+def test_periodic_eviction_removes_stale_rate_limit_keys(mock_monotonic):
+    """A later request evicts rate-limit buckets whose windows have elapsed."""
+    rate_limit.reset()
+    mock_monotonic.return_value = 1.0
+    assert rate_limit._allow('auth:stale', limit=1, window_seconds=300)
+
+    mock_monotonic.return_value = 302.0
+    assert rate_limit._allow('auth:current', limit=1, window_seconds=300)
+
+    assert 'auth:stale' not in rate_limit._events
+    assert 'auth:current' in rate_limit._events
+    rate_limit.reset()
+
+
 @patch('app.router.v1.router_movies.tmdb_search_movies')
 @patch('app.services.rate_limit.get_settings')
 def test_search_is_rate_limited_per_user(
