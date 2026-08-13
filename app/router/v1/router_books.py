@@ -7,7 +7,7 @@ search proxy, lazy enrichment on detail view (keyed on isbn), and per-user
 trackers with independent Watchlist (to-read) / Rankings (read) lists.
 """
 
-from typing import List
+from typing import List, Union
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
@@ -16,9 +16,9 @@ from sqlalchemy.orm import Session, joinedload
 from app.db.database import get_db
 from app.services.rate_limit import catalog_add_cap, search_rate_limit
 from app.services.tracker_query import (
-    apply_list_params,
-    guard_truncation,
+    list_tracker_items,
     list_params,
+    tracker_list_response,
 )
 from app.services.tracker_rules import (
     default_completed_at,
@@ -35,6 +35,7 @@ from app.schemas.schemas_sandbox import (
     BookSummary,
     BookUpdate,
     RankPlacement,
+    TrackerListPage,
     UserBookCreate,
     UserBookResponse,
     UserBookUpdate,
@@ -212,7 +213,10 @@ def _close_rank_gap(db: Session, user_pk: int, vacated_rank) -> None:
     ).update({DbUserBook.rank: DbUserBook.rank - 1}, synchronize_session=False)
 
 
-@router.get('/users/me/books', response_model=List[UserBookResponse])
+@router.get(
+    '/users/me/books',
+    response_model=Union[List[UserBookResponse], TrackerListPage[UserBookResponse]],
+)
 def get_user_books(
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
@@ -223,8 +227,8 @@ def get_user_books(
         .options(joinedload(DbUserBook.book))
         .filter(DbUserBook.user_id == current_user[0].pk)
     )
-    rows = apply_list_params(query, DbUserBook, params).all()
-    return guard_truncation(rows, params, 'Book')
+    rows, total = list_tracker_items(query, DbUserBook, DbBook, params)
+    return tracker_list_response(rows, total, params, 'Book')
 
 
 @router.put('/users/me/books/rankings/order', response_model=List[UserBookResponse])

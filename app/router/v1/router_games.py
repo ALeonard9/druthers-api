@@ -8,7 +8,7 @@ and per-user trackers with independent Watchlist (backlog) / Rankings
 (played) lists plus a 100%-completion flag.
 """
 
-from typing import List
+from typing import List, Union
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
@@ -17,9 +17,9 @@ from sqlalchemy.orm import Session, joinedload
 from app.db.database import get_db
 from app.services.rate_limit import catalog_add_cap, search_rate_limit
 from app.services.tracker_query import (
-    apply_list_params,
-    guard_truncation,
+    list_tracker_items,
     list_params,
+    tracker_list_response,
 )
 from app.services.tracker_rules import (
     default_completed_at,
@@ -32,6 +32,7 @@ from app.schemas.schemas_sandbox import (
     GameRankingReorder,
     GameSearchResult,
     RankPlacement,
+    TrackerListPage,
     UserVideoGameCreate,
     UserVideoGameResponse,
     UserVideoGameUpdate,
@@ -207,7 +208,12 @@ def _close_rank_gap(db: Session, user_pk: int, vacated_rank) -> None:
     )
 
 
-@router.get('/users/me/games', response_model=List[UserVideoGameResponse])
+@router.get(
+    '/users/me/games',
+    response_model=Union[
+        List[UserVideoGameResponse], TrackerListPage[UserVideoGameResponse]
+    ],
+)
 def get_user_games(
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
@@ -218,8 +224,8 @@ def get_user_games(
         .options(joinedload(DbUserVideoGame.game))
         .filter(DbUserVideoGame.user_id == current_user[0].pk)
     )
-    rows = apply_list_params(query, DbUserVideoGame, params).all()
-    return guard_truncation(rows, params, 'Game')
+    rows, total = list_tracker_items(query, DbUserVideoGame, DbVideoGame, params)
+    return tracker_list_response(rows, total, params, 'Game')
 
 
 @router.put(

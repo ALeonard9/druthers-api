@@ -8,7 +8,7 @@ Watchlist/Rankings lists plus episode-level watched marks.
 """
 
 from datetime import datetime, time, timedelta
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
@@ -18,9 +18,9 @@ from app.db.database import get_db
 from app.services import preferences
 from app.services.rate_limit import catalog_add_cap, search_rate_limit
 from app.services.tracker_query import (
-    apply_list_params,
-    guard_truncation,
+    list_tracker_items,
     list_params,
+    tracker_list_response,
 )
 from app.services.tracker_rules import (
     default_completed_at,
@@ -43,6 +43,7 @@ from app.schemas.schemas_sandbox import (
     TVShowSearchResult,
     TVShowSummary,
     TVShowUpdate,
+    TrackerListPage,
     UserTVEpisodeResponse,
     UserTVShowCreate,
     UserTVShowResponse,
@@ -377,7 +378,12 @@ def _watch_status(aired: int, watched: int, show_status: Optional[str]) -> str:
     return 'complete' if show_status == 'Ended' else 'up_to_date'
 
 
-@router.get('/users/me/tv-shows', response_model=List[UserTVShowWithStatus])
+@router.get(
+    '/users/me/tv-shows',
+    response_model=Union[
+        List[UserTVShowWithStatus], TrackerListPage[UserTVShowWithStatus]
+    ],
+)
 def get_user_tv_shows(
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
@@ -389,9 +395,7 @@ def get_user_tv_shows(
         .options(joinedload(DbUserTVShow.tv_show))
         .filter(DbUserTVShow.user_id == user_pk)
     )
-    trackers = guard_truncation(
-        apply_list_params(query, DbUserTVShow, params).all(), params, 'TV'
-    )
+    trackers, total = list_tracker_items(query, DbUserTVShow, DbTVShow, params)
     show_pks = [t.tv_show_id for t in trackers]
     aired_before = _local_day_end(current_user[0])
 
@@ -442,7 +446,7 @@ def get_user_tv_shows(
                 watched_count=watched_count,
             )
         )
-    return results
+    return tracker_list_response(results, total, params, 'TV')
 
 
 @router.get('/users/me/schedule', response_model=ScheduleResponse)
