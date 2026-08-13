@@ -51,6 +51,12 @@ while leaving catalog rows, the cast users themselves, and their
 relationships in place.
 """
 
+# This module sat at 993 of pylint's 1000-line default before the pending-row
+# check below, so any fix to it trips too-many-lines. Suppressed rather than
+# compressed: it wants splitting along domain lines (movies/tv/books/games/
+# cast), which is a refactor, not something a bug fix should smuggle in.
+# pylint: disable=too-many-lines
+
 import argparse
 import json
 import os
@@ -329,7 +335,20 @@ def _next_rank(session: Session, model, user: DbUser) -> int:
 def _already_tracked(
     session: Session, model, user_pk: int, fk_column, catalog_pk: int
 ) -> bool:
-    """True if this user already has *any* tracker row for this catalog item."""
+    """True if this user already has *any* tracker row for this catalog item.
+
+    Pending rows count: the target is seeded for the eight canon titles twice
+    (fixture sample, then cast-overlap) and neither pass is flushed while the
+    other builds. Checked before the query, which autoflushes -- and flushing
+    the duplicate is what raises.
+    """
+    if any(
+        isinstance(p, model)
+        and p.user_id == user_pk
+        and getattr(p, fk_column.key, None) == catalog_pk
+        for p in session.new
+    ):
+        return True
     return (
         session.query(model)
         .filter(model.user_id == user_pk, fk_column == catalog_pk)

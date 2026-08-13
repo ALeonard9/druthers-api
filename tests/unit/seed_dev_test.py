@@ -89,6 +89,39 @@ def test_seed_movies_does_not_duplicate_an_existing_tracker(test_client):
     assert by_movie[movie.pk].is_seed_data is False
 
 
+def test_seed_movies_does_not_duplicate_a_tracker_pending_in_the_session(test_client):
+    # The sibling test above covers a tracker already committed. This covers one
+    # queued but not yet flushed, which is the case that actually bit: the target
+    # user is seeded for each canon overlap title twice -- once from the fixture
+    # sample, once from the cast-overlap pass -- and neither is flushed while the
+    # other is being built. A database-only check saw nothing and queued both,
+    # producing eight duplicate tracker rows per seed. That was silent until
+    # api#352 added UNIQUE (user_id, movie_id), which turned it into a failed
+    # seed: `task seed:dev` aborting with a UniqueViolation.
+    session = test_client.test_db_session
+    user = test_client.first_user
+    movie = seed_dev._get_or_create_movie(session, _MOVIE_A)
+    session.add(
+        DbUserMovie(
+            movie_id=movie.pk,
+            user_id=user.pk,
+            on_rankings=True,
+            rank=1,
+            is_seed_data=True,
+        )
+    )
+    # deliberately not committed -- the row is pending, exactly as it is mid-seed
+
+    seed_dev._seed_movies(session, user, [_MOVIE_A, _MOVIE_B])
+    session.commit()
+
+    trackers = session.query(DbUserMovie).filter(DbUserMovie.user_id == user.pk).all()
+    assert len(trackers) == 2, 'the pending Interstellar row must not be queued twice'
+    assert sorted(t.movie_id for t in trackers) == sorted(
+        {t.movie_id for t in trackers}
+    )
+
+
 def test_wipe_removes_only_seeded_trackers_for_the_target_user(test_client):
     session = test_client.test_db_session
     first, second = test_client.first_user, test_client.second_user
