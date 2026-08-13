@@ -13,8 +13,11 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Text,
     Boolean,
+    UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import relationship
 
@@ -36,6 +39,24 @@ def rank_is_1_based(table_name: str) -> tuple:
     return (
         CheckConstraint(
             'rank IS NULL OR rank >= 1', name=f"ck_{table_name}_rank_1_based"
+        ),
+    )
+
+
+def ranked_tracker_table_args(table_name: str, fk_column: str) -> tuple:
+    """Constraints and indexes shared by the four ranked tracker tables."""
+    return rank_is_1_based(table_name) + (
+        UniqueConstraint(
+            'user_id',
+            fk_column,
+            name=f'uq_{table_name}_user_id_{fk_column}',
+        ),
+        Index(
+            f'ix_{table_name}_user_id_rank_on_rankings',
+            'user_id',
+            'rank',
+            postgresql_where=text('on_rankings AND rank IS NOT NULL'),
+            sqlite_where=text('on_rankings AND rank IS NOT NULL'),
         ),
     )
 
@@ -94,7 +115,7 @@ class DbMovie(DBBaseModel):
 
 class DbUserMovie(DBBaseModel):
     __tablename__ = 'user_movies'
-    __table_args__ = rank_is_1_based(__tablename__)
+    __table_args__ = ranked_tracker_table_args(__tablename__, 'movie_id')
 
     movie_id = Column(Integer, ForeignKey('movies.pk'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.pk'), nullable=False)
@@ -162,7 +183,7 @@ class DbTVShow(DBBaseModel):
 
 class DbUserTVShow(DBBaseModel):
     __tablename__ = 'user_tv_shows'
-    __table_args__ = rank_is_1_based(__tablename__)
+    __table_args__ = ranked_tracker_table_args(__tablename__, 'tv_show_id')
 
     tv_show_id = Column(Integer, ForeignKey('tv_shows.pk'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.pk'), nullable=False)
@@ -218,6 +239,13 @@ class DbTVEpisode(DBBaseModel):
 
 class DbUserTVEpisode(DBBaseModel):
     __tablename__ = 'user_tv_episodes'
+    __table_args__ = (
+        UniqueConstraint(
+            'user_id',
+            'episode_id',
+            name='uq_user_tv_episodes_user_id_episode_id',
+        ),
+    )
 
     episode_id = Column(Integer, ForeignKey('tv_episodes.pk'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.pk'), nullable=False)
@@ -259,7 +287,7 @@ class DbVideoGame(DBBaseModel):
 
 class DbUserVideoGame(DBBaseModel):
     __tablename__ = 'user_video_games'
-    __table_args__ = rank_is_1_based(__tablename__)
+    __table_args__ = ranked_tracker_table_args(__tablename__, 'game_id')
 
     game_id = Column(Integer, ForeignKey('video_games.pk'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.pk'), nullable=False)
@@ -324,7 +352,7 @@ class DbBook(DBBaseModel):
 
 class DbUserBook(DBBaseModel):
     __tablename__ = 'user_books'
-    __table_args__ = rank_is_1_based(__tablename__)
+    __table_args__ = ranked_tracker_table_args(__tablename__, 'book_id')
 
     book_id = Column(Integer, ForeignKey('books.pk'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.pk'), nullable=False)
