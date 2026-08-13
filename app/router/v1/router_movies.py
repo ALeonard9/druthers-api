@@ -3,7 +3,7 @@
 This module contains the API routes for Movies.
 """
 
-from typing import List
+from typing import List, Union
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, or_
@@ -25,6 +25,7 @@ from app.schemas.schemas_sandbox import (
     MovieUpdate,
     RankPlacement,
     RankingReorder,
+    TrackerListPage,
     UserMovieCreate,
     UserMovieResponse,
     UserMovieUpdate,
@@ -40,9 +41,9 @@ from app.services.watch_providers import DEFAULT_REGION, get_movie_providers
 from app.services.search_correction import correct_query
 from app.services.tracked_status import attach_tracked_status
 from app.services.tracker_query import (
-    apply_list_params,
-    guard_truncation,
+    list_tracker_items,
     list_params,
+    tracker_list_response,
 )
 
 router = APIRouter(prefix='/v1', tags=['Movies'])
@@ -254,7 +255,10 @@ def _close_rank_gap(db: Session, user_pk: int, vacated_rank) -> None:
     ).update({DbUserMovie.rank: DbUserMovie.rank - 1}, synchronize_session=False)
 
 
-@router.get('/users/me/movies', response_model=List[UserMovieResponse])
+@router.get(
+    '/users/me/movies',
+    response_model=Union[List[UserMovieResponse], TrackerListPage[UserMovieResponse]],
+)
 def get_user_movies(
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
@@ -265,8 +269,8 @@ def get_user_movies(
         .options(joinedload(DbUserMovie.movie))
         .filter(DbUserMovie.user_id == current_user[0].pk)
     )
-    rows = apply_list_params(query, DbUserMovie, params).all()
-    return guard_truncation(rows, params, 'Movie')
+    rows, total = list_tracker_items(query, DbUserMovie, DbMovie, params)
+    return tracker_list_response(rows, total, params, 'Movie')
 
 
 @router.get('/users/me/movies/{movie_id}', response_model=UserMovieResponse)
