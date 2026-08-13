@@ -1,3 +1,13 @@
+Implemented and committed issue #352 as `aa44472`.
+
+- Added dedupe migration, five unique constraints, and four partial rank indexes.
+- Updated SQLAlchemy models.
+- Added comprehensive migration/model tests.
+- Full suite: `890 passed, 17 warnings`.
+- Pre-commit, Black, pylint, and graph refresh passed.
+- No push or PR created.
+
+[WORKER_REPORT.md](/Users/adam/dev/.worktrees/druthers-api/352/WORKER_REPORT.md) contains demo instructions and flags production-copy verification for the orchestrator. It remains uncommitted; it was already tracked on `origin/main`, so Git shows it as modified rather than untracked.
 Implemented and committed the multi-stage Docker build.
 
 - Commit: `042f864 chore: convert api dockerfile to a multi-stage build`
