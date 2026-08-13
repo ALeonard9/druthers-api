@@ -8,5 +8,5 @@ pytest-testmon==2.2.0  # pre-push: run only tests affected by changes
 pytest-xdist==3.8.0
 Faker==40.36.0
 httpx==0.28.1
-coverage==7.15.3
+coverage==7.15.4
 python-dateutil==2.9.0.post0
