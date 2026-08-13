@@ -8,3 +8,23 @@ Implemented and committed issue #352 as `aa44472`.
 - No push or PR created.
 
 [WORKER_REPORT.md](/Users/adam/dev/.worktrees/druthers-api/352/WORKER_REPORT.md) contains demo instructions and flags production-copy verification for the orchestrator. It remains uncommitted; it was already tracked on `origin/main`, so Git shows it as modified rather than untracked.
+Implemented and committed the multi-stage Docker build.
+
+- Commit: `042f864 chore: convert api dockerfile to a multi-stage build`
+- Runtime keeps only built wheels, app code, and `libpq`; builder retains gcc/Rust/Cargo/PostgreSQL headers.
+- Healthcheck now targets `/health`.
+- Added Dockerfile regression tests.
+- `pytest -q`: `874 passed, 17 warnings`.
+
+`WORKER_REPORT.md` is updated but not committed. Docker boot and image-size verification were not run per fleet-worker boundaries; demo steps are in the report.
+Implemented and committed the rate-limiter fix.
+
+- Commit: `80283c0 fix: secure rate limiter xff parsing and evict stale keys`
+- XFF parsing now uses Cloud Run’s rightmost hop.
+- Expired rate-limit buckets are evicted periodically.
+- Added forged-XFF and stale-key eviction tests.
+- Verified: `874 passed, 17 warnings`.
+
+`WORKER_REPORT.md` is left uncommitted in the worktree. It was already tracked from prior worktree state, so it appears as a local modification rather than untracked; it is not part of the commit. No push or PR created.
+
+Graphify refresh was attempted but sandbox permissions blocked its rebuild.
