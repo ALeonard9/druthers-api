@@ -26,12 +26,22 @@ SEARCH_WINDOW_SECONDS = 60
 CATALOG_WINDOW_SECONDS = 86400
 FRIEND_WINDOW_SECONDS = 3600
 FOLLOW_WINDOW_SECONDS = 3600
+EVICTION_INTERVAL_SECONDS = 60
+
+
+class _EvictionState:
+    def __init__(self):
+        self.last_eviction = 0.0
+
+
+_eviction_state = _EvictionState()
 
 
 def reset() -> None:
     """Clear all recorded events (tests only)."""
     with _lock:
         _events.clear()
+        _eviction_state.last_eviction = 0.0
 
 
 def _enforced() -> bool:
@@ -44,17 +54,43 @@ def _enforced() -> bool:
 def client_ip(request: Request) -> str:
     """
     Best-effort caller IP. Behind Cloud Run/Cloudflare the connecting peer is
-    the proxy, so prefer the first X-Forwarded-For hop.
+    the proxy. Cloud Run appends the connecting client's IP after any
+    client-supplied X-Forwarded-For hops, so use the rightmost value.
     """
     forwarded = request.headers.get('x-forwarded-for')
     if forwarded:
-        return forwarded.split(',')[0].strip()
+        return forwarded.rsplit(',', 1)[-1].strip()
     return request.client.host if request.client else 'unknown'
+
+
+def _window_for_key(key: str) -> int:
+    if key.startswith(('auth:', 'refresh:')):
+        return AUTH_WINDOW_SECONDS
+    if key.startswith('search:'):
+        return SEARCH_WINDOW_SECONDS
+    if key.startswith('catalog:'):
+        return CATALOG_WINDOW_SECONDS
+    if key.startswith(('friend:', 'follow:')):
+        return FRIEND_WINDOW_SECONDS
+    raise ValueError(f'Unknown rate-limit key: {key}')
+
+
+def _evict_expired_events(now: float) -> None:
+    if now - _eviction_state.last_eviction < EVICTION_INTERVAL_SECONDS:
+        return
+    for key, events in list(_events.items()):
+        cutoff = now - _window_for_key(key)
+        while events and events[0] <= cutoff:
+            events.popleft()
+        if not events:
+            del _events[key]
+    _eviction_state.last_eviction = now
 
 
 def _allow(key: str, limit: int, window_seconds: int) -> bool:
     now = time.monotonic()
     with _lock:
+        _evict_expired_events(now)
         events = _events[key]
         while events and events[0] <= now - window_seconds:
             events.popleft()
