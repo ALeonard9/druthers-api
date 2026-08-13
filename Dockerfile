@@ -1,6 +1,6 @@
 # Build dependency wheels separately so compilers and build headers do not
 # become part of the production image.
-FROM python:3.14.6-alpine AS builder
+FROM python:3.15.0rc1-alpine AS builder
 
 WORKDIR /build
 
@@ -19,7 +19,7 @@ RUN apk add --no-cache \
 
 # Keep only the application, its dependency wheels, and the runtime PostgreSQL
 # library in the final image.
-FROM python:3.14.6-alpine AS runtime
+FROM python:3.15.0rc1-alpine AS runtime
 
 WORKDIR /app
 
