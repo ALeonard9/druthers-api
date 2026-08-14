@@ -261,7 +261,7 @@ def test_goodreads_import_enriches_isbnless_rows_by_title_and_author(
     assert gatsby['isbn'] == '9780743273565'
     assert gatsby['poster_url'] == 'https://covers.openlibrary.org/b/id/7222246-L.jpg'
     assert gatsby['page_count'] == 180
-    mock_search.assert_called_once_with('The Great Gatsby F. Scott Fitzgerald')
+    mock_search.assert_called_once_with('The Great Gatsby Wrong Author')
     assert mock_detail.call_args_list[1].args == ('9780743273565',)
 
 
