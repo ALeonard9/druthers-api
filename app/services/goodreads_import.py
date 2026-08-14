@@ -16,14 +16,20 @@ Import/Export) and maps each row onto the Books domain:
 
 import csv
 import io
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
+from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.models_sandbox import DbBook, DbUserBook
-from app.services.book_search import apply_detail_to_book, get_book_detail
+from app.services.book_search import (
+    apply_detail_to_book,
+    get_book_detail,
+    search_books,
+)
 from app.services.tracker_rules import utc_now
 
 
@@ -103,6 +109,50 @@ def _has_placed_books(db: Session, user_pk: int) -> bool:
     )
 
 
+def _catalog_key(value: str | None) -> str:
+    return re.sub(r'[^a-z0-9]+', ' ', (value or '').casefold()).strip()
+
+
+def _matching_search_result(title: str, author: str | None) -> dict | None:
+    """Find the deterministic best Open Library hit for a Goodreads row."""
+    try:
+        results = search_books(' '.join(part for part in (title, author) if part))
+    except HTTPException:
+        return None
+
+    title_key = _catalog_key(title)
+    author_key = _catalog_key(author)
+    title_matches = [
+        result for result in results if _catalog_key(result.get('title')) == title_key
+    ]
+    if author_key:
+        author_matches = [
+            result
+            for result in title_matches
+            if author_key in _catalog_key(result.get('authors'))
+        ]
+        if author_matches:
+            return author_matches[0]
+    return title_matches[0] if title_matches else None
+
+
+def _import_detail(title: str, author: str | None, isbn: str | None) -> dict | None:
+    """Resolve an ISBN first, then use the normal title+author catalog search."""
+    detail = get_book_detail(isbn)
+    if detail:
+        return detail
+
+    result = _matching_search_result(title, author)
+    if result is None:
+        return None
+    detail = get_book_detail(result.get('isbn'))
+    if detail:
+        return detail
+    # A search result still supplies normal catalog fields such as cover and
+    # author. Keep the Goodreads ISBN when full detail is unavailable.
+    return {key: value for key, value in result.items() if key != 'isbn'}
+
+
 def import_goodreads_csv(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     db: Session, user_pk: int, content: str
 ) -> ImportReport:
@@ -144,7 +194,7 @@ def import_goodreads_csv(  # pylint: disable=too-many-locals,too-many-branches,t
                 or _int_or_none(row.get('Year Published')),
                 page_count=_int_or_none(row.get('Number of Pages')),
             )
-            detail = get_book_detail(isbn)
+            detail = _import_detail(title, author, isbn)
             if detail:
                 apply_detail_to_book(book, detail)
             db.add(book)

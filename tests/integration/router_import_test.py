@@ -33,9 +33,10 @@ def _upload(test_client: TestClient, token: str, content: str = CSV):
     )
 
 
+@patch('app.services.goodreads_import.search_books', return_value=[])
 @patch('app.services.goodreads_import.get_book_detail', return_value=None)
 def test_goodreads_import_creates_books_and_trackers(
-    mock_detail, test_client: TestClient
+    mock_detail, _mock_search, test_client: TestClient
 ):
     token = test_client.first_user.token
     response = _upload(test_client, token)
@@ -63,9 +64,10 @@ def test_goodreads_import_creates_books_and_trackers(
     assert mock_detail.call_count == 2
 
 
+@patch('app.services.goodreads_import.search_books', return_value=[])
 @patch('app.services.goodreads_import.get_book_detail')
 def test_goodreads_import_enriches_new_catalog_books(
-    mock_detail, test_client: TestClient
+    mock_detail, _mock_search, test_client: TestClient
 ):
     mock_detail.return_value = {
         'title': 'Dune',
@@ -96,9 +98,10 @@ def test_goodreads_import_enriches_new_catalog_books(
     assert detail['page_count'] == 604
 
 
+@patch('app.services.goodreads_import.search_books', return_value=[])
 @patch('app.services.goodreads_import.get_book_detail', return_value=None)
 def test_goodreads_import_keeps_csv_fields_when_provider_misses(
-    mock_detail, test_client: TestClient
+    mock_detail, _mock_search, test_client: TestClient
 ):
     _upload(test_client, test_client.first_user.token)
     books = test_client.get(
@@ -112,8 +115,11 @@ def test_goodreads_import_keeps_csv_fields_when_provider_misses(
     assert mock_detail.call_count == 2
 
 
+@patch('app.services.goodreads_import.search_books', return_value=[])
 @patch('app.services.goodreads_import.get_book_detail', return_value=None)
-def test_goodreads_import_is_idempotent(mock_detail, test_client: TestClient):
+def test_goodreads_import_is_idempotent(
+    mock_detail, _mock_search, test_client: TestClient
+):
     token = test_client.first_user.token
     _upload(test_client, token)
     body = _upload(test_client, token).json()
@@ -129,9 +135,10 @@ def test_goodreads_import_is_idempotent(mock_detail, test_client: TestClient):
     assert mock_detail.call_count == 2
 
 
+@patch('app.services.goodreads_import.search_books', return_value=[])
 @patch('app.services.goodreads_import.get_book_detail', return_value=None)
 def test_goodreads_import_promotes_but_never_demotes(
-    _mock_detail, test_client: TestClient
+    _mock_detail, _mock_search, test_client: TestClient
 ):
     token = test_client.first_user.token
     _upload(test_client, token)
@@ -146,9 +153,10 @@ def test_goodreads_import_promotes_but_never_demotes(
     assert piranesi['rank'] is None
 
 
+@patch('app.services.goodreads_import.search_books', return_value=[])
 @patch('app.services.goodreads_import.get_book_detail', return_value=None)
 def test_goodreads_import_leaves_all_read_rows_after_the_first_unplaced(
-    _mock_detail, test_client: TestClient
+    _mock_detail, _mock_search, test_client: TestClient
 ):
     content = (
         HEADER
@@ -170,9 +178,10 @@ def test_goodreads_import_leaves_all_read_rows_after_the_first_unplaced(
     ]
 
 
+@patch('app.services.goodreads_import.search_books', return_value=[])
 @patch('app.services.goodreads_import.get_book_detail', return_value=None)
 def test_goodreads_import_into_populated_rankings_leaves_read_book_unplaced(
-    _mock_detail, test_client: TestClient
+    _mock_detail, _mock_search, test_client: TestClient
 ):
     headers = _auth(test_client.first_user.token)
     book = test_client.post(
@@ -191,10 +200,11 @@ def test_goodreads_import_into_populated_rankings_leaves_read_book_unplaced(
     assert body['unplaced_read_book_ids'] == [dune['book']['id']]
 
 
+@patch('app.services.goodreads_import.search_books', return_value=[])
 @patch('app.services.goodreads_import.get_book_detail', return_value=None)
 @patch('app.services.goodreads_import.utc_now')
 def test_goodreads_import_defaults_missing_read_date_to_import_day(
-    mock_now, _mock_detail, test_client: TestClient
+    mock_now, _mock_detail, _mock_search, test_client: TestClient
 ):
     mock_now.return_value = datetime(2026, 8, 14, 15, tzinfo=timezone.utc)
     content = HEADER + 'Undated,Author,="",="9780000000001",0,100,2020,2020,read,,\n'
@@ -203,6 +213,100 @@ def test_goodreads_import_defaults_missing_read_date_to_import_day(
         '/v1/users/me/books', headers=_auth(test_client.first_user.token)
     ).json()
     assert books[0]['completed_at'] == '2026-08-14'
+
+
+@patch('app.services.goodreads_import.get_book_detail')
+@patch('app.services.goodreads_import.search_books')
+def test_goodreads_import_enriches_isbnless_rows_by_title_and_author(
+    mock_search, mock_detail, test_client: TestClient
+):
+    mock_search.return_value = [
+        {
+            'title': 'The Great Gatsby',
+            'authors': 'F. Scott Fitzgerald',
+            'isbn': '9780743273565',
+            'year': '1925',
+            'poster_url': 'https://covers.openlibrary.org/b/id/7222246-L.jpg',
+        },
+        {
+            'title': 'The Great Gatsby',
+            'authors': 'Some Other Author',
+            'isbn': '9780000000000',
+            'year': '2000',
+            'poster_url': 'https://covers.openlibrary.org/b/id/1-L.jpg',
+        },
+    ]
+    mock_detail.side_effect = [
+        None,
+        {
+            'title': 'The Great Gatsby',
+            'authors': 'F. Scott Fitzgerald',
+            'isbn': '9780743273565',
+            'year': 1925,
+            'page_count': 180,
+            'poster_url': 'https://covers.openlibrary.org/b/id/7222246-L.jpg',
+        },
+    ]
+    content = (
+        HEADER + 'The Great Gatsby,F. Scott Fitzgerald,="","",0,218,2004,1925,read,,\n'
+    )
+
+    response = _upload(test_client, test_client.first_user.token, content)
+
+    assert response.status_code == 200
+    books = test_client.get(
+        '/v1/users/me/books', headers=_auth(test_client.first_user.token)
+    ).json()
+    gatsby = books[0]['book']
+    assert gatsby['title'] == 'The Great Gatsby'
+    assert gatsby['authors'] == 'F. Scott Fitzgerald'
+    assert gatsby['isbn'] == '9780743273565'
+    assert gatsby['poster_url'] == 'https://covers.openlibrary.org/b/id/7222246-L.jpg'
+    assert gatsby['page_count'] == 180
+    mock_search.assert_called_once_with('The Great Gatsby F. Scott Fitzgerald')
+    assert mock_detail.call_args_list[1].args == ('9780743273565',)
+
+
+@patch('app.services.goodreads_import.get_book_detail')
+@patch('app.services.goodreads_import.search_books')
+def test_goodreads_import_retries_an_unresolved_isbn_by_title_and_author(
+    mock_search, mock_detail, test_client: TestClient
+):
+    mock_search.return_value = [
+        {
+            'title': 'The Catcher in the Rye',
+            'authors': 'J. D. Salinger',
+            'isbn': '9780316769488',
+            'year': '1951',
+            'poster_url': 'https://covers.openlibrary.org/b/id/8231856-L.jpg',
+        }
+    ]
+    mock_detail.side_effect = [
+        None,
+        {
+            'title': 'The Catcher in the Rye',
+            'authors': 'J. D. Salinger',
+            'isbn': '9780316769488',
+            'year': 1951,
+            'poster_url': 'https://covers.openlibrary.org/b/id/8231856-L.jpg',
+        },
+    ]
+    content = (
+        HEADER
+        + 'The Catcher in the Rye,J. D. Salinger,="","9780000000000",0,234,2014,1951,read,,\n'
+    )
+
+    _upload(test_client, test_client.first_user.token, content)
+
+    books = test_client.get(
+        '/v1/users/me/books', headers=_auth(test_client.first_user.token)
+    ).json()
+    catcher = books[0]['book']
+    assert catcher['isbn'] == '9780316769488'
+    assert catcher['poster_url'] == 'https://covers.openlibrary.org/b/id/8231856-L.jpg'
+    mock_search.assert_called_once_with('The Catcher in the Rye J. D. Salinger')
+    assert mock_detail.call_args_list[0].args == ('9780000000000',)
+    assert mock_detail.call_args_list[1].args == ('9780316769488',)
 
 
 def test_goodreads_import_rejects_non_export(test_client: TestClient):
