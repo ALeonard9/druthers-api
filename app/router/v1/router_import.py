@@ -47,5 +47,6 @@ async def import_goodreads(
         'books_matched': report.books_matched,
         'trackers_created': report.trackers_created,
         'trackers_updated': report.trackers_updated,
+        'unplaced_read_book_ids': report.unplaced_read_book_ids,
         'skipped': report.skipped,
     }

@@ -4,24 +4,33 @@ Goodreads CSV import.
 Parses the standard Goodreads library export (goodreads.com → My Books →
 Import/Export) and maps each row onto the Books domain:
 
-- ``Exclusive Shelf`` ``read`` → on the rankings list (unplaced, ready to
-  rank); ``to-read``/``currently-reading`` → watchlist.
+- ``Exclusive Shelf`` ``read`` → on the rankings list; the first imported
+  read book is placed at #1 when the user has no placed books.
+  ``to-read``/``currently-reading`` → watchlist.
 - Catalog matching is by ISBN first (Goodreads wraps them in ``="…"``), then
-  case-insensitive title+author; unmatched rows create a catalog entry from
-  the CSV itself — no external API calls, so imports are fast and
-  deterministic.
+  case-insensitive title+author; unmatched rows use the normal Open Library
+  enrichment path, with the CSV fields as a fallback when it has no result.
 - Idempotent: re-uploading the same file updates existing trackers instead
   of duplicating, and never overwrites notes you've written since.
 """
 
 import csv
 import io
+import re
 from dataclasses import dataclass, field
+from datetime import date, datetime
 
+from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.models_sandbox import DbBook, DbUserBook
+from app.services.book_search import (
+    apply_detail_to_book,
+    get_book_detail,
+    search_books,
+)
+from app.services.tracker_rules import utc_now
 
 
 @dataclass
@@ -32,6 +41,7 @@ class ImportReport:
     books_matched: int = 0
     trackers_created: int = 0
     trackers_updated: int = 0
+    unplaced_read_book_ids: list[str] = field(default_factory=list)
     skipped: list = field(default_factory=list)
 
 
@@ -62,6 +72,19 @@ def _notes(row: dict) -> str | None:
     return '\n\n'.join(parts) or None
 
 
+def _completed_at(row: dict) -> date | None:
+    """Parse Goodreads' Date Read when it is a usable calendar date."""
+    raw = (row.get('Date Read') or '').strip()
+    if not raw:
+        return None
+    for pattern in ('%Y/%m/%d', '%Y-%m-%d', '%m/%d/%Y'):
+        try:
+            return datetime.strptime(raw, pattern).date()
+        except ValueError:
+            pass
+    return None
+
+
 def _find_book(db: Session, isbn: str | None, title: str, author: str | None):
     if isbn:
         book = db.query(DbBook).filter(DbBook.isbn == isbn).first()
@@ -73,7 +96,70 @@ def _find_book(db: Session, isbn: str | None, title: str, author: str | None):
     return query.first()
 
 
-def import_goodreads_csv(  # pylint: disable=too-many-locals
+def _has_placed_books(db: Session, user_pk: int) -> bool:
+    return (
+        db.query(DbUserBook)
+        .filter(
+            DbUserBook.user_id == user_pk,
+            DbUserBook.on_rankings.is_(True),
+            DbUserBook.rank.isnot(None),
+        )
+        .first()
+        is not None
+    )
+
+
+def _catalog_key(value: str | None) -> str:
+    return re.sub(r'[^a-z0-9]+', ' ', (value or '').casefold()).strip()
+
+
+def _strip_series(title: str) -> str:
+    """Remove a terminal parenthetical series qualifier like '(Harry Potter, #1)'."""
+    return re.sub(r'\s*\(.*?\)\s*$', '', title)
+
+
+def _matching_search_result(title: str, author: str | None) -> dict | None:
+    """Find the deterministic best Open Library hit for a Goodreads row."""
+    clean_title = _strip_series(title)
+    try:
+        results = search_books(' '.join(part for part in (clean_title, author) if part))
+    except HTTPException:
+        return None
+
+    title_key = _catalog_key(clean_title)
+    author_key = _catalog_key(author)
+    title_matches = [
+        result for result in results if _catalog_key(result.get('title')) == title_key
+    ]
+    if author_key:
+        author_matches = [
+            result
+            for result in title_matches
+            if author_key in _catalog_key(result.get('authors'))
+        ]
+        if author_matches:
+            return author_matches[0]
+    return title_matches[0] if title_matches else None
+
+
+def _import_detail(title: str, author: str | None, isbn: str | None) -> dict | None:
+    """Resolve an ISBN first, then use the normal title+author catalog search."""
+    detail = get_book_detail(isbn)
+    if detail:
+        return detail
+
+    result = _matching_search_result(title, author)
+    if result is None:
+        return None
+    detail = get_book_detail(result.get('isbn'))
+    if detail:
+        return detail
+    # A search result still supplies normal catalog fields such as cover and
+    # author. Keep the Goodreads ISBN when full detail is unavailable.
+    return {key: value for key, value in result.items() if key != 'isbn'}
+
+
+def import_goodreads_csv(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     db: Session, user_pk: int, content: str
 ) -> ImportReport:
     """
@@ -87,6 +173,7 @@ def import_goodreads_csv(  # pylint: disable=too-many-locals
         )
         return report
 
+    has_placed_books = _has_placed_books(db, user_pk)
     for line_no, row in enumerate(reader, start=2):
         title = (row.get('Title') or '').strip()
         if not title:
@@ -113,6 +200,9 @@ def import_goodreads_csv(  # pylint: disable=too-many-locals
                 or _int_or_none(row.get('Year Published')),
                 page_count=_int_or_none(row.get('Number of Pages')),
             )
+            detail = _import_detail(title, author, isbn)
+            if detail:
+                apply_detail_to_book(book, detail, overwrite_title=True)
             db.add(book)
             db.flush()
             report.books_created += 1
@@ -125,16 +215,23 @@ def import_goodreads_csv(  # pylint: disable=too-many-locals
             .first()
         )
         read = shelf == 'read'
+        completed_at = _completed_at(row)
         if tracker is None:
+            rank = 1 if read and not has_placed_books else None
             db.add(
                 DbUserBook(
                     user_id=user_pk,
                     book_id=book.pk,
                     on_rankings=read,
                     on_watchlist=not read,
+                    rank=rank,
+                    ranked_at=utc_now() if rank else None,
                     notes=_notes(row),
+                    completed_at=(completed_at or utc_now().date()) if read else None,
                 )
             )
+            if rank:
+                has_placed_books = True
             report.trackers_created += 1
         else:
             # Promote watchlist → read if Goodreads says so; never demote a
@@ -143,6 +240,12 @@ def import_goodreads_csv(  # pylint: disable=too-many-locals
             if read and not tracker.on_rankings:
                 tracker.on_rankings = True
                 tracker.on_watchlist = False
+                if not has_placed_books:
+                    tracker.rank = 1
+                    tracker.ranked_at = utc_now()
+                    has_placed_books = True
+                if tracker.completed_at is None:
+                    tracker.completed_at = completed_at or utc_now().date()
                 changed = True
             if not tracker.notes:
                 notes = _notes(row)
@@ -152,5 +255,17 @@ def import_goodreads_csv(  # pylint: disable=too-many-locals
             if changed:
                 report.trackers_updated += 1
 
+    db.flush()
+    unplaced = (
+        db.query(DbUserBook)
+        .filter(
+            DbUserBook.user_id == user_pk,
+            DbUserBook.on_rankings.is_(True),
+            DbUserBook.rank.is_(None),
+        )
+        .order_by(DbUserBook.pk)
+        .all()
+    )
+    report.unplaced_read_book_ids = [tracker.book.id for tracker in unplaced]
     db.commit()
     return report
