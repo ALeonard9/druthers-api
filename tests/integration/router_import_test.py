@@ -364,3 +364,14 @@ def test_goodreads_import_requires_auth(test_client: TestClient):
         files={'file': ('x.csv', io.BytesIO(b'Title\n'), 'text/csv')},
     )
     assert response.status_code == 401
+
+
+def test_goodreads_import_rejects_oversized_file(test_client: TestClient):
+    token = test_client.first_user.token
+    content = b'x' * (5 * 1024 * 1024 + 1)
+    response = test_client.post(
+        '/v1/users/me/import/goodreads',
+        headers=_auth(token),
+        files={'file': ('huge.csv', io.BytesIO(content), 'text/csv')},
+    )
+    assert response.status_code == 413

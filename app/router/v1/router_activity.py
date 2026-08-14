@@ -22,12 +22,16 @@ from app.auth.oauth2 import get_current_user
 from app.db.database import get_db
 from app.db.models import DbFollow, DbFriendship, DbUser
 from app.db.models_sandbox import (
+    DbBook,
+    DbMovie,
+    DbTVShow,
     DbTVEpisode,
     DbUserBook,
     DbUserMovie,
     DbUserTVEpisode,
     DbUserTVShow,
     DbUserVideoGame,
+    DbVideoGame,
 )
 from app.schemas.schemas_sandbox import (
     ActivityActor,
@@ -517,105 +521,111 @@ def get_social_activity(
 
 
 # --- "I'm bored" recommendation ---
-def _movie_pool(db: Session, user_pk: int) -> List[BoredItem]:
-    trackers = (
-        db.query(DbUserMovie)
-        .options(joinedload(DbUserMovie.movie))
-        .filter(DbUserMovie.user_id == user_pk, DbUserMovie.on_watchlist.is_(True))
-        .all()
-    )
-    return [
-        BoredItem(
-            category='movie',
-            title=t.movie.title,
-            entity_id=t.movie.id,
-            poster_url=t.movie.poster_url,
-        )
-        for t in trackers
-    ]
-
-
-def _tv_show_pool(db: Session, user_pk: int) -> List[BoredItem]:
-    trackers = (
-        db.query(DbUserTVShow)
-        .options(joinedload(DbUserTVShow.tv_show))
-        .filter(DbUserTVShow.user_id == user_pk, DbUserTVShow.on_watchlist.is_(True))
-        .all()
-    )
-    return [
-        BoredItem(
-            category='tv_show',
-            title=t.tv_show.title,
-            entity_id=t.tv_show.id,
-            poster_url=t.tv_show.poster_url,
-        )
-        for t in trackers
-    ]
-
-
-def _game_pool(db: Session, user_pk: int) -> List[BoredItem]:
-    trackers = (
-        db.query(DbUserVideoGame)
-        .options(joinedload(DbUserVideoGame.game))
-        .filter(
-            DbUserVideoGame.user_id == user_pk, DbUserVideoGame.on_watchlist.is_(True)
-        )
-        .all()
-    )
-    return [
-        BoredItem(
-            category='game',
-            title=t.game.title,
-            entity_id=t.game.id,
-            poster_url=t.game.poster_url,
-        )
-        for t in trackers
-    ]
-
-
-def _book_pool(db: Session, user_pk: int) -> List[BoredItem]:
-    trackers = (
-        db.query(DbUserBook)
-        .options(joinedload(DbUserBook.book))
-        .filter(DbUserBook.user_id == user_pk, DbUserBook.on_watchlist.is_(True))
-        .all()
-    )
-    return [
-        BoredItem(
-            category='book',
-            title=t.book.title,
-            subtitle=t.book.authors,
-            entity_id=t.book.id,
-            poster_url=t.book.poster_url,
-        )
-        for t in trackers
-    ]
-
-
 @router.get('/users/me/bored', response_model=BoredResponse)
 def get_bored_pick(
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
     exclude: Optional[str] = None,
 ):
+    # pylint: disable=too-many-locals
     """
     Randomly pick one item off the user's watchlists/bucket lists, across
     every domain. ``exclude`` (comma-separated entity ids) lets the client
     re-roll without repeating the item(s) it's already shown.
     """
     user_pk = current_user[0].pk
-    pool = (
-        _movie_pool(db, user_pk)
-        + _tv_show_pool(db, user_pk)
-        + _game_pool(db, user_pk)
-        + _book_pool(db, user_pk)
-    )
-    if not pool:
+    excluded_ids = set(exclude.split(',')) if exclude else set()
+
+    sources = [
+        (DbUserMovie, DbMovie, DbUserMovie.movie, 'movie'),
+        (DbUserTVShow, DbTVShow, DbUserTVShow.tv_show, 'tv_show'),
+        (DbUserVideoGame, DbVideoGame, DbUserVideoGame.game, 'game'),
+        (DbUserBook, DbBook, DbUserBook.book, 'book'),
+    ]
+
+    def _get_counts(exclude_set):
+        counts = []
+        for model, entity_model, _, _ in sources:
+            q = (
+                db.query(model)
+                .join(entity_model)
+                .filter(model.user_id == user_pk, model.on_watchlist.is_(True))
+            )
+            if exclude_set:
+                q = q.filter(entity_model.id.notin_(exclude_set))
+            counts.append(q.count())
+        return counts
+
+    counts = _get_counts(excluded_ids)
+    total_pool = sum(counts)
+
+    if total_pool == 0 and excluded_ids:
+        counts = _get_counts(set())
+        total_pool = sum(counts)
+        excluded_ids = set()
+
+    if total_pool == 0:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='Nothing on your to-be-consumed lists yet',
         )
-    excluded_ids = set(exclude.split(',')) if exclude else set()
-    candidates = [item for item in pool if item.entity_id not in excluded_ids] or pool
-    pick = random.choice(candidates)
-    return BoredResponse(pick=pick, pool_size=len(pool))
+
+    pick_idx = random.randint(0, total_pool - 1)
+
+    pick = None
+    running_total = 0
+    for count, (model, entity_model, entity_rel, category) in zip(counts, sources):
+        if running_total <= pick_idx < running_total + count:
+            offset = pick_idx - running_total
+            q = (
+                db.query(model)
+                .join(entity_model)
+                .options(joinedload(entity_rel))
+                .filter(model.user_id == user_pk, model.on_watchlist.is_(True))
+            )
+            if excluded_ids:
+                q = q.filter(entity_model.id.notin_(excluded_ids))
+
+            t = q.order_by(model.pk).offset(offset).first()
+            if not t:
+                continue
+
+            if category == 'movie':
+                pick = BoredItem(
+                    category=category,
+                    title=t.movie.title,
+                    entity_id=t.movie.id,
+                    poster_url=t.movie.poster_url,
+                )
+            elif category == 'tv_show':
+                pick = BoredItem(
+                    category=category,
+                    title=t.tv_show.title,
+                    entity_id=t.tv_show.id,
+                    poster_url=t.tv_show.poster_url,
+                )
+            elif category == 'game':
+                pick = BoredItem(
+                    category=category,
+                    title=t.game.title,
+                    entity_id=t.game.id,
+                    poster_url=t.game.poster_url,
+                )
+            elif category == 'book':
+                pick = BoredItem(
+                    category=category,
+                    title=t.book.title,
+                    subtitle=t.book.authors,
+                    entity_id=t.book.id,
+                    poster_url=t.book.poster_url,
+                )
+            break
+        running_total += count
+
+    if not pick:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Could not fetch a bored pick',
+        )
+
+    return BoredResponse(pick=pick, pool_size=total_pool)

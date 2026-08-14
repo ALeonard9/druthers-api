@@ -4,7 +4,7 @@ Data import: bring your library in from other services.
 Currently: Goodreads CSV (books). IMDb CSV (movies/TV) is next.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, status, Request
 from sqlalchemy.orm import Session
 
 from app.auth.oauth2 import get_current_user
@@ -19,6 +19,7 @@ MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # a Goodreads export is tens of KB
 @router.post('/goodreads')
 async def import_goodreads(
     file: UploadFile,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
 ):
@@ -27,6 +28,13 @@ async def import_goodreads(
     the same file updates rather than duplicates. Returns counts plus any
     skipped rows with reasons (nothing is dropped silently).
     """
+    content_length = request.headers.get('content-length')
+    if content_length and int(content_length) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail='File too large for a Goodreads export',
+        )
+
     raw = await file.read()
     if len(raw) > MAX_UPLOAD_BYTES:
         raise HTTPException(
