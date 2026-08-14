@@ -43,8 +43,7 @@ def test_goodreads_import_creates_books_and_trackers(
     body = response.json()
     assert body['books_created'] == 2
     assert body['trackers_created'] == 2
-    assert body['unplaced_rankings_count'] == 0
-    assert body['next_unplaced_book_id'] is None
+    assert body['unplaced_read_book_ids'] == []
     assert body['skipped'] == [{'row': 4, 'reason': 'Missing title'}]
 
     books = test_client.get('/v1/users/me/books', headers=_auth(token)).json()
@@ -165,8 +164,10 @@ def test_goodreads_import_leaves_all_read_rows_after_the_first_unplaced(
     assert by_title['First']['rank'] == 1
     assert by_title['Second']['rank'] is None
     assert by_title['Third']['rank'] is None
-    assert body['unplaced_rankings_count'] == 2
-    assert body['next_unplaced_book_id'] == by_title['Second']['book']['id']
+    assert body['unplaced_read_book_ids'] == [
+        by_title['Second']['book']['id'],
+        by_title['Third']['book']['id'],
+    ]
 
 
 @patch('app.services.goodreads_import.get_book_detail', return_value=None)
@@ -187,8 +188,7 @@ def test_goodreads_import_into_populated_rankings_leaves_read_book_unplaced(
     books = test_client.get('/v1/users/me/books', headers=headers).json()
     dune = next(book for book in books if book['book']['title'] == 'Dune')
     assert dune['rank'] is None
-    assert body['unplaced_rankings_count'] == 1
-    assert body['next_unplaced_book_id'] == dune['book']['id']
+    assert body['unplaced_read_book_ids'] == [dune['book']['id']]
 
 
 @patch('app.services.goodreads_import.get_book_detail', return_value=None)

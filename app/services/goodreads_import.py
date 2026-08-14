@@ -35,8 +35,7 @@ class ImportReport:
     books_matched: int = 0
     trackers_created: int = 0
     trackers_updated: int = 0
-    unplaced_rankings_count: int = 0
-    next_unplaced_book_id: str | None = None
+    unplaced_read_book_ids: list[str] = field(default_factory=list)
     skipped: list = field(default_factory=list)
 
 
@@ -211,8 +210,6 @@ def import_goodreads_csv(  # pylint: disable=too-many-locals,too-many-branches,t
         .order_by(DbUserBook.pk)
         .all()
     )
-    report.unplaced_rankings_count = len(unplaced)
-    if unplaced:
-        report.next_unplaced_book_id = unplaced[0].book.id
+    report.unplaced_read_book_ids = [tracker.book.id for tracker in unplaced]
     db.commit()
     return report
