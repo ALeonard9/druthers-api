@@ -297,11 +297,28 @@ def reorder_rankings(
 ):
     """Persist a new ranking order (drag-and-drop). Rank = position in the list."""
     user_pk = current_user[0].pk
+
+    movies = db.query(DbMovie).filter(DbMovie.id.in_(request.movie_ids)).all()
+    movie_pk_by_id = {m.id: m.pk for m in movies}
+
+    if movie_pk_by_id:
+        trackers = (
+            db.query(DbUserMovie)
+            .filter(
+                DbUserMovie.user_id == user_pk,
+                DbUserMovie.movie_id.in_(movie_pk_by_id.values()),
+            )
+            .all()
+        )
+        tracker_by_movie_pk = {t.movie_id: t for t in trackers}
+    else:
+        tracker_by_movie_pk = {}
+
     for position, movie_id in enumerate(request.movie_ids, start=1):
-        movie = db.query(DbMovie).filter(DbMovie.id == movie_id).first()
-        if not movie:
+        movie_pk = movie_pk_by_id.get(movie_id)
+        if not movie_pk:
             continue
-        tracker = _get_tracker(db, user_pk, movie.pk)
+        tracker = tracker_by_movie_pk.get(movie_pk)
         if tracker:
             if tracker.rank != position:
                 tracker.ranked_at = utc_now()

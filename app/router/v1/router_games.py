@@ -238,11 +238,28 @@ def reorder_rankings(
 ):
     """Persist a new ranking order (drag-and-drop). Rank = position in the list."""
     user_pk = current_user[0].pk
+
+    games = db.query(DbVideoGame).filter(DbVideoGame.id.in_(request.game_ids)).all()
+    game_pk_by_id = {g.id: g.pk for g in games}
+
+    if game_pk_by_id:
+        trackers = (
+            db.query(DbUserVideoGame)
+            .filter(
+                DbUserVideoGame.user_id == user_pk,
+                DbUserVideoGame.game_id.in_(game_pk_by_id.values()),
+            )
+            .all()
+        )
+        tracker_by_game_pk = {t.game_id: t for t in trackers}
+    else:
+        tracker_by_game_pk = {}
+
     for position, game_id in enumerate(request.game_ids, start=1):
-        game = db.query(DbVideoGame).filter(DbVideoGame.id == game_id).first()
-        if not game:
+        game_pk = game_pk_by_id.get(game_id)
+        if not game_pk:
             continue
-        tracker = _get_tracker(db, user_pk, game.pk)
+        tracker = tracker_by_game_pk.get(game_pk)
         if tracker:
             if tracker.rank != position:
                 tracker.ranked_at = utc_now()

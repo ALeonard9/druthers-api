@@ -239,11 +239,28 @@ def reorder_rankings(
 ):
     """Persist a new ranking order (drag-and-drop). Rank = position in the list."""
     user_pk = current_user[0].pk
+
+    books = db.query(DbBook).filter(DbBook.id.in_(request.book_ids)).all()
+    book_pk_by_id = {b.id: b.pk for b in books}
+
+    if book_pk_by_id:
+        trackers = (
+            db.query(DbUserBook)
+            .filter(
+                DbUserBook.user_id == user_pk,
+                DbUserBook.book_id.in_(book_pk_by_id.values()),
+            )
+            .all()
+        )
+        tracker_by_book_pk = {t.book_id: t for t in trackers}
+    else:
+        tracker_by_book_pk = {}
+
     for position, book_id in enumerate(request.book_ids, start=1):
-        book = db.query(DbBook).filter(DbBook.id == book_id).first()
-        if not book:
+        book_pk = book_pk_by_id.get(book_id)
+        if not book_pk:
             continue
-        tracker = _get_tracker(db, user_pk, book.pk)
+        tracker = tracker_by_book_pk.get(book_pk)
         if tracker:
             if tracker.rank != position:
                 tracker.ranked_at = utc_now()

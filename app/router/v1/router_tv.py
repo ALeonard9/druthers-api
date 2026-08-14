@@ -1,4 +1,4 @@
-# pylint: disable=missing-function-docstring, useless-return
+# pylint: disable=missing-function-docstring, useless-return, too-many-lines
 """
 This module contains the API routes for TV Shows and Episodes.
 
@@ -555,11 +555,28 @@ def reorder_rankings(
 ):
     """Persist a new ranking order (drag-and-drop). Rank = position in the list."""
     user_pk = current_user[0].pk
+
+    shows = db.query(DbTVShow).filter(DbTVShow.id.in_(request.show_ids)).all()
+    show_pk_by_id = {s.id: s.pk for s in shows}
+
+    if show_pk_by_id:
+        trackers = (
+            db.query(DbUserTVShow)
+            .filter(
+                DbUserTVShow.user_id == user_pk,
+                DbUserTVShow.tv_show_id.in_(show_pk_by_id.values()),
+            )
+            .all()
+        )
+        tracker_by_show_pk = {t.tv_show_id: t for t in trackers}
+    else:
+        tracker_by_show_pk = {}
+
     for position, show_id in enumerate(request.show_ids, start=1):
-        show = db.query(DbTVShow).filter(DbTVShow.id == show_id).first()
-        if not show:
+        show_pk = show_pk_by_id.get(show_id)
+        if not show_pk:
             continue
-        tracker = _get_tracker(db, user_pk, show.pk)
+        tracker = tracker_by_show_pk.get(show_pk)
         if tracker:
             if tracker.rank != position:
                 tracker.ranked_at = utc_now()
