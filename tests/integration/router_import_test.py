@@ -247,9 +247,7 @@ def test_goodreads_import_enriches_isbnless_rows_by_title_and_author(
             'poster_url': 'https://covers.openlibrary.org/b/id/7222246-L.jpg',
         },
     ]
-    content = (
-        HEADER + 'The Great Gatsby,F. Scott Fitzgerald,="","",0,218,2004,1925,read,,\n'
-    )
+    content = HEADER + 'The Great Gatsby,Wrong Author,="","",0,218,2004,2004,read,,\n'
 
     response = _upload(test_client, test_client.first_user.token, content)
 
@@ -345,7 +343,7 @@ def test_goodreads_import_strips_series_qualifier_from_title_for_search(
         '/v1/users/me/books', headers=_auth(test_client.first_user.token)
     ).json()
     hp = books[0]['book']
-    assert hp['title'] == 'Harry Potter and the Philosopher\'s Stone (Harry Potter, #1)'
+    assert hp['title'] == "Harry Potter and the Philosopher's Stone"
     assert hp['poster_url'] == 'https://covers.openlibrary.org/b/id/10521270-L.jpg'
     mock_search.assert_called_once_with(
         "Harry Potter and the Philosopher's Stone J.K. Rowling"

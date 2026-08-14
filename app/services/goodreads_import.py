@@ -202,7 +202,7 @@ def import_goodreads_csv(  # pylint: disable=too-many-locals,too-many-branches,t
             )
             detail = _import_detail(title, author, isbn)
             if detail:
-                apply_detail_to_book(book, detail)
+                apply_detail_to_book(book, detail, overwrite_title=True)
             db.add(book)
             db.flush()
             report.books_created += 1
