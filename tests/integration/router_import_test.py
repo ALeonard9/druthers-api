@@ -309,6 +309,49 @@ def test_goodreads_import_retries_an_unresolved_isbn_by_title_and_author(
     assert mock_detail.call_args_list[1].args == ('9780316769488',)
 
 
+@patch('app.services.goodreads_import.get_book_detail')
+@patch('app.services.goodreads_import.search_books')
+def test_goodreads_import_strips_series_qualifier_from_title_for_search(
+    mock_search, mock_detail, test_client: TestClient
+):
+    mock_search.return_value = [
+        {
+            'title': "Harry Potter and the Philosopher's Stone",
+            'authors': 'J.K. Rowling',
+            'isbn': '9780747532743',
+            'year': '1997',
+            'poster_url': 'https://covers.openlibrary.org/b/id/10521270-L.jpg',
+        }
+    ]
+    mock_detail.side_effect = [
+        None,
+        {
+            'title': "Harry Potter and the Philosopher's Stone",
+            'authors': 'J.K. Rowling',
+            'isbn': '9780747532743',
+            'year': 1997,
+            'poster_url': 'https://covers.openlibrary.org/b/id/10521270-L.jpg',
+        },
+    ]
+    content = (
+        HEADER
+        + '"Harry Potter and the Philosopher\'s Stone (Harry Potter, #1)",'
+        + 'J.K. Rowling,="","9780000000000",0,223,1997,1997,read,,\n'
+    )
+
+    _upload(test_client, test_client.first_user.token, content)
+
+    books = test_client.get(
+        '/v1/users/me/books', headers=_auth(test_client.first_user.token)
+    ).json()
+    hp = books[0]['book']
+    assert hp['title'] == 'Harry Potter and the Philosopher\'s Stone (Harry Potter, #1)'
+    assert hp['poster_url'] == 'https://covers.openlibrary.org/b/id/10521270-L.jpg'
+    mock_search.assert_called_once_with(
+        "Harry Potter and the Philosopher's Stone J.K. Rowling"
+    )
+
+
 def test_goodreads_import_rejects_non_export(test_client: TestClient):
     body = _upload(
         test_client, test_client.first_user.token, 'just,some,columns\n1,2,3\n'

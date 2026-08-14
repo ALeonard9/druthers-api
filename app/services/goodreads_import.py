@@ -113,14 +113,20 @@ def _catalog_key(value: str | None) -> str:
     return re.sub(r'[^a-z0-9]+', ' ', (value or '').casefold()).strip()
 
 
+def _strip_series(title: str) -> str:
+    """Remove a terminal parenthetical series qualifier like '(Harry Potter, #1)'."""
+    return re.sub(r'\s*\(.*?\)\s*$', '', title)
+
+
 def _matching_search_result(title: str, author: str | None) -> dict | None:
     """Find the deterministic best Open Library hit for a Goodreads row."""
+    clean_title = _strip_series(title)
     try:
-        results = search_books(' '.join(part for part in (title, author) if part))
+        results = search_books(' '.join(part for part in (clean_title, author) if part))
     except HTTPException:
         return None
 
-    title_key = _catalog_key(title)
+    title_key = _catalog_key(clean_title)
     author_key = _catalog_key(author)
     title_matches = [
         result for result in results if _catalog_key(result.get('title')) == title_key
