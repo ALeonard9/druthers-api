@@ -5,7 +5,7 @@ This module contains Pydantic schemas for Sandbox entities.
 # pylint: disable=missing-class-docstring
 
 from datetime import date, datetime
-from typing import Annotated, Generic, List, Optional, TypeVar
+from typing import Annotated, Generic, List, Literal, Optional, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -168,6 +168,44 @@ class UserMovieResponse(UserMovieBase):
     updated_at: datetime
     source_handle: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
+
+
+class MovieImportErrorResponse(BaseModel):
+    """One field-level template validation error."""
+
+    row: int
+    column: Optional[str] = None
+    message: str
+    value: Optional[str] = None
+
+
+class MovieImportRowResponse(BaseModel):
+    """Outcome for one row after a successful atomic import."""
+
+    row: int
+    status: Literal['imported', 'matched', 'skipped']
+    tmdb_id: int
+    movie_id: str
+    title: str
+    catalog_created: bool
+    message: str
+
+
+class MovieImportSummaryResponse(BaseModel):
+    imported: int = 0
+    matched: int = 0
+    skipped: int = 0
+
+
+class MovieImportResponse(BaseModel):
+    """Validation failure or per-row outcome report for a movie import."""
+
+    valid: bool
+    summary: MovieImportSummaryResponse = Field(
+        default_factory=MovieImportSummaryResponse
+    )
+    rows: List[MovieImportRowResponse] = Field(default_factory=list)
+    errors: List[MovieImportErrorResponse] = Field(default_factory=list)
 
 
 class RankingReorder(BaseModel):
