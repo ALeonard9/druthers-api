@@ -46,6 +46,7 @@ MOVIE_TEMPLATE_COLUMNS = (
 )
 MOVIE_TEMPLATE_HEADERS = tuple(column['name'] for column in MOVIE_TEMPLATE_COLUMNS)
 MAX_IMPORT_ROWS = 5000
+MAX_TMDB_DETAIL_LOOKUPS = 25
 MAX_XLSX_UNCOMPRESSED_BYTES = 25 * 1024 * 1024
 MAX_XLSX_ARCHIVE_FILES = 1000
 
@@ -172,7 +173,12 @@ def movie_template_xlsx() -> bytes:
             'file',
             'yes',
             f'at most {MAX_IMPORT_ROWS} movie rows',
-            'Every row is validated before any history is written.',
+            (
+                'Every row is validated before any history is written. '
+                f'At most {MAX_TMDB_DETAIL_LOOKUPS} rows may require a live TMDB '
+                'lookup; larger files must already match the local catalog or be '
+                'split into smaller uploads.'
+            ),
             '',
         )
     )
@@ -362,6 +368,7 @@ def validate_movie_import(  # pylint: disable=too-many-locals,too-many-branches,
         return _file_error('File contains no movie rows')
 
     candidates = []
+    rows_with_errors = set()
     seen_tmdb_ids = set()
     for row_number, row in raw_rows:
         row_error_count = len(result.errors)
@@ -392,6 +399,7 @@ def validate_movie_import(  # pylint: disable=too-many-locals,too-many-branches,
             )
 
         tmdb_id = _parse_tmdb_id(row.get('tmdb_id'))
+        duplicate_tmdb_id = tmdb_id is not None and tmdb_id in seen_tmdb_ids
         if tmdb_id is None:
             result.errors.append(
                 MovieImportError(
@@ -401,7 +409,7 @@ def validate_movie_import(  # pylint: disable=too-many-locals,too-many-branches,
                     _display_value(row.get('tmdb_id')),
                 )
             )
-        elif tmdb_id in seen_tmdb_ids:
+        elif duplicate_tmdb_id:
             result.errors.append(
                 MovieImportError(
                     row_number,
@@ -433,7 +441,19 @@ def validate_movie_import(  # pylint: disable=too-many-locals,too-many-branches,
                 )
             )
 
-        if len(result.errors) == row_error_count:
+        if len(result.errors) > row_error_count:
+            rows_with_errors.add(row_number)
+
+        # A bad watched date must not hide a title/year mismatch. Semantic
+        # validation only needs these three identifying fields, so keep the
+        # row checkable even when another primitive field is invalid.
+        if (
+            title
+            and len(title) <= 255
+            and release_year is not None
+            and tmdb_id is not None
+            and not duplicate_tmdb_id
+        ):
             candidates.append((row_number, title, release_year, tmdb_id, watched_date))
 
     tmdb_ids = [candidate[3] for candidate in candidates]
@@ -441,6 +461,29 @@ def validate_movie_import(  # pylint: disable=too-many-locals,too-many-branches,
         movie.tmdb: movie
         for movie in db.query(DbMovie).filter(DbMovie.tmdb.in_(tmdb_ids)).all()
     }
+    lookup_tmdb_ids = {
+        tmdb_id
+        for _, _, _, tmdb_id, _ in candidates
+        if (
+            (movie := catalog_by_tmdb.get(tmdb_id)) is None
+            or not movie.title
+            or _canonical_year(movie, None) is None
+        )
+    }
+    if len(lookup_tmdb_ids) > MAX_TMDB_DETAIL_LOOKUPS:
+        result.errors.append(
+            MovieImportError(
+                row=1,
+                column='file',
+                message=(
+                    f'Import requires {len(lookup_tmdb_ids)} live TMDB lookups; '
+                    f'the per-upload limit is {MAX_TMDB_DETAIL_LOOKUPS}. Split '
+                    'the file into smaller uploads.'
+                ),
+            )
+        )
+        return result
+
     for row_number, title, release_year, tmdb_id, watched_date in candidates:
         movie = catalog_by_tmdb.get(tmdb_id)
         detail = None
@@ -481,7 +524,7 @@ def validate_movie_import(  # pylint: disable=too-many-locals,too-many-branches,
                         str(release_year),
                     )
                 )
-        if len(result.errors) == row_error_count:
+        if len(result.errors) == row_error_count and row_number not in rows_with_errors:
             result.rows.append(
                 ValidatedMovieRow(
                     row=row_number,

@@ -7,7 +7,7 @@ Satisfies issue druthers-api#291.
 
 from datetime import datetime
 import os
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import pytest
 
 from app.db.models_sandbox import DbTVShow
@@ -84,3 +84,33 @@ def test_build_seed_fixtures_helpers(tmp_path):
 
     assert target_file.exists()
     assert 'Test Item' in target_file.read_text()
+
+
+@patch('app.migration.build_seed_fixtures.requests.get')
+def test_build_seed_fixtures_identifies_direct_provider_requests(mock_get):
+    response = Mock()
+    response.status_code = 404
+    response.json.return_value = {'isbn_13': ['9780441172719']}
+    mock_get.return_value = response
+
+    build_seed_fixtures._resolve_isbn('OL123M')
+    with patch.object(build_seed_fixtures, 'TV_TARGET', 1), patch.object(
+        build_seed_fixtures, '_write'
+    ):
+        build_seed_fixtures.build_tv_shows()
+    with patch.object(
+        build_seed_fixtures, '_BOOK_SUBJECTS', ('fiction',)
+    ), patch.object(build_seed_fixtures, 'BOOK_TARGET', 0), patch.object(
+        build_seed_fixtures, '_write'
+    ):
+        build_seed_fixtures.build_books()
+
+    assert mock_get.call_args_list[0].kwargs['headers'] == {
+        'User-Agent': 'druthers.io (Admin@druthers.io)'
+    }
+    assert mock_get.call_args_list[1].kwargs['headers'] == {
+        'User-Agent': 'druthers.io (Admin@druthers.io)'
+    }
+    assert mock_get.call_args_list[2].kwargs['headers'] == {
+        'User-Agent': 'druthers.io (Admin@druthers.io)'
+    }

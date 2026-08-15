@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from openpyxl import Workbook, load_workbook
 
 from app.db.models_sandbox import DbMovie, DbUserMovie
+from app.services.generic_movie_import import MAX_TMDB_DETAIL_LOOKUPS
 
 HEADER = (
     'Title,Author,ISBN,ISBN13,My Rating,Number of Pages,Year Published,'
@@ -517,6 +518,68 @@ def test_movie_import_rejects_every_row_without_partial_writes(
     ]
     assert test_client.test_db_session.query(DbMovie).count() == 0
     assert test_client.test_db_session.query(DbUserMovie).count() == 0
+
+
+@patch('app.services.generic_movie_import.get_movie_detail')
+def test_movie_import_reports_primitive_and_tmdb_errors_together(
+    mock_detail, test_client: TestClient
+):
+    mock_detail.return_value = _tmdb_movie('The Matrix', 603, 1999)
+    content = _movie_csv('Wrong title,2000,603,not-a-date')
+
+    response = _movie_upload(test_client, test_client.first_user.token, content)
+
+    assert response.status_code == 422
+    assert response.json()['errors'] == [
+        {
+            'row': 2,
+            'column': 'watched_date',
+            'message': 'Watched date must use YYYY-MM-DD',
+            'value': 'not-a-date',
+        },
+        {
+            'row': 2,
+            'column': 'title',
+            'message': 'Title does not match TMDB movie "The Matrix"',
+            'value': 'Wrong title',
+        },
+        {
+            'row': 2,
+            'column': 'release_year',
+            'message': 'Release year does not match TMDB year 1999',
+            'value': '2000',
+        },
+    ]
+    assert test_client.test_db_session.query(DbUserMovie).count() == 0
+
+
+@patch('app.services.generic_movie_import.get_movie_detail')
+def test_movie_import_rejects_excess_live_tmdb_lookups_before_calling_provider(
+    mock_detail, test_client: TestClient
+):
+    content = _movie_csv(
+        *(
+            f'Movie {tmdb_id},2000,{tmdb_id},2020-01-01'
+            for tmdb_id in range(1, MAX_TMDB_DETAIL_LOOKUPS + 2)
+        )
+    )
+
+    response = _movie_upload(test_client, test_client.first_user.token, content)
+
+    assert response.status_code == 422
+    assert response.json()['errors'] == [
+        {
+            'row': 1,
+            'column': 'file',
+            'message': (
+                f'Import requires {MAX_TMDB_DETAIL_LOOKUPS + 1} live TMDB lookups; '
+                f'the per-upload limit is {MAX_TMDB_DETAIL_LOOKUPS}. Split the '
+                'file into smaller uploads.'
+            ),
+            'value': None,
+        }
+    ]
+    mock_detail.assert_not_called()
 
 
 def test_movie_import_matches_watchlist_then_skips_same_file(
