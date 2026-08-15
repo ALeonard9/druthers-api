@@ -17,6 +17,10 @@ def test_strip_html_and_to_date():
     assert tv_search._to_date(None) is None
 
 
+def test_tvmaze_headers_identify_druthers():
+    assert tv_search.TVMAZE_HEADERS == {'User-Agent': 'druthers.io (Admin@druthers.io)'}
+
+
 def test_apply_detail_truncates_and_skips_none():
     class Show:
         genre = None
@@ -54,6 +58,11 @@ def test_get_tv_show_detail_maps_fields(mock_get):
     mock_get.return_value = resp
 
     detail = tv_search.get_tv_show_detail(44932)
+    mock_get.assert_called_once_with(
+        'https://api.tvmaze.com/shows/44932',
+        timeout=tv_search.REQUEST_TIMEOUT,
+        headers=tv_search.TVMAZE_HEADERS,
+    )
     assert detail['title'] == 'Severance'
     assert detail['imdb'] == 'tt11280740'
     assert detail['status'] == 'Running'
@@ -87,6 +96,11 @@ def test_get_show_episodes_normalizes(mock_get):
     mock_get.return_value = resp
 
     episodes = tv_search.get_show_episodes(44932)
+    mock_get.assert_called_once_with(
+        'https://api.tvmaze.com/shows/44932/episodes',
+        timeout=tv_search.REQUEST_TIMEOUT,
+        headers=tv_search.TVMAZE_HEADERS,
+    )
     assert len(episodes) == 2
     assert episodes[0]['tvmaze'] == 2128885
     assert episodes[0]['title'] == 'Good News About Hell'
@@ -130,6 +144,7 @@ def test_search_tv_shows_imdb_id_uses_lookup(mock_get):
         'https://api.tvmaze.com/lookup/shows',
         params={'imdb': 'tt11280740'},
         timeout=tv_search.REQUEST_TIMEOUT,
+        headers=tv_search.TVMAZE_HEADERS,
     )
     assert len(results) == 1
     assert results[0] == {
@@ -157,6 +172,7 @@ def test_search_tv_shows_imdb_id_is_case_insensitive(mock_get):
         'https://api.tvmaze.com/lookup/shows',
         params={'imdb': 'tt11280740'},
         timeout=tv_search.REQUEST_TIMEOUT,
+        headers=tv_search.TVMAZE_HEADERS,
     )
 
 
@@ -174,6 +190,7 @@ def test_search_tv_shows_thetvdb_id_uses_lookup(mock_get):
         'https://api.tvmaze.com/lookup/shows',
         params={'thetvdb': '281588'},
         timeout=tv_search.REQUEST_TIMEOUT,
+        headers=tv_search.TVMAZE_HEADERS,
     )
     assert results[0]['title'] == 'Severance'
 
@@ -205,6 +222,7 @@ def test_search_tv_shows_short_numeric_query_falls_back_to_title_search(
         'https://api.tvmaze.com/search/shows',
         params={'q': '1923'},
         timeout=tv_search.REQUEST_TIMEOUT,
+        headers=tv_search.TVMAZE_HEADERS,
     )
     assert results[0]['title'] == '1923'
 
@@ -222,5 +240,6 @@ def test_search_tv_shows_ordinary_title_query_unaffected(mock_get):
         'https://api.tvmaze.com/search/shows',
         params={'q': 'Severance'},
         timeout=tv_search.REQUEST_TIMEOUT,
+        headers=tv_search.TVMAZE_HEADERS,
     )
     assert results[0]['title'] == 'Severance'
