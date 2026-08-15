@@ -5,7 +5,7 @@ This module contains the API routes for user-related operations.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.auth.oauth2 import get_current_user
+from app.auth.oauth2 import get_current_session_user, get_current_user
 from app.config import get_settings
 from app.db import db_user
 from app.db.database import get_db
@@ -135,7 +135,7 @@ def update_user(
 def delete_user(
     uuid: str,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: list = Depends(get_current_session_user),
 ):
     """
     Delete a user by ID from the database.
