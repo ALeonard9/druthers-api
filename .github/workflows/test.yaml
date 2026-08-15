@@ -41,6 +41,10 @@ jobs:
           FLOOR=$(cat .coverage-baseline || echo 55)
           ./.venv/bin/pytest --cov=./ --cov-fail-under=$FLOOR --cov-report=html:.reports/coverage --cov-report=term --html=.reports/junit/test-results.html
 
+    - name: Fail on any pytest warning
+      run: |
+          source .venv/bin/activate
+          ./.venv/bin/pytest -q -W error
 
     - name: Upload Test Results
       uses: actions/upload-artifact@v7

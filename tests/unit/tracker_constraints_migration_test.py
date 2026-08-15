@@ -106,6 +106,7 @@ def test_ranked_tracker_dedupe_applies_every_survivor_priority(table_name, fk_co
         )
         assert surviving_pks == [3, 4, 7, 8, 10]
         migration._assert_no_duplicate_groups(_tracker(migration, table_name))
+    engine.dispose()
 
 
 def test_episode_dedupe_prefers_active_state_then_earliest_creation():
@@ -146,6 +147,7 @@ def test_episode_dedupe_prefers_active_state_then_earliest_creation():
         )
         assert surviving_pks == [2, 5, 6]
         migration._assert_no_duplicate_groups(tracker)
+    engine.dispose()
 
 
 def test_duplicate_assertion_fails_loudly_before_constraint_creation():
@@ -166,6 +168,7 @@ def test_duplicate_assertion_fails_loudly_before_constraint_creation():
 
         with pytest.raises(RuntimeError, match='still has 1 duplicate'):
             migration._assert_no_duplicate_groups(tracker)
+    engine.dispose()
 
 
 def test_upgrade_asserts_each_table_immediately_before_create_unique(monkeypatch):
@@ -305,3 +308,4 @@ def test_model_unique_constraint_rejects_duplicate_tracker_rows(
         connection.execute(model.__table__.insert().values(**values))
         with pytest.raises(IntegrityError):
             connection.execute(model.__table__.insert().values(**values))
+    engine.dispose()
