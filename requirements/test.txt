@@ -8,5 +8,9 @@ pytest-testmon==2.2.0  # pre-push: run only tests affected by changes
 pytest-xdist==3.8.0
 Faker==40.36.0
 httpx==0.28.1
+# starlette.testclient requires httpx2 (starlette 1.x deprecates the httpx
+# fallback and warns on import when httpx2 is absent); keep both so the test
+# client runs on the supported transport.
+httpx2==2.10.0
 coverage==7.15.4
 python-dateutil==2.9.0.post0

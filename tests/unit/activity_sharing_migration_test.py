@@ -45,3 +45,4 @@ def test_upgrade_defaults_existing_users_in_and_downgrade_is_reversible():
         assert {
             column['name'] for column in inspect(connection).get_columns('users')
         } == {'pk'}
+    engine.dispose()
