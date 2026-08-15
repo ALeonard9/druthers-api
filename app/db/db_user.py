@@ -6,7 +6,7 @@ import os
 
 from email_validator import EmailNotValidError, validate_email
 from fastapi import HTTPException, status
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
@@ -14,6 +14,17 @@ from app.db.hash import Hash
 from app.db.models import DbUser
 from app.log.logging_config import logger
 from app.schemas.model_schemas import InUserBase
+
+
+def _database_error_code(exc: SQLAlchemyError) -> str:
+    """Return a non-sensitive, stable identifier for a database failure."""
+    original = getattr(exc, 'orig', None)
+    return (
+        getattr(original, 'sqlstate', None)
+        or getattr(original, 'pgcode', None)
+        or getattr(exc, 'code', None)
+        or 'unknown'
+    )
 
 
 def create_user(db: Session, request: InUserBase) -> list[DbUser]:
@@ -228,8 +239,21 @@ def delete_user(db: Session, user_id: str) -> list[DbUser]:
             detail=f"User with id {user_id} not found",
         )
 
-    db.delete(user)
-    db.commit()
+    try:
+        db.delete(user)
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.error(
+            'Failed to delete user account account_id=%s exception=%s database_code=%s',
+            user_id,
+            type(exc).__name__,
+            _database_error_code(exc),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Unable to delete user account',
+        ) from exc
     logger.info(
         'User deleted: %s, display_name: %s, email: %s',
         user.id,

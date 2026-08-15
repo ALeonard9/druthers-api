@@ -89,6 +89,23 @@ def _user_from_api_key(token: str, db: Session, credentials_exception):
     return [row.user]
 
 
+def _user_from_access_token(token: str, db: Session, credentials_exception):
+    """Resolve a signed, expiring access JWT to its user."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        uuid: str = payload.get('sub')
+        if uuid is None:
+            raise credentials_exception
+    except jwt.ExpiredSignatureError as exc:
+        raise credentials_exception from exc
+    except jwt.InvalidTokenError as exc:
+        raise credentials_exception from exc
+    user = db_user.get_user(db, uuid)
+    if user is None:
+        raise credentials_exception
+    return user
+
+
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """
     This function creates an access token
@@ -118,19 +135,26 @@ def get_current_user(
     )
     if token.startswith(API_KEY_PREFIX):
         return _user_from_api_key(token, db, credentials_exception)
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        uuid: str = payload.get('sub')
-        if uuid is None:
-            raise credentials_exception
-    except jwt.ExpiredSignatureError as exc:
-        raise credentials_exception from exc
-    except jwt.InvalidTokenError as exc:
-        raise credentials_exception from exc
-    user = db_user.get_user(db, uuid)
-    if user is None:
-        raise credentials_exception
-    return user
+    return _user_from_access_token(token, db, credentials_exception)
+
+
+def get_current_session_user(
+    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+):
+    """
+    Authenticate only an expiring interactive-session access token.
+
+    API keys are intentionally not considered here. Destructive account
+    deletion uses this dependency so a long-lived MCP or script credential
+    cannot delete its owner, while the rest of the API can continue accepting
+    both supported bearer credential types through :func:`get_current_user`.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail='Could not validate credentials',
+        headers={'WWW-Authenticate': 'Bearer'},
+    )
+    return _user_from_access_token(token, db, credentials_exception)
 
 
 def get_optional_current_user(
