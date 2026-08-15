@@ -7,6 +7,7 @@ Currently: Goodreads CSV (books) and the generic CSV/XLSX movie template.
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status, Request
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.auth.oauth2 import get_current_user
 from app.db.database import get_db
@@ -116,7 +117,15 @@ async def import_movies(
             detail='File too large for a movie import',
         )
 
-    validation = validate_movie_import(db, raw, file.filename)
+    # Validation may perform bounded live TMDB lookups. Keep that synchronous
+    # provider work off the application's async event loop so other requests
+    # remain responsive while a large import is checked.
+    validation = await run_in_threadpool(
+        validate_movie_import,
+        db,
+        raw,
+        file.filename,
+    )
     if validation.errors:
         body = MovieImportResponse(
             valid=False,

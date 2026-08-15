@@ -4,6 +4,7 @@ import csv
 import io
 import re
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -46,9 +47,17 @@ MOVIE_TEMPLATE_COLUMNS = (
 )
 MOVIE_TEMPLATE_HEADERS = tuple(column['name'] for column in MOVIE_TEMPLATE_COLUMNS)
 MAX_IMPORT_ROWS = 5000
-MAX_TMDB_DETAIL_LOOKUPS = 25
+TMDB_IMPORT_LOOKUP_WORKERS = 8
 MAX_XLSX_UNCOMPRESSED_BYTES = 25 * 1024 * 1024
 MAX_XLSX_ARCHIVE_FILES = 1000
+
+# One shared pool bounds provider traffic across concurrent imports. TMDB's
+# movie-detail endpoint accepts one ID per request, so uncached rows are looked
+# up concurrently without creating an unbounded pool for every upload.
+_TMDB_IMPORT_EXECUTOR = ThreadPoolExecutor(
+    max_workers=TMDB_IMPORT_LOOKUP_WORKERS,
+    thread_name_prefix='movie-import-tmdb',
+)
 
 
 @dataclass(frozen=True)
@@ -173,12 +182,7 @@ def movie_template_xlsx() -> bytes:
             'file',
             'yes',
             f'at most {MAX_IMPORT_ROWS} movie rows',
-            (
-                'Every row is validated before any history is written. '
-                f'At most {MAX_TMDB_DETAIL_LOOKUPS} rows may require a live TMDB '
-                'lookup; larger files must already match the local catalog or be '
-                'split into smaller uploads.'
-            ),
+            'Every row is validated before any history is written.',
             '',
         )
     )
@@ -470,19 +474,13 @@ def validate_movie_import(  # pylint: disable=too-many-locals,too-many-branches,
             or _canonical_year(movie, None) is None
         )
     }
-    if len(lookup_tmdb_ids) > MAX_TMDB_DETAIL_LOOKUPS:
-        result.errors.append(
-            MovieImportError(
-                row=1,
-                column='file',
-                message=(
-                    f'Import requires {len(lookup_tmdb_ids)} live TMDB lookups; '
-                    f'the per-upload limit is {MAX_TMDB_DETAIL_LOOKUPS}. Split '
-                    'the file into smaller uploads.'
-                ),
-            )
+    ordered_lookup_ids = sorted(lookup_tmdb_ids)
+    detail_by_tmdb = dict(
+        zip(
+            ordered_lookup_ids,
+            _TMDB_IMPORT_EXECUTOR.map(get_movie_detail, ordered_lookup_ids),
         )
-        return result
+    )
 
     for row_number, title, release_year, tmdb_id, watched_date in candidates:
         movie = catalog_by_tmdb.get(tmdb_id)
@@ -490,7 +488,7 @@ def validate_movie_import(  # pylint: disable=too-many-locals,too-many-branches,
         canonical_title = movie.title if movie is not None else None
         canonical_year = _canonical_year(movie, None)
         if movie is None or not canonical_title or canonical_year is None:
-            detail = get_movie_detail(tmdb_id)
+            detail = detail_by_tmdb.get(tmdb_id)
             if detail:
                 canonical_title = canonical_title or detail.get('title')
                 canonical_year = canonical_year or _canonical_year(None, detail)

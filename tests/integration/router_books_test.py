@@ -3,6 +3,8 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
+from app.db.models_sandbox import DbBook
+
 
 def _make_book(test_client: TestClient, title='Dune', **extra) -> str:
     headers = {'Authorization': f"Bearer {test_client.admin_user.token}"}
@@ -31,6 +33,26 @@ def test_get_books(test_client: TestClient):
     response = test_client.get('/v1/books', headers=headers)
     assert response.status_code == 200
     assert len(response.json()) > 0
+
+
+def test_get_books_filters_by_normalized_isbn_beyond_first_page(
+    test_client: TestClient,
+):
+    test_client.test_db_session.add_all(
+        [DbBook(title=f'Book {index}', googleid=f'gid-{index}') for index in range(26)]
+        + [DbBook(title='Dune', isbn='9780441172719')]
+    )
+    test_client.test_db_session.commit()
+    headers = {'Authorization': f'Bearer {test_client.first_user.token}'}
+
+    response = test_client.get(
+        '/v1/books',
+        headers=headers,
+        params={'isbn': '978-0-441-17271-9'},
+    )
+
+    assert response.status_code == 200
+    assert [book['title'] for book in response.json()] == ['Dune']
 
 
 def test_create_book_unauthenticated(test_client: TestClient):

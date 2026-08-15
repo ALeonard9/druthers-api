@@ -94,8 +94,9 @@ def _local_day_end(user) -> datetime:
 
 # Global Entity Endpoints
 @router.get('/tv-shows', response_model=List[TVShowSummary])
-def get_all_tv_shows(
+def get_all_tv_shows(  # pylint: disable=too-many-arguments, too-many-positional-arguments
     tvmaze: Optional[int] = None,
+    imdb: Optional[str] = None,
     limit: int = Query(25, ge=1),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -105,6 +106,8 @@ def get_all_tv_shows(
     query = db.query(DbTVShow)
     if tvmaze is not None:
         query = query.filter(DbTVShow.tvmaze == tvmaze)
+    if imdb is not None:
+        query = query.filter(DbTVShow.imdb == imdb)
     return query.order_by(DbTVShow.pk).offset(offset).limit(limit).all()
 
 

@@ -53,8 +53,9 @@ router = APIRouter(prefix='/v1', tags=['Books'])
 
 # Global Entity Endpoints
 @router.get('/books', response_model=List[BookSummary])
-def get_all_books(
+def get_all_books(  # pylint: disable=too-many-arguments, too-many-positional-arguments
     googleid: Optional[str] = None,
+    isbn: Optional[str] = None,
     limit: int = Query(25, ge=1),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -64,6 +65,9 @@ def get_all_books(
     query = db.query(DbBook)
     if googleid is not None:
         query = query.filter(DbBook.googleid == googleid)
+    if isbn is not None:
+        normalized_isbn = isbn.replace('-', '').strip()
+        query = query.filter(DbBook.isbn == normalized_isbn)
     return query.order_by(DbBook.pk).offset(offset).limit(limit).all()
 
 

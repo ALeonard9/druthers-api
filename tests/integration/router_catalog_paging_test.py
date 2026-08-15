@@ -67,6 +67,24 @@ def test_catalog_list_rejects_invalid_pagination(test_client: TestClient, path, 
     assert response.status_code == 422
 
 
+def test_tv_catalog_filters_by_imdb_id_beyond_first_page(test_client: TestClient):
+    rows = [
+        DbTVShow(title=f'Show {index}', tvmaze=40_000 + index) for index in range(26)
+    ]
+    rows.append(DbTVShow(title='Severance', tvmaze=44_932, imdb='tt11280740'))
+    test_client.test_db_session.add_all(rows)
+    test_client.test_db_session.commit()
+
+    response = test_client.get(
+        '/v1/tv-shows',
+        headers=_auth(test_client),
+        params={'imdb': 'tt11280740'},
+    )
+
+    assert response.status_code == 200
+    assert [show['title'] for show in response.json()] == ['Severance']
+
+
 def test_episode_list_requires_authentication(test_client: TestClient):
     show = DbTVShow(title='Severance', tvmaze=44_932)
     test_client.test_db_session.add(show)
