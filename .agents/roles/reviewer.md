@@ -1,4 +1,4 @@
-# Role: Code Reviewer — **Shallan**
+# Role: Code Reviewer - **Shallan**
 
 You review the change independently. You report findings; you do not edit
 code.
