@@ -34,7 +34,10 @@ from app.db.db_follow import count_followers, is_following
 from app.db.models import DbUser
 from app.schemas.model_schemas import InVisibilityUpdate, OutVisibility
 from app.services import handles
-from app.services.profile_access import viewer_relationship
+from app.services.profile_access import (
+    outgoing_friend_request_state,
+    viewer_relationship,
+)
 from app.services.shelves import SHELVES, Shelf, shelf_tier_fields
 from app.services.visibility import (
     PROFILE_TIER_FIELD,
@@ -404,10 +407,11 @@ def public_profile(  # pylint: disable=too-many-arguments, too-many-positional-a
     shelves, and so never a 404 on their own handle - which is why the
     response carries ``viewer.relationship``: a client rendering this page has
     to be able to say *whose* view it is showing. ``viewer.following`` (#276)
-    rides alongside it for the same reason - whether to render a Follow or
-    Following button - and is computed only *after* every access decision
-    above has already been made: following is never part of the ceiling a
-    caller is served, only a fact about the payload once that's settled.
+    and ``viewer.friend_request_state`` (#357) ride alongside it for the same
+    reason - whether to render a Follow, Following, Add friend, or Request
+    sent button - and are computed only *after* every access decision above
+    has already been made. Neither affects the ceiling a caller is served;
+    they are facts about the payload once that is settled.
 
     **One ceiling, resolved once.** The caller's relationship is turned into a
     single tier ceiling before any shelf is read, and every shelf - ranked
@@ -492,11 +496,16 @@ def public_profile(  # pylint: disable=too-many-arguments, too-many-positional-a
         relationship is ViewerRelationship.NONE
         or relationship is ViewerRelationship.FRIEND
     ) and is_following(db, viewer.pk, user.pk)
+    friend_request_state = outgoing_friend_request_state(db, user, viewer, relationship)
 
     payload = {
         'handle': user.handle,
         'display_name': user.display_name,
-        'viewer': {'relationship': relationship.value, 'following': following},
+        'viewer': {
+            'relationship': relationship.value,
+            'following': following,
+            'friend_request_state': friend_request_state,
+        },
         'shelves': shelves,
         'total_ranked': sum(s['ranked_count'] for s in shelves),
     }
