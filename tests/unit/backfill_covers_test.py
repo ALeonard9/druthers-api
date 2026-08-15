@@ -50,7 +50,7 @@ def test_igdb_size_upgrade():
 
 
 def test_igdb_upgrade_skips_current_size_and_foreign_urls():
-    # Already at the size the service serves — nothing to do.
+    # Already at the size the service serves - nothing to do.
     assert (
         backfill_covers.upgrade_igdb_size(
             'https://images.igdb.com/igdb/image/upload/t_cover_big_2x/co1r7f.jpg'

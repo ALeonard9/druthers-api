@@ -29,7 +29,7 @@ def rank_is_1_based(table_name: str) -> tuple:
     ``__table_args__`` asserting this tracker's rank is a 1-based position.
 
     A rank is either NULL (not placed) or >= 1. Rank 0 kept coming back to
-    prod — the legacy site stored ranks 0-based, and every fix was a *repair*
+    prod - the legacy site stored ranks 0-based, and every fix was a *repair*
     script bolted onto the deploy pipeline, so any release where it didn't run
     left "0" printed at the top of the Top 5. A CHECK makes the bad state
     unrepresentable instead of periodically swept up: whatever writes a 0 now
@@ -66,8 +66,8 @@ class DbNotification(DBBaseModel):
 
     user_id = Column(Integer, ForeignKey('users.pk'), nullable=False)
 
-    # Machine-readable kind (e.g. 'movie_release') so clients — web today,
-    # mobile later — can pick icons/routes without parsing the title.
+    # Machine-readable kind (e.g. 'movie_release') so clients - web today,
+    # mobile later - can pick icons/routes without parsing the title.
     type = Column(String(50), nullable=False)
     title = Column(String(255), nullable=False)
     body = Column(Text, nullable=True)
@@ -91,7 +91,7 @@ class DbMovie(DBBaseModel):
     tmdb = Column(Integer, unique=True, nullable=True)
     imdb = Column(String(40), unique=True)
     release_date = Column(DateTime, nullable=True)
-    # Legacy: real IMDb ratings from the OMDb era. Frozen — no longer written
+    # Legacy: real IMDb ratings from the OMDb era. Frozen - no longer written
     # or displayed, since TMDB has no IMDb rating to keep it current (#163).
     rating_imdb = Column(Float, nullable=True)
     # TMDB's own vote_average, which replaced it.
@@ -129,7 +129,7 @@ class DbUserMovie(DBBaseModel):
     on_watchlist = Column(Boolean, nullable=False, default=False)
     on_rankings = Column(Boolean, nullable=False, default=False)
     rank = Column(Integer, nullable=True)
-    # When the current rank was assigned — drives Activity, so notes edits
+    # When the current rank was assigned - drives Activity, so notes edits
     # and other tracker updates never re-date a ranking (#141).
     ranked_at = Column(DateTime, nullable=True)
     completed = Column(Integer, nullable=True)
@@ -196,7 +196,7 @@ class DbUserTVShow(DBBaseModel):
     on_watchlist = Column(Boolean, nullable=False, default=False)
     on_rankings = Column(Boolean, nullable=False, default=False)
     rank = Column(Integer, nullable=True)
-    # When the current rank was assigned — drives Activity, so notes edits
+    # When the current rank was assigned - drives Activity, so notes edits
     # and other tracker updates never re-date a ranking (#141).
     ranked_at = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)
@@ -301,7 +301,7 @@ class DbUserVideoGame(DBBaseModel):
     on_watchlist = Column(Boolean, nullable=False, default=False)
     on_rankings = Column(Boolean, nullable=False, default=False)
     rank = Column(Integer, nullable=True)
-    # When the current rank was assigned — drives Activity, so notes edits
+    # When the current rank was assigned - drives Activity, so notes edits
     # and other tracker updates never re-date a ranking (#141).
     ranked_at = Column(DateTime, nullable=True)
     completed = Column(Integer, nullable=True)
@@ -366,7 +366,7 @@ class DbUserBook(DBBaseModel):
     on_watchlist = Column(Boolean, nullable=False, default=False)
     on_rankings = Column(Boolean, nullable=False, default=False)
     rank = Column(Integer, nullable=True)
-    # When the current rank was assigned — drives Activity, so notes edits
+    # When the current rank was assigned - drives Activity, so notes edits
     # and other tracker updates never re-date a ranking (#141).
     ranked_at = Column(DateTime, nullable=True)
     completed = Column(Integer, nullable=True)

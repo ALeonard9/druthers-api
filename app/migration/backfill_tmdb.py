@@ -15,8 +15,8 @@ For each movie it:
 
 Resumable: rows that already have a ``tmdb`` id are skipped, so a re-run
 continues where an interrupted pass stopped. Unlike the OMDb-era
-``enrich_movies``, there's no daily cap to nurse — TMDB publishes no daily
-limit, only ~40-50 req/s — so the throttle exists purely to stay well clear
+``enrich_movies``, there's no daily cap to nurse - TMDB publishes no daily
+limit, only ~40-50 req/s - so the throttle exists purely to stay well clear
 of that ceiling and of TMDB's "no bulk scraping" guidance.
 
 Usage::
@@ -85,7 +85,7 @@ def run(throttle: float = DEFAULT_THROTTLE_SECONDS, dry_run: bool = False) -> No
                 if detail.get('rating_tmdb') is not None:
                     movie.rating_tmdb = detail['rating_tmdb']
                 # Only replace a poster we're actually migrating away from, and
-                # only when TMDB gave us a real replacement — never blank out a
+                # only when TMDB gave us a real replacement - never blank out a
                 # working image for a null.
                 if new_poster and _needs_new_poster(movie.poster_url):
                     movie.poster_url = new_poster

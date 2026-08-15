@@ -2,7 +2,7 @@
 Streaming availability ("where can I watch this") from TMDB (web#26).
 
 TMDB's ``/watch/providers`` endpoints resell JustWatch's availability data, so
-one provider covers both movie metadata and streaming availability — which is
+one provider covers both movie metadata and streaming availability - which is
 why this landed on top of the OMDb->TMDB migration (#163) rather than as a
 separate JustWatch integration.
 
@@ -12,7 +12,7 @@ Two things shape this module:
   TMDB id, only an IMDb id from TVMaze's ``externals`` block. So a show has to
   be resolved through TMDB's ``/find`` endpoint first; movies already store
   the ``tmdb`` id the lookup needs.
-* **Availability is live data, not catalog data.** Nothing is persisted —
+* **Availability is live data, not catalog data.** Nothing is persisted -
   where a title streams changes without warning, and a stale row is worse
   than no row. The TTL cache below keeps detail views off TMDB's rate limit
   without pretending we own the data.
@@ -42,7 +42,7 @@ _CACHE_TTL_SECONDS = 6 * 60 * 60
 
 # TMDB's per-region keys, mapped to the buckets the UI groups by. ``ads`` is
 # folded into ``free`` because from a viewer's side both mean "no extra
-# payment" — Tubi and Pluto are ad-supported and belong next to the free tier,
+# payment" - Tubi and Pluto are ad-supported and belong next to the free tier,
 # not in their own row.
 _BUCKETS = {
     'stream': ('flatrate',),
@@ -85,7 +85,7 @@ def normalize_region(region: Optional[str]) -> str:
     """
     Coerce a caller-supplied region to the ISO-3166-1 alpha-2 code TMDB keys
     its results by. Anything unrecognizable falls back to
-    :data:`DEFAULT_REGION` rather than 400ing — a bad region should degrade to
+    :data:`DEFAULT_REGION` rather than 400ing - a bad region should degrade to
     "US availability", not break the detail page.
     """
     region = (region or '').strip()
@@ -109,7 +109,7 @@ def _provider(entry: dict) -> Optional[dict]:
 def _bucket(region_block: dict, keys) -> List[dict]:
     """
     Collect the providers under ``keys``, ordered by TMDB's display_priority
-    and de-duplicated by provider — a service listed under both ``free`` and
+    and de-duplicated by provider - a service listed under both ``free`` and
     ``ads`` must not render twice.
     """
     entries = []
@@ -136,7 +136,7 @@ def _shape(payload: Optional[dict], region: str) -> dict:
     Reduce a raw ``/watch/providers`` payload to one region's buckets.
 
     A title TMDB doesn't carry, or one with no availability in ``region``,
-    yields the same empty-but-valid response — "we looked and found nothing"
+    yields the same empty-but-valid response - "we looked and found nothing"
     and "we couldn't look" are the same story for the viewer, and the frontend
     renders neither.
     """
@@ -187,7 +187,7 @@ def _resolve_tv_tmdb_id(imdb_id: str) -> Optional[int]:
 def get_tv_providers(imdb_id: Optional[str], region: str = DEFAULT_REGION) -> dict:
     """
     Streaming availability for a TV show, keyed by the IMDb id the catalog
-    stores (see module docstring — shows have no TMDB id of their own).
+    stores (see module docstring - shows have no TMDB id of their own).
     """
     region = normalize_region(region)
     imdb_id = (imdb_id or '').strip()

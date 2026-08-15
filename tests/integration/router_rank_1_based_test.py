@@ -4,7 +4,7 @@ Rank 0 must be impossible, from every direction.
 The Top 5 board prints the stored rank rather than the row position, so a
 0-based rank shows up as a literal "0" against the user's best movie. That
 regressed in prod more than once because the invariant was only ever restored
-by a repair script; these tests pin it at the two layers that now enforce it —
+by a repair script; these tests pin it at the two layers that now enforce it -
 the API schema (422 before anything is written) and the database CHECK
 (ck_<table>_rank_1_based, which SQLite honours too).
 """

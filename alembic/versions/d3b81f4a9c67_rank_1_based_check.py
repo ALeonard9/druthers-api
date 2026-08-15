@@ -1,8 +1,8 @@
 """tracker ranks are 1-based, enforced
 
 Rank 0 has come back to prod repeatedly (#229 and before it #181). Every fix
-so far was a *repair* — ``backfill_rank_base``, run as a step in the deploy
-workflow — so the invariant only held on releases where that step ran, and
+so far was a *repair* - ``backfill_rank_base``, run as a step in the deploy
+workflow - so the invariant only held on releases where that step ran, and
 nothing stopped the column from holding a 0 in between. The Top 5 board prints
 the stored rank deliberately (a mismatch is a data bug worth seeing), so every
 lapse showed up as "0" against Adam's best movie.
@@ -19,8 +19,8 @@ that is already correct. ``backfill_rank_base`` could only handle the first of
 those, and only when the *whole* shelf started at 0.
 
 Rows carrying a rank while off the rankings list are unplaced (rank NULL).
-That is already the app's rule — mark_movie and update_user_movie both clear
-the rank when a tracker leaves Rankings — but orion_import copied the legacy
+That is already the app's rule - mark_movie and update_user_movie both clear
+the rank when a tracker leaves Rankings - but orion_import copied the legacy
 0-based rank onto watchlist rows too, which the CHECK would reject.
 
 Revision ID: d3b81f4a9c67

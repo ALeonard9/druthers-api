@@ -21,7 +21,7 @@ def _movie(test_client: TestClient, title='Heat', imdb='tt0113277') -> str:
 
 def test_entering_rankings_stamps_today(test_client: TestClient):
     """
-    Adding to Rankings means "I finished this" — completed_at defaults to
+    Adding to Rankings means "I finished this" - completed_at defaults to
     today.
     """
     movie_id = _movie(test_client)

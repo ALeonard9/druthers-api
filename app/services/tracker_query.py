@@ -2,7 +2,7 @@
 Shared list-shaping for the per-user tracker collections.
 
 ``/v1/users/me/{movies,tv-shows,books,games}`` returned every tracker a user
-owns with no ceiling — ~1,400 rows (≈400KB) for movies alone. Callers that
+owns with no ceiling - ~1,400 rows (≈400KB) for movies alone. Callers that
 only want one list ("what's ranked?") had to fetch everything and filter
 client-side. These helpers give all four endpoints the same filters, the same
 paging, and a real upper bound.
@@ -61,7 +61,7 @@ def guard_truncation(rows, params: dict, label: str):
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=(
-                f'{label} library exceeds {MAX_PAGE} entries — '
+                f'{label} library exceeds {MAX_PAGE} entries - '
                 'page it with limit/offset'
             ),
         )

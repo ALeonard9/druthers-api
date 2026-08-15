@@ -33,7 +33,7 @@ def test_other_party_reads_from_either_seat():
 
 def test_status_values_are_the_two_the_schema_allows():
     """
-    A third status would need a migration — the CHECK constraint in
+    A third status would need a migration - the CHECK constraint in
     c9a2e7f31b04 lists exactly these. Declining deletes its row instead.
     """
     assert [status.value for status in FriendshipStatus] == ['pending', 'accepted']

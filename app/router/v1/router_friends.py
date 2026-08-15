@@ -13,7 +13,7 @@ friend, and once accepted, either side can unfriend.
 
 **A first request does not confirm who exists.** There is no user search or
 directory anywhere in the API, so a handle is the only way to reach a person
-— which makes ``POST /friends/requests`` the place the user base could leak.
+- which makes ``POST /friends/requests`` the place the user base could leak.
 The cases:
 
 * unknown handle, and a brand-new request to a real handle -> the same 202
@@ -25,7 +25,7 @@ The cases:
   Know what this costs. Sending twice *does* distinguish a real handle (409)
   from an unused one (202), so a determined caller can enumerate handles at
   two requests each. The rate limit is what bounds that, not this endpoint's
-  response shape — so treat ``friend_request_rate_limit`` as a privacy
+  response shape - so treat ``friend_request_rate_limit`` as a privacy
   control, not just an abuse control, and do not loosen it casually;
 * already friends, or the other side has already asked -> 409, but reaching
   either requires the *other* user to have acted, which no amount of probing
@@ -112,7 +112,7 @@ def send_friend_request(
     Send a friend request to an exact handle.
 
     Always 202 unless the caller is already a party to the relationship (or
-    is the target) — see the module docstring for why the shape of the
+    is the target) - see the module docstring for why the shape of the
     non-answers matters as much as the answer.
     """
     me = current_user[0]
@@ -140,12 +140,12 @@ def send_friend_request(
         if existing.requested_by_id != me.pk:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail='That user has already sent you a friend request — '
+                detail='That user has already sent you a friend request - '
                 'accept it instead',
             )
         # Adam's call (#275): a resend is a conflict, not a silent no-op, so
         # a double-click gets told what happened. The cost is accepted and
-        # recorded in the module docstring — this is the one response that
+        # recorded in the module docstring - this is the one response that
         # confirms a handle exists.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -285,7 +285,7 @@ def unfriend(
 ):
     """
     End a friendship. Symmetric: either side may do this, and one row going
-    away ends it for both — there is no second row to leave behind.
+    away ends it for both - there is no second row to leave behind.
     """
     found = db_friendship.get_for_user(
         db, current_user[0].pk, friendship_id, FriendshipStatus.ACCEPTED

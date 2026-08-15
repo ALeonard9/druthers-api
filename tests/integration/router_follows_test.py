@@ -5,7 +5,7 @@ profile tier only.
 
 The critical property under test throughout is that following never widens
 what a viewer sees. A follower of a profile is deliberately put through the
-exact same ``/v1/public/{handle}`` assertions a stranger would face —
+exact same ``/v1/public/{handle}`` assertions a stranger would face -
 ``test_a_follower_sees_exactly_what_a_stranger_sees`` is the one this issue
 exists to make true, and ``test_a_follow_survives_the_followee_going_private``
 is the one acceptance criterion that is a real test case rather than a
@@ -186,7 +186,7 @@ def test_follow_lists_and_deletion_are_scoped_to_the_caller(test_client: TestCli
 
 
 def test_following_requires_no_approval(test_client: TestClient):
-    """Unlike a friend request, the row exists immediately — no accept step."""
+    """Unlike a friend request, the row exists immediately - no accept step."""
     _claim_public_handle(test_client, test_client.second_user.token, 'blake')
     follow = test_client.put(
         '/v1/users/me/following/blake', headers=_auth(test_client.first_user.token)
@@ -273,7 +273,7 @@ def test_following_an_unknown_handle_404s(test_client: TestClient):
 
 def test_cannot_follow_a_private_profile(test_client: TestClient):
     # Explicit: every tier now defaults to 'friends' (web#156), so a test of
-    # a genuinely *private* profile has to lower every shelf too — the floor
+    # a genuinely *private* profile has to lower every shelf too - the floor
     # invariant (#274) otherwise rejects a private profile under a friends
     # shelf, and 'friends' alone would 404 here too, but for the wrong reason.
     _set_visibility(
@@ -324,7 +324,7 @@ def test_cannot_follow_a_friends_only_profile_even_as_an_accepted_friend(
 ):
     """
     Following is gated on the profile tier alone, never on the requester's
-    relationship to the owner — an accepted friend gets no special path in.
+    relationship to the owner - an accepted friend gets no special path in.
     """
     owner_token = test_client.second_user.token
     friend_token = test_client.first_user.token
@@ -367,7 +367,7 @@ def test_a_follower_sees_exactly_what_a_stranger_sees(
     ``blake`` has a public profile with a public Movies shelf and a
     friends-only TV shelf. first_user follows blake (allowed: the profile
     tier is public). A stranger who never followed blake gets the identical
-    response — same shelves, same content, same viewer ceiling — proving a
+    response - same shelves, same content, same viewer ceiling - proving a
     follower resolves to exactly the anonymous/none ceiling and never to
     ``friends``.
     """
@@ -408,8 +408,8 @@ def test_a_follower_sees_exactly_what_a_stranger_sees(
     stranger_view = test_client.get('/v1/public/blake', headers=_auth(stranger_token))
     anonymous_view = test_client.get('/v1/public/blake')
 
-    # The follower is signed in, so their relationship reads 'none' — same as
-    # the stranger — never 'friend'. `following` is the only field allowed to
+    # The follower is signed in, so their relationship reads 'none' - same as
+    # the stranger - never 'friend'. `following` is the only field allowed to
     # differ, and it differs in exactly the direction that proves the point:
     # the follower's flag is True, and it still bought them nothing.
     assert follower_view.json()['viewer'] == {'relationship': 'none', 'following': True}
@@ -442,7 +442,7 @@ def test_a_follow_survives_the_followee_going_private(test_client: TestClient):
     owner_token = test_client.second_user.token
     follower_token = test_client.first_user.token
     # A public profile tier alone still 404s (#277: nothing visible to this
-    # caller), so give the owner a public shelf with something on it — the
+    # caller), so give the owner a public shelf with something on it - the
     # profile has to render 200 first for "stops granting anything" to mean
     # anything.
     _set_visibility(

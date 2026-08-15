@@ -9,7 +9,7 @@ jobs:
     with:
       stack: python
       builds_image: true
-      block: true            # enforced — findings resolved
+      block: true            # enforced - findings resolved
       severity: "CRITICAL,HIGH"
     secrets: inherit
     permissions:

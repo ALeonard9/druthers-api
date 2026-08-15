@@ -4,7 +4,7 @@ End-to-end coverage for the profanity check wired into `update_visibility`
 (#278): a profane handle is rejected at claim time with a 422, and Adam has
 a real override for a specific handle via `HANDLE_PROFANITY_ALLOWLIST`.
 
-As in `tests/unit/handles_test.py`, no profane term is hardcoded here — the
+As in `tests/unit/handles_test.py`, no profane term is hardcoded here - the
 handle used in every case below is read out of the library's own installed
 wordlist at runtime.
 """

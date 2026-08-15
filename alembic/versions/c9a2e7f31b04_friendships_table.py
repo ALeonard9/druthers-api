@@ -7,16 +7,16 @@ One row per *relationship*, not one per direction. The pair is stored in
 canonical order and both invariants that depend on it are declared in the
 database, not just in the service layer:
 
-* ``uq_friendships_pair`` — a pair can hold at most one row, so a race
+* ``uq_friendships_pair`` - a pair can hold at most one row, so a race
   between two simultaneous requests resolves to a single relationship instead
   of two rows that later disagree;
-* ``ck_friendships_canonical_order`` — ``user_low_id < user_high_id``, which
+* ``ck_friendships_canonical_order`` - ``user_low_id < user_high_id``, which
   also rules out a self-friendship without a separate constraint.
 
 ``status`` is a VARCHAR with a CHECK rather than a native Postgres enum, for
 the same reasons the visibility tiers are (b7c1f4a9d2e3): a bad write fails
 loudly, and a rollback leaves no orphaned type behind. There is no
-``declined`` value — declining or cancelling deletes the row.
+``declined`` value - declining or cancelling deletes the row.
 
 The three FKs cascade on delete: a friendship is meaningless without both
 parties, so removing a user takes their edges with them rather than leaving

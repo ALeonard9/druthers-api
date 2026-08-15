@@ -2,12 +2,12 @@
 
 Viewer display preference (api#122): how many entries of a ranked list to
 show by default. NULL means unset, read as the default (25) everywhere via
-``app.services.preferences.coerce`` — nothing here backfills existing rows,
+``app.services.preferences.coerce`` - nothing here backfills existing rows,
 since NULL already means the right thing.
 
 The unrelated index/constraint drift autogenerate also detected (an existing
 mismatch between a handful of tracker/movie indexes and the current models,
-predating this change) is deliberately left out of this migration — it
+predating this change) is deliberately left out of this migration - it
 belongs to whichever change introduced it, not to this one.
 
 Revision ID: 4fe7bd675954

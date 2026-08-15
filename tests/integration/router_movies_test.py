@@ -394,7 +394,7 @@ def test_search_badges_already_ranked_result(mock_search, test_client: TestClien
     )
     assert rank_resp.status_code == 200
 
-    # Title-search hits carry no imdb — the badge join has to work off tmdb alone.
+    # Title-search hits carry no imdb - the badge join has to work off tmdb alone.
     mock_search.return_value = [
         {'tmdb': 27205, 'title': 'Inception', 'year': '2010'},
         {'tmdb': 329, 'title': 'Jurassic Park', 'year': '1993'},
@@ -477,7 +477,7 @@ def test_movie_watch_providers_accepts_a_region(mock_request, test_client: TestC
     )
 
     assert response.status_code == 200
-    # TMDB has no GB block in this payload — empty, not an error.
+    # TMDB has no GB block in this payload - empty, not an error.
     assert response.json() == {
         'region': 'GB',
         'link': None,

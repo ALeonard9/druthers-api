@@ -243,7 +243,7 @@ def test_tv_unresolvable_on_tmdb_returns_empty(mock_request):
 
     result = watch_providers.get_tv_providers('tt9999999')
 
-    # Only the /find call happens — there's no id to fetch providers for.
+    # Only the /find call happens - there's no id to fetch providers for.
     assert mock_request.call_count == 1
     assert result['stream'] == []
 

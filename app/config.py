@@ -93,7 +93,7 @@ class Settings(BaseSettings):
     # scraper wants thousands.
     rate_limit_friend_requests: int = 30  # friend requests per user per hour
     # Following (#276) targets only already-public profiles, so there is no
-    # probing concern the way there is for friend requests — this cap exists
+    # probing concern the way there is for friend requests - this cap exists
     # purely to stop a mass-follow script.
     rate_limit_follows: int = 60  # follow actions per user per hour
 
@@ -104,14 +104,14 @@ class Settings(BaseSettings):
     disable_signup: bool = False
     # Comma-separated email allowlist. Unset = no-op (today's open-Google
     # behavior). Set = only these addresses may complete ANY Google sign-in
-    # (new account or existing) — everyone else gets a clear invite-only
+    # (new account or existing) - everyone else gets a clear invite-only
     # rejection. Intended for QA/pre-launch: set to just the operator's own
     # Google account.
     oauth_allowlist: Optional[str] = None
 
     # --- Handle claiming (#278) ---
     # Comma-separated handles exempted from the profanity check, case-
-    # insensitive. No wordlist is complete or neutral — `better-profanity`'s
+    # insensitive. No wordlist is complete or neutral - `better-profanity`'s
     # will occasionally flag a legitimate handle as a false positive (see
     # `app/services/handles.py`). This is Adam's lever to unblock a specific
     # user without touching the wordlist or redeploying code: add the handle,
@@ -125,14 +125,14 @@ class Settings(BaseSettings):
     # --- CORS (comma-separated origins) ---
     cors_origins: str = 'http://localhost:3000'
 
-    # --- External APIs (movies search proxy — TMDB) ---
+    # --- External APIs (movies search proxy - TMDB) ---
     tmdb_api_key: Optional[str] = None
 
-    # --- External APIs (games search proxy — IGDB via Twitch OAuth) ---
+    # --- External APIs (games search proxy - IGDB via Twitch OAuth) ---
     twitch_client_id: Optional[str] = None
     twitch_client_secret: Optional[str] = None
 
-    # --- External APIs (book enrichment fallback — Google Books) ---
+    # --- External APIs (book enrichment fallback - Google Books) ---
     # Open Library is the primary book source and needs no key. This is only
     # used to enrich rows Open Library cannot resolve by ISBN but which carry
     # a legacy ``googleid``; enrichment simply skips them when unset.
@@ -209,7 +209,7 @@ class Settings(BaseSettings):
         Parsed, lowercased handle exemptions (empty set when unset).
 
         Unlike ``oauth_allowlist_emails`` this has no "feature off" sentinel
-        to preserve — an empty set and "unset" behave identically at the
+        to preserve - an empty set and "unset" behave identically at the
         call site (nothing is exempted), so there's no ambiguity to protect
         against.
         """

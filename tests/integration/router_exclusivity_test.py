@@ -158,7 +158,7 @@ def _smoke_domain(test_client: TestClient, noun: str, create_json: dict):
 
 def test_tv_books_games_share_the_rule(test_client: TestClient):
     """
-    The other domains run the same patched paths — one promotion each.
+    The other domains run the same patched paths - one promotion each.
     """
     _smoke_domain(test_client, 'tv-shows', {'title': 'Severance', 'imdb': 'tt11280740'})
     _smoke_domain(test_client, 'books', {'title': 'Dune', 'isbn': '9780441172719'})

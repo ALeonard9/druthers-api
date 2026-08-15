@@ -58,7 +58,7 @@ def upgrade() -> None:
     # 1-based); otherwise the backlog, whose rank column holds a meaningless
     # 0 sentinel that must not leak into the ranked list.
     op.execute('UPDATE user_video_games SET on_rankings = TRUE WHERE completed = 1')
-    # "anything but completed=1" — matches orion_import's flag derivation.
+    # "anything but completed=1" - matches orion_import's flag derivation.
     op.execute(
         'UPDATE user_video_games SET on_watchlist = TRUE '
         'WHERE completed != 1 OR completed IS NULL'

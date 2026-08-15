@@ -85,7 +85,7 @@ def export_json(
 ):
     """
     Full-fidelity JSON export of every domain, using the same schemas the
-    API serves — anything the UI can show is in here.
+    API serves - anything the UI can show is in here.
     """
     user = current_user[0]
     payload = {
@@ -267,7 +267,7 @@ def export_csv(
     else:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Unknown export domain — use movies, tv-shows, tv-episodes, books, or games',
+            detail='Unknown export domain - use movies, tv-shows, tv-episodes, books, or games',
         )
 
     return _csv_response(f'druthers-{domain}.csv', header, rows)

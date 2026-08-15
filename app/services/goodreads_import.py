@@ -8,7 +8,7 @@ Import/Export) and maps each row onto the Books domain:
   rank); ``to-read``/``currently-reading`` → watchlist.
 - Catalog matching is by ISBN first (Goodreads wraps them in ``="…"``), then
   case-insensitive title+author; unmatched rows create a catalog entry from
-  the CSV itself — no external API calls, so imports are fast and
+  the CSV itself - no external API calls, so imports are fast and
   deterministic.
 - Idempotent: re-uploading the same file updates existing trackers instead
   of duplicating, and never overwrites notes you've written since.
@@ -36,7 +36,7 @@ class ImportReport:
 
 
 def _clean_isbn(raw: str | None) -> str | None:
-    """Goodreads exports ISBNs as ``="0439023483"`` — unwrap them."""
+    """Goodreads exports ISBNs as ``="0439023483"`` - unwrap them."""
     if not raw:
         return None
     cleaned = raw.strip().removeprefix('=').strip('"').strip()

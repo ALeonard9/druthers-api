@@ -23,7 +23,7 @@ def test_index():
     assert response_data['success'] is True
     assert isinstance(response_data['data'], list)
     assert len(response_data['data']) == 0
-    assert response_data['message'] == 'druthers.io API — your favorites, ranked.'
+    assert response_data['message'] == 'druthers.io API - your favorites, ranked.'
 
 
 @pytest.mark.asyncio

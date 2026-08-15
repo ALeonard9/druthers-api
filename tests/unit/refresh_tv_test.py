@@ -72,7 +72,7 @@ def test_shows_without_a_tvmaze_id_are_skipped(test_db_session):
 @patch('app.jobs.refresh_tv.time.sleep')
 def test_stops_early_after_consecutive_misses(_sleep, _detail, _sync, test_db_session):
     """
-    A run of misses means rate limiting — stop rather than hammer TVMaze.
+    A run of misses means rate limiting - stop rather than hammer TVMaze.
     """
     for i in range(refresh_tv.STOP_AFTER_CONSECUTIVE_MISSES + 5):
         show = _show(test_db_session, f'Show {i}', 300 + i, 'Running')
@@ -95,7 +95,7 @@ def test_run_repairs_duplicate_slots_left_by_the_sync(
 ):
     """
     The nightly sync is the only thing that creates ambiguous slots, so it has
-    to be the thing that clears them — otherwise the Schedule and the detail
+    to be the thing that clears them - otherwise the Schedule and the detail
     page disagree until someone runs the CLI by hand (#240).
     """
     show = _show(test_db_session, 'Reassigned', 401, 'Running')
@@ -119,7 +119,7 @@ def test_run_repairs_duplicate_slots_left_by_the_sync(
     )
     test_db_session.add_all([keeper, newer])
     test_db_session.flush()
-    # Two users, state split across both rows — the case where a user-scoped
+    # Two users, state split across both rows - the case where a user-scoped
     # repair would drop whoever it was not looking at.
     test_db_session.add_all(
         [
@@ -129,7 +129,7 @@ def test_run_repairs_duplicate_slots_left_by_the_sync(
         ]
     )
     test_db_session.flush()
-    # run() closes the session, detaching these — keep the ids as plain ints.
+    # run() closes the session, detaching these - keep the ids as plain ints.
     show_pk, keeper_pk = show.pk, keeper.pk
 
     with patch('app.jobs.refresh_tv.SessionLocal', return_value=test_db_session):
@@ -159,7 +159,7 @@ def test_run_repairs_duplicate_slots_left_by_the_sync(
 @patch('app.jobs.refresh_tv.time.sleep')
 def test_run_leaves_clean_shows_alone(_sleep, _detail, _sync, test_db_session):
     """
-    A show with no duplicated slot must not report a repair — otherwise the
+    A show with no duplicated slot must not report a repair - otherwise the
     nightly log cries wolf and nobody reads it.
     """
     show = _show(test_db_session, 'Clean', 402, 'Running')

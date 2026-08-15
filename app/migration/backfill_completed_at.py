@@ -4,12 +4,12 @@ Recover the old site's completed dates (``g_first``) into ``completed_at``.
 The orion import handled ``g_first`` inconsistently: movies conflated it into
 ``created_at`` (with a ``g_updated`` fallback), and books/games never fetched
 it at all. This one-shot reads the orion source again and restores the real
-dates, falling back to ``g_created`` (the day the row was added — the old
+dates, falling back to ``g_created`` (the day the row was added - the old
 site's default) for completed rows that never had an explicit date.
 
 Joins use the same natural keys as ``orion_import``: movies/tv by ``imdb``,
 books by ``googleid or title`` (exactly what the import wrote into druthers's
-``googleid`` column), games by ``igdb``. TV is excluded — orion never had a
+``googleid`` column), games by ``igdb``. TV is excluded - orion never had a
 per-show completed date.
 
 Idempotent: only rows whose ``completed_at`` is currently NULL are touched,
@@ -140,7 +140,7 @@ def run(  # pylint: disable=too-many-locals, too-many-branches, too-many-stateme
                         misses.append(f'(no tracker) {str(key)[:32]}')
                         continue
                     if t.completed_at is not None:
-                        skipped += 1  # already set — never clobber
+                        skipped += 1  # already set - never clobber
                         continue
                     source = row['g_first'] or row['g_created']
                     if source is None:

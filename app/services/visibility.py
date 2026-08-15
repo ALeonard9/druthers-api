@@ -1,7 +1,7 @@
 """
 Visibility tiers (#274): ``private`` < ``friends`` < ``public``.
 
-Every shelf — and the profile itself — carries one of three tiers instead of
+Every shelf - and the profile itself - carries one of three tiers instead of
 the on/off booleans this replaced. The tier is an enum in Python and a
 constrained string in the database (never an integer): a value nobody wrote
 on purpose has to be a loud failure, not a silently more permissive setting.
@@ -11,7 +11,7 @@ two-part question: what the owner set, and who is asking. A viewer-aware
 reader resolves the caller's :class:`ViewerRelationship` once, turns it into a
 tier ceiling with :func:`ceiling_for`, and asks :func:`admits` per shelf.
 :func:`is_public` remains the right question only where there is no viewer at
-all — "is this profile shareable", as the owner's own summary asks it.
+all - "is this profile shareable", as the owner's own summary asks it.
 """
 
 from enum import StrEnum
@@ -19,7 +19,7 @@ from typing import Optional
 
 
 class VisibilityTier(StrEnum):
-    """How widely one shelf — or the whole profile — is shared."""
+    """How widely one shelf - or the whole profile - is shared."""
 
     PRIVATE = 'private'
     FRIENDS = 'friends'
@@ -32,7 +32,7 @@ class ViewerRelationship(StrEnum):
 
     One value covers the four framings a client has to render, and the four
     levels of access the API grants. ``NONE`` is an authenticated caller with
-    no relationship — deliberately distinct from ``ANONYMOUS``, which is not
+    no relationship - deliberately distinct from ``ANONYMOUS``, which is not
     signed in at all, even though the two are served identical shelves.
     """
 
@@ -42,7 +42,7 @@ class ViewerRelationship(StrEnum):
     SELF = 'self'
 
 
-# New accounts start visible to friends, not private (web#156) — a fresh
+# New accounts start visible to friends, not private (web#156) - a fresh
 # signup is otherwise invisible to the friends who invited them. This one
 # constant drives every tier_column() default in app/db/models.py, so the
 # profile's own default moves in lockstep with the shelves it fronts and the
@@ -86,7 +86,7 @@ def openness(value) -> int:
 
 
 def is_public(value) -> bool:
-    """True only for ``public`` — friends and junk read as private."""
+    """True only for ``public`` - friends and junk read as private."""
     return coerce(value) is VisibilityTier.PUBLIC
 
 
@@ -121,7 +121,7 @@ def ceiling_for(relationship: ViewerRelationship) -> VisibilityTier:
     The tier ceiling a viewer is served, resolved from their relationship.
 
     Owners see everything of their own; accepted friends additionally see
-    ``friends``; everybody else — signed in or not — sees ``public`` only.
+    ``friends``; everybody else - signed in or not - sees ``public`` only.
     Following (#276) grants nothing, so it never appears here.
     """
     return _CEILING[relationship]

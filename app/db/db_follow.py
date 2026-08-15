@@ -33,7 +33,7 @@ def is_following(db: Session, follower_pk: int, followee_pk: int) -> bool:
     """
     True when ``follower_pk`` already follows ``followee_pk``.
 
-    Self is always False without a query — a user is never following
+    Self is always False without a query - a user is never following
     themselves, the same shape :func:`app.db.db_friendship.are_friends`
     uses for the self case.
     """

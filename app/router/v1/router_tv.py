@@ -494,7 +494,7 @@ def get_schedule(  # pylint: disable=too-many-locals
         # window_end >= aired_before for any window_days >= 1, so bounding the
         # fetch to airdate <= window_end covers both.
         # The unwatched anti-join is pushed into SQL too, instead of loading
-        # every episode of every active show and filtering in Python — row
+        # every episode of every active show and filtering in Python - row
         # count no longer scales with the full episode catalog.
         watched_exists = (
             db.query(DbUserTVEpisode.pk)
@@ -649,7 +649,7 @@ def mark_tv_show(
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
 ):
-    """Add a show to the user's lists (idempotent — merges list membership)."""
+    """Add a show to the user's lists (idempotent - merges list membership)."""
     user_pk = current_user[0].pk
     show = _get_show(db, show_id)
     tracker = _get_tracker(db, user_pk, show.pk)
@@ -676,7 +676,7 @@ def mark_tv_show(
 
     # A show only holds a rank while it's on the ranked list AND was already
     # placed. Entering Rankings (or leaving it) resets to unplaced so it lands
-    # in the "to rank" bucket rather than at a stale/leftover position —
+    # in the "to rank" bucket rather than at a stale/leftover position -
     # unless it's the first ranked show, which auto-places at #1 (#289).
     enforce_single_home(tracker, data)
     default_completed_at(tracker, was_on_rankings)
@@ -724,7 +724,7 @@ def update_user_tv_show(
         tracker.rank = None
         tracker.ranked_at = None
 
-    # A removed placement leaves a gap — shift everything below it up.
+    # A removed placement leaves a gap - shift everything below it up.
     if old_rank is not None and tracker.rank is None:
         _close_rank_gap(db, user_pk, old_rank)
 
@@ -904,7 +904,7 @@ def unmark_episode_watched(
             status_code=status.HTTP_404_NOT_FOUND, detail='Episode not marked'
         )
     # A favorited episode keeps its row (and the favorite) even once
-    # unwatched (#262) — only drop the row entirely once nothing's left on it.
+    # unwatched (#262) - only drop the row entirely once nothing's left on it.
     if tracker.favorited:
         tracker.watched = 0
         tracker.watched_at = None

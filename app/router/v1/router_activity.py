@@ -261,7 +261,7 @@ def _social_shelf_rows(  # pylint: disable=too-many-arguments, too-many-position
 def _tracker_occurred_at(tracker, action):
     """
     The semantic timestamp for a tracker's feed entry. updated_at is a
-    technical "row was touched" column — it is only ever a last-resort
+    technical "row was touched" column - it is only ever a last-resort
     fallback here, never the meaning (#141 follow-up, 2026-07-19).
     """
     if action == 'ranked':
@@ -275,7 +275,7 @@ def _tracker_occurred_at(tracker, action):
 def _bounded_tracker_rows(db: Session, model, user_pk: int, *loader_options):
     """
     Rows on watchlist or rankings, newest-by-_tracker_occurred_at first,
-    bounded to MAX_FEED in SQL — mirrors _tracker_occurred_at's branching so
+    bounded to MAX_FEED in SQL - mirrors _tracker_occurred_at's branching so
     the SQL order matches the Python-computed occurred_at exactly. Movies/TV
     shows/games/books share these column names (on_rankings, rank, ranked_at,
     completed_at, created_at, updated_at).
@@ -368,7 +368,7 @@ def _episode_activity(db: Session, user_pk: int) -> List[ActivityItem]:
         .filter(DbUserTVEpisode.user_id == user_pk, DbUserTVEpisode.watched == 1)
         # Episode marks dwarf every other domain (tens of thousands once a
         # library is imported) and occurred_at is updated_at here, so only the
-        # newest MAX_FEED can survive the merged sort — bound it in SQL.
+        # newest MAX_FEED can survive the merged sort - bound it in SQL.
         .order_by(
             func.coalesce(DbUserTVEpisode.watched_at, DbUserTVEpisode.updated_at).desc()
         )

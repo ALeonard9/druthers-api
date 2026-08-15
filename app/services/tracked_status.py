@@ -1,7 +1,7 @@
 """
 Attaches on_watchlist/on_rankings/rank to raw search-provider results by
 joining the current user's tracker row via the domain's external catalog id
-(imdb/tvmaze/igdb/isbn) — so search can badge items the user already tracks
+(imdb/tvmaze/igdb/isbn) - so search can badge items the user already tracks
 instead of only offering "add" (web#31).
 """
 
@@ -63,7 +63,7 @@ def attach_tracked_status(
     """
     Mutates each result dict in place, adding on_watchlist/on_rankings/rank
     for items the user already tracks. Results without the domain's external
-    id (e.g. a book missing an ISBN) are left untracked — there's nothing to
+    id (e.g. a book missing an ISBN) are left untracked - there's nothing to
     join on. Safe to call with an empty results list.
     """
     catalog_model, external_key, tracker_model, fk_column = _DOMAIN_CONFIG[domain]

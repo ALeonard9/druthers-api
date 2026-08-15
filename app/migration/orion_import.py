@@ -253,7 +253,7 @@ def run_import(dry_run: bool = False) -> Report:
                     {
                         # Legacy movie ranks are 0-based, like TV's below; the
                         # API contract is 1-based (reorder_rankings enumerates
-                        # from 1). An unranked row keeps no position at all —
+                        # from 1). An unranked row keeps no position at all -
                         # it used to carry its raw 0-based legacy rank, which
                         # is both meaningless off the rankings list and a
                         # ck_user_movies_rank_1_based violation.

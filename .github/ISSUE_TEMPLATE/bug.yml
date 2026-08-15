@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         The **Estimate** block is read by the fleet dispatcher to route the
-        work — fill it honestly.
+        work - fill it honestly.
 
   - type: textarea
     id: story
@@ -48,7 +48,7 @@ body:
     id: channel-impact
     attributes:
       label: Channel Impact
-      description: Every channel gets a line — in this issue, companion issue, or no impact and why.
+      description: Every channel gets a line - in this issue, companion issue, or no impact and why.
       value: |
         - **API:**
         - **Web:**
@@ -61,12 +61,12 @@ body:
     id: recommended-model
     attributes:
       label: Recommended model
-      description: Difficulty tier. Drives fleet routing — see `druthers-infra/fleet/README.md`.
+      description: Difficulty tier. Drives fleet routing - see `druthers-infra/fleet/README.md`.
       options:
-        - Haiku 4.5 — trivial, mechanical, low-risk
-        - Sonnet 5 — standard fix with a regression test (default)
-        - Opus 4.8 — data integrity, security, caching, or cross-repo
-        - Fable 5 — writing/content-shaped work
+        - Haiku 4.5 - trivial, mechanical, low-risk
+        - Sonnet 5 - standard fix with a regression test (default)
+        - Opus 4.8 - data integrity, security, caching, or cross-repo
+        - Fable 5 - writing/content-shaped work
       default: 1
     validations:
       required: true
@@ -75,7 +75,7 @@ body:
     id: human-effort
     attributes:
       label: Human effort
-      description: Your involvement — decisions, review, manual steps. Not AI implementation time.
+      description: Your involvement - decisions, review, manual steps. Not AI implementation time.
       options:
         - XS
         - S

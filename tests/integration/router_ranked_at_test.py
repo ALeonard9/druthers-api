@@ -51,7 +51,7 @@ def test_notes_edit_does_not_redate_ranking_activity(test_client: TestClient):
 
 def test_reranking_does_redate(test_client: TestClient):
     """
-    An actual rank move is a genuine event — the entry re-dates.
+    An actual rank move is a genuine event - the entry re-dates.
     """
     _make_ranked_movie(test_client, title='Heat', imdb='tt0113277')
     _make_ranked_movie(test_client, title='Ronin', imdb='tt0122690')

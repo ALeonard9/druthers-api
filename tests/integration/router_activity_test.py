@@ -569,7 +569,7 @@ def test_bored_picks_from_watchlists(test_client: TestClient):
 
 
 def test_bored_excludes_ranked_or_completed_items(test_client: TestClient):
-    """Only items still on a watchlist are candidates — ranked ones are done."""
+    """Only items still on a watchlist are candidates - ranked ones are done."""
     movie_id = _make_movie(test_client)
     headers = {'Authorization': f"Bearer {test_client.first_user.token}"}
     test_client.post(

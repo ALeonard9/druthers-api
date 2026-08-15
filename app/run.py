@@ -65,7 +65,7 @@ def _is_mutable_user_read(method: str, path: str) -> bool:
 app = FastAPI(
     title='druthers.io API ' + settings.env,
     description=(
-        'API for druthers.io — track and rank the movies, TV, books, and '
+        'API for druthers.io - track and rank the movies, TV, books, and '
         'games you actually care about.'
     ),
     version='0.0.1',
@@ -95,12 +95,12 @@ app = FastAPI(
         },
         {
             'name': 'Follows',
-            'description': 'Asymmetric, unapproved follows — grants no extra visibility',
+            'description': 'Asymmetric, unapproved follows - grants no extra visibility',
         },
         {'name': 'Search', 'description': 'Cross-domain global search'},
         {
             'name': 'Summary',
-            'description': 'Home summary — per-shelf Top 5 and counts',
+            'description': 'Home summary - per-shelf Top 5 and counts',
         },
     ],
     openapi_url='/openapi.json',
@@ -183,7 +183,7 @@ def index():
     """
     Index endpoint that returns a welcome message.
     """
-    return OutResponseBaseModel(message='druthers.io API — your favorites, ranked.')
+    return OutResponseBaseModel(message='druthers.io API - your favorites, ranked.')
 
 
 @app.get('/favicon.ico', include_in_schema=False)
@@ -271,7 +271,7 @@ async def start_server():
         )
         return
 
-    # We're already inside asyncio.run() here — the sync uvicorn.run() would
+    # We're already inside asyncio.run() here - the sync uvicorn.run() would
     # try to start a second event loop and crash (exactly what took down the
     # first Cloud Run revision). Serve on the running loop instead.
     config = uvicorn.Config(

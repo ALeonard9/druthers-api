@@ -67,7 +67,7 @@ tasks:
         done
         printf '\napi never answered on :8000\n' >&2; exit 1
       - "echo ''"
-      - "echo 'dev is up — API on http://localhost:8000'"
+      - "echo 'dev is up - API on http://localhost:8000'"
       - "echo 'Seed the dev cast with:  task seed:dev'"
 
   migrate:

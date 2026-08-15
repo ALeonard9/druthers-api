@@ -4,7 +4,7 @@ status from TVMaze.
 
 This is the recurring counterpart to ``app.migration.enrich_tv``, which only
 touches shows *missing* detail and therefore goes silent once the backfill is
-done — it would never notice a new season. This job re-syncs shows a user
+done - it would never notice a new season. This job re-syncs shows a user
 actually tracks, so the Schedule page keeps working.
 
 Usage::
@@ -15,7 +15,7 @@ Idempotent: ``sync_episodes`` upserts on the TVMaze episode id, so re-running
 only ever adds new episodes and refreshes existing titles/airdates.
 
 Each show is also reconciled for duplicated episode slots immediately after
-its sync — see ``audit_watch_gaps.repair_duplicate_slots``. This job is the
+its sync - see ``audit_watch_gaps.repair_duplicate_slots``. This job is the
 only thing that creates them, so it is the only thing that has to clean them
 up; ``app.jobs.audit_watch_gaps`` remains the by-hand entry point for
 auditing gaps and for repairing a backlog that predates this.
@@ -43,7 +43,7 @@ from app.services.tv_search import (
 # episodes), so 1.5s between shows keeps a full pass well inside the limit.
 THROTTLE_SECONDS = 1.5
 # Consecutive detail misses almost always mean we are being rate limited
-# rather than that every remaining show vanished — stop and try again later.
+# rather than that every remaining show vanished - stop and try again later.
 STOP_AFTER_CONSECUTIVE_MISSES = 15
 # Shows in these states can still gain episodes. Anything else is only worth
 # refreshing on an explicit --all pass.
@@ -113,7 +113,7 @@ def run(include_ended: bool = False, limit: int = 0) -> dict:
             # show now rather than leaving the slot for whoever next notices
             # the Schedule and the detail page disagreeing (#240, #169).
             for repair in repair_duplicate_slots(db, show):
-                logger.info('refresh_tv: repaired duplicate slot — %s', repair)
+                logger.info('refresh_tv: repaired duplicate slot - %s', repair)
                 report['slots_repaired'] += 1
             report['shows'] += 1
             # Commit per show so an early stop still keeps completed work.

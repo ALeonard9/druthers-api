@@ -1,12 +1,12 @@
 """tracker completed_at
 
-The date the user finished an item (#159) — the old site's ``g_first`` field,
+The date the user finished an item (#159) - the old site's ``g_first`` field,
 lost/partially conflated by the orion import. Defaults to the day an item
 enters Rankings; editable on the detail page. Historical values are restored
 separately by ``app.migration.backfill_completed_at`` (better data than any
 in-schema backfill could manage).
 
-Countries deliberately excluded — the product no longer tracks them.
+Countries deliberately excluded - the product no longer tracks them.
 
 Revision ID: f2a5b74c8d36
 Revises: e9f4a63b7c25

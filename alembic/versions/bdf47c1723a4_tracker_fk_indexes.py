@@ -22,7 +22,7 @@ down_revision: Union[str, Sequence[str], None] = 'a7c8d95e2f41'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-# (table, fk_column) — composite index is (user_id, fk_column)
+# (table, fk_column) - composite index is (user_id, fk_column)
 TRACKER_FKS = (
     ('user_movies', 'movie_id'),
     ('user_tv_shows', 'tv_show_id'),

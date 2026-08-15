@@ -3,7 +3,7 @@
 Mutual friend requests (#275).
 
 Two clusters of assertions: the request/accept/decline/cancel/unfriend
-lifecycle over a single canonical row, and the enumeration-resistance rules —
+lifecycle over a single canonical row, and the enumeration-resistance rules -
 an unknown handle has to be indistinguishable from a known one, including on
 the *second* attempt, which is where the naive "duplicate -> 409" version
 leaks.
@@ -135,7 +135,7 @@ def test_unknown_handle_answers_exactly_like_a_known_one(test_client: TestClient
     assert known.status_code == unknown.status_code == 202
     assert known.json() == unknown.json()
 
-    # A malformed handle — which could never exist — takes the same path
+    # A malformed handle - which could never exist - takes the same path
     # rather than a distinguishable 422.
     malformed = _send(test_client, token, 'Not A Handle!!')
     assert malformed.status_code == 202
@@ -211,7 +211,7 @@ def test_already_friends_request_is_rejected(test_client: TestClient):
 
 def test_request_from_the_other_direction_says_accept_it(test_client: TestClient):
     """
-    Reachable only because the *other* user already asked — a state no amount
+    Reachable only because the *other* user already asked - a state no amount
     of probing can create, so a clear error leaks nothing.
     """
     _claim_handle(test_client, test_client.first_user.token, 'avery')
@@ -448,7 +448,7 @@ def test_a_user_without_a_handle_cannot_be_reached(test_client: TestClient):
     """
     _claim_handle(test_client, test_client.second_user.token, 'blake')
     # Clearing a handle is only allowed while fully private, and every tier
-    # now defaults to 'friends' (web#156) — go there explicitly first.
+    # now defaults to 'friends' (web#156) - go there explicitly first.
     test_client.put(
         '/v1/users/me/visibility',
         headers=_auth(test_client.second_user.token),
@@ -492,7 +492,7 @@ def test_the_friend_graph_needs_authentication(test_client: TestClient):
 
 def test_handle_is_matched_exactly_but_case_insensitively(test_client: TestClient):
     """
-    Handles are stored lowercase, so ' BLAKE ' is the same address — but no
+    Handles are stored lowercase, so ' BLAKE ' is the same address - but no
     prefix or fuzzy matching, which would be a search endpoint in disguise.
     """
     _claim_handle(test_client, test_client.second_user.token, 'blake')

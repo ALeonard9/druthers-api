@@ -3,8 +3,8 @@ The four tracked domains, described once.
 
 Movies, TV, Books and Games have identical tracker shapes: ``on_rankings`` /
 ``on_watchlist`` / ``rank`` against a catalog row carrying a title, year and
-poster. Endpoints that work across all four — the public profile and the home
-summary — read this registry instead of repeating the tuple, so the shelf list
+poster. Endpoints that work across all four - the public profile and the home
+summary - read this registry instead of repeating the tuple, so the shelf list
 stays in one place.
 """
 
@@ -25,14 +25,14 @@ from app.db.models_sandbox import (
 class Shelf(NamedTuple):
     """One tracked domain and the bits generic queries need to reach it."""
 
-    # URL/JSON slug ('movies'). Stable — clients key off this.
+    # URL/JSON slug ('movies'). Stable - clients key off this.
     category: str
     # Human label ('Video Games'), as it appears on profiles and share cards.
     label: str
     # Attribute on DbUser holding this shelf's visibility tier.
     visibility_tier: str
     # Attribute on DbUser holding this shelf's *watchlist* visibility tier
-    # (#236) — only takes effect when visibility_tier admits the viewer too.
+    # (#236) - only takes effect when visibility_tier admits the viewer too.
     watchlist_visibility_tier: str
     tracker_model: Type
     catalog_model: Type

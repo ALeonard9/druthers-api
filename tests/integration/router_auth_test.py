@@ -75,7 +75,7 @@ def test_google_login_rejects_non_allowlisted_email(
     """
     #183: when OAUTH_ALLOWLIST is configured, a valid-but-unlisted Google
     account is rejected with a clear invite-only message rather than being
-    silently signed up — this is the "restrict login / disable new-member
+    silently signed up - this is the "restrict login / disable new-member
     signup" gate.
     """
     email = f'{fake.user_name()}@gmail.com'
@@ -103,7 +103,7 @@ def test_google_login_allowlist_also_blocks_existing_unlisted_account(
     mock_verify, mock_settings, test_client: TestClient
 ):
     """
-    The allowlist gates sign-in outright, not just first-time registration —
+    The allowlist gates sign-in outright, not just first-time registration -
     an account that already exists in the DB but has since fallen off the
     allowlist is rejected too.
     """

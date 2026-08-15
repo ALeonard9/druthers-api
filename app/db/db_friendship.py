@@ -7,7 +7,7 @@ imports. The split is what keeps the import graph acyclic; it is the same
 arrangement ``db_user`` / ``model_schemas`` already use.
 
 :func:`are_friends` is the entry point the ``friends`` visibility tier is
-meant to call (#277) — one indexed lookup, no knowledge of canonical ordering
+meant to call (#277) - one indexed lookup, no knowledge of canonical ordering
 required at the call site.
 """
 
@@ -26,7 +26,7 @@ def friendship_between(
     """
     The single row for this pair, whatever its status, or ``None``.
 
-    Returns pending rows too — callers that only care about real friendships
+    Returns pending rows too - callers that only care about real friendships
     want :func:`are_friends`.
     """
     if one_pk == other_pk:
@@ -47,7 +47,7 @@ def are_friends(db: Session, one_pk: int, other_pk: int) -> bool:
     True when these two users have an *accepted* friendship.
 
     The question the ``friends`` visibility tier asks (#277). A pending
-    request is not a friendship, and a user is not their own friend — the
+    request is not a friendship, and a user is not their own friend - the
     self case is False so a viewer looking at their own profile is served by
     ownership, never by an accidental friends-with-self edge.
     """

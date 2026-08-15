@@ -5,7 +5,7 @@ Global cross-domain search: one query fanned out to every provider.
 Providers are independent external APIs, so they run in parallel; a provider
 failing (or being unconfigured) yields an empty list for its domain rather
 than failing the whole search. Domains that come back empty are retried once
-with a spelling correction — some providers fuzzy-match and some don't.
+with a spelling correction - some providers fuzzy-match and some don't.
 """
 
 from concurrent.futures import ThreadPoolExecutor
