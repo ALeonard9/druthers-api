@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 # A 1-based position in a ranked list (None when the item is tracked but not
 # placed). The bound is the API half of the ck_<table>_rank_1_based CHECK: a
 # client PUTting rank 0 gets a 422 naming the field, rather than a row the
-# database will reject — or, before the CHECK existed, a silently stored 0
+# database will reject - or, before the CHECK existed, a silently stored 0
 # that showed up as "0" at the top of the Top 5 board.
 RankPosition = Annotated[int, Field(ge=1)]
 TrackerItem = TypeVar('TrackerItem')
@@ -40,8 +40,8 @@ class WatchProviders(BaseModel):
     """
     Where a title can be watched in one region (web#26).
 
-    Never 404s and never errors: a title with no availability — or one TMDB
-    can't resolve — comes back with empty buckets, so the detail page renders
+    Never 404s and never errors: a title with no availability - or one TMDB
+    can't resolve - comes back with empty buckets, so the detail page renders
     the same either way. ``attribution`` carries the credit TMDB requires
     wherever this data is displayed.
     """
@@ -110,7 +110,7 @@ class MovieResponse(MovieBase):
 
 
 class MovieSummary(BaseModel):
-    """Lightweight movie for list responses — omits the large ``plot`` field."""
+    """Lightweight movie for list responses - omits the large ``plot`` field."""
 
     id: str
     title: str
@@ -227,7 +227,7 @@ class TVShowResponse(TVShowBase):
 
 
 class TVShowSummary(BaseModel):
-    """Lightweight show for list responses — omits the large ``summary``."""
+    """Lightweight show for list responses - omits the large ``summary``."""
 
     id: str
     title: str
@@ -417,7 +417,7 @@ class VideoGameResponse(VideoGameBase):
 
 
 class VideoGameSummary(BaseModel):
-    """Lightweight game for list responses — omits the large ``summary``."""
+    """Lightweight game for list responses - omits the large ``summary``."""
 
     id: str
     title: str
@@ -518,7 +518,7 @@ class BookResponse(BookBase):
 
 
 class BookSummary(BaseModel):
-    """Lightweight book for list responses — omits the large ``description``."""
+    """Lightweight book for list responses - omits the large ``description``."""
 
     id: str
     title: str

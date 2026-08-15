@@ -5,7 +5,7 @@ against.
 One row per *relationship*, not one per direction. The two user ids are
 stored in canonical order (``user_low_id < user_high_id``) with a separate
 column recording who asked, so "are these two friends" is a single indexed
-lookup and the two directions can never disagree with each other — there is
+lookup and the two directions can never disagree with each other - there is
 only one direction to disagree with.
 
 This module is deliberately pure: the enum and the ordering rule live here so
@@ -38,7 +38,7 @@ DEFAULT_STATUS = FriendshipStatus.PENDING
 
 def canonical_pair(one_pk: int, other_pk: int) -> Tuple[int, int]:
     """
-    The two user ids as ``(low, high)`` — the order every row is stored in.
+    The two user ids as ``(low, high)`` - the order every row is stored in.
 
     Every read and write goes through this, so a relationship has exactly one
     representation no matter which side of it is asking.

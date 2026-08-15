@@ -5,7 +5,7 @@ Profanity detection for claimed handles (#278).
 A handle is the profile URL (``update_visibility`` in
 ``app/router/v1/router_visibility.py`` refuses to let anything leave
 ``private`` without one), so it needs to be rejectable the same way a
-malformed or reserved handle already is — at claim time, with a 422.
+malformed or reserved handle already is - at claim time, with a 422.
 
 Everything here runs against the wordlist ``better-profanity`` ships inside
 its own installed package. Nothing profane is vendored, copied, or typed
@@ -19,7 +19,7 @@ Detection is two layers for that reason, each normalizing the handle
 differently because they're looking for different things:
 
 1. **Word-boundary pass.** The handle is split into tokens on every hyphen
-   *and* every digit — digits are ``ALLOWED_CHARACTERS`` to the library
+   *and* every digit - digits are ``ALLOWED_CHARACTERS`` to the library
    itself, so it never splits ``word123`` into ``word`` on its own; doing
    that split ourselves before handing tokens to
    ``better_profanity.profanity`` is what turns a 0% catch rate on
@@ -28,7 +28,7 @@ differently because they're looking for different things:
    leetspeak *within* a token). This is what catches ``the-<word>``,
    ``<word>-fan``, and ``<word>123``.
 2. **Substring pass.** Separately, leetspeak digits with an unambiguous
-   letter reading (0/1/3/4/5/7 -> o/i/e/a/s/t — the entire leetspeak
+   letter reading (0/1/3/4/5/7 -> o/i/e/a/s/t - the entire leetspeak
    alphabet available inside a handle, since ``HANDLE_RE`` allows nothing
    but ``[a-z0-9-]``) are folded back to letters, and whatever's left that
    isn't a letter (hyphens, plus digits with no letter reading) is stripped
@@ -38,7 +38,7 @@ differently because they're looking for different things:
    (``<word>fan``, ``xx<word>``) that never reach a boundary for pass 1 to
    find. (Folding leet digits into letters *before* splitting on them, the
    way pass 1 does, was tried and discarded: a padding run like ``123``
-   partially resolves to letters — ``1``/``3`` do, ``2`` doesn't — which
+   partially resolves to letters - ``1``/``3`` do, ``2`` doesn't - which
    fragments the split instead of cleanly separating it. Pass 1 sidesteps
    that by never folding digits to letters in the first place.)
 
@@ -51,9 +51,9 @@ common words like "accuracy").
 
 No wordlist is complete or neutral: this will still miss creative spellings
 and will still catch a handful of legitimate handles (the measured
-collateral above — e.g. words like "asexual" or "amorally" contain a
+collateral above - e.g. words like "asexual" or "amorally" contain a
 shorter profane word as a substring). That's why ``HANDLE_PROFANITY_ALLOWLIST``
-exists (``app/config.py``) — Adam's per-handle override for exactly that
+exists (``app/config.py``) - Adam's per-handle override for exactly that
 case, applied at the call site in ``router_visibility.py`` rather than here,
 so this module stays a pure "is this profane" check.
 """
@@ -83,13 +83,13 @@ _LEET_TRANSLATION = str.maketrans(
 
 
 def _tokens(handle: str) -> List[str]:
-    """Split on every hyphen and digit — the word-boundary pass's input."""
+    """Split on every hyphen and digit - the word-boundary pass's input."""
     return [token for token in _NON_LETTER_RE.split(handle.lower()) if token]
 
 
 def _glued_and_unleeted(handle: str) -> str:
     """
-    Fold leetspeak digits to letters, strip whatever's left — the substring
+    Fold leetspeak digits to letters, strip whatever's left - the substring
     pass's input.
     """
     return _NON_LETTER_RE.sub('', handle.lower().translate(_LEET_TRANSLATION))
@@ -102,7 +102,7 @@ def _load_substring_words() -> FrozenSet[str]:
 
     Read as plain text straight from the file the installed package ships
     (``profanity_wordlist.txt``) rather than via ``profanity.CENSOR_WORDSET``
-    — those are ``VaryingString`` objects, which are neither sortable nor
+    - those are ``VaryingString`` objects, which are neither sortable nor
     comparable, so a plain-string read is the only way to get something
     ``in``-able for substring containment. Multi-word entries (the list has
     a few, e.g. phrases) can't appear inside a single handle token and are
@@ -123,7 +123,7 @@ def _load_substring_words() -> FrozenSet[str]:
     return frozenset(words)
 
 
-# Read once, at import time, and kept for the life of the process — see the
+# Read once, at import time, and kept for the life of the process - see the
 # module docstring for why nothing profane ends up committed anywhere.
 profanity.load_censor_words()
 SUBSTRING_WORDS: FrozenSet[str] = _load_substring_words()

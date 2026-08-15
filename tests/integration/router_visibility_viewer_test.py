@@ -302,7 +302,7 @@ def test_a_friends_only_profile_is_a_404_for_everybody_else(
         handle=HANDLE,
         visibility_profile='friends',
         visibility_movies='friends',
-        # Every shelf now defaults to 'friends' too (web#156) — pin the other
+        # Every shelf now defaults to 'friends' too (web#156) - pin the other
         # three closed so this stays a test of "only Movies is friends-tier",
         # not an accident of the account-wide default.
         visibility_tv='private',
@@ -317,7 +317,7 @@ def test_a_friends_only_profile_is_a_404_for_everybody_else(
     assert friend.status_code == 200
     assert _shelves(friend) == ['Movies']
 
-    # Everyone else gets the answer an unclaimed handle gets — byte for byte,
+    # Everyone else gets the answer an unclaimed handle gets - byte for byte,
     # headers included.
     unknown = test_client.get('/v1/public/nobody-here')
     assert _fingerprint(test_client.get(f'/v1/public/{HANDLE}')) == _fingerprint(
@@ -344,7 +344,7 @@ def test_nothing_visible_returns_200_when_profile_tier_admits_you(
         owner_token,
         handle=HANDLE,
         visibility_profile='friends',
-        # Shelves default to 'friends' now (web#156) — pin them private so
+        # Shelves default to 'friends' now (web#156) - pin them private so
         # this test still exercises "profile open, every shelf closed".
         visibility_movies='private',
         visibility_tv='private',
@@ -459,7 +459,7 @@ def test_absent_credentials_are_anonymous_not_an_error(profile: TestClient):
 @pytest.mark.parametrize('token', ['garbage', 'drk_not-a-real-key', ''])
 def test_bad_credentials_are_rejected_rather_than_ignored(profile: TestClient, token):
     # The deliberate choice: present-but-invalid is never silently downgraded
-    # to the anonymous view — except for an empty bearer, which carries no
+    # to the anonymous view - except for an empty bearer, which carries no
     # credential at all.
     response = profile.get(f'/v1/public/{HANDLE}', headers=_auth(token))
     if token == '':
@@ -498,7 +498,7 @@ def test_a_token_for_a_deleted_account_is_a_401(
 
 def test_the_response_varies_on_the_authorization_header(profile: TestClient):
     # A shared cache keyed on the URL alone would hand one viewer another
-    # viewer's shelves — or another viewer's 404, since whether this handle
+    # viewer's shelves - or another viewer's 404, since whether this handle
     # resolves at all depends on who is asking.
     assert profile.get(f'/v1/public/{HANDLE}').headers['vary'] == 'Authorization'
     assert profile.get('/v1/public/nobody').headers['vary'] == 'Authorization'

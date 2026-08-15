@@ -1,6 +1,6 @@
 name: Promote image
 
-# Promote a tested+scanned artifact between environments by DIGEST — never rebuilds.
+# Promote a tested+scanned artifact between environments by DIGEST - never rebuilds.
 # See www.aleonard.us-docker/docs/PROMOTION.md. Copy this file to -web / -mcp
 # (only IMAGE_NAME differs, which is derived from the repo automatically).
 

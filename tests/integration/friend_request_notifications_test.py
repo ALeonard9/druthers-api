@@ -41,7 +41,7 @@ def test_incoming_request_raises_exactly_one_notification(test_client: TestClien
     assert items[0]['category'] == 'friend_request'
     assert items[0]['read'] is False
 
-    # Nothing for the sender yet — only the recipient is notified.
+    # Nothing for the sender yet - only the recipient is notified.
     assert _notifications(test_client, test_client.first_user.token) == []
 
 
@@ -74,7 +74,7 @@ def test_accept_notifies_the_original_sender(test_client: TestClient):
     assert sender_items[0]['category'] == 'friend_request'
 
     # The recipient's original "wants to be friends" notification is
-    # resolved — it would deep-link into a friendship they already acted on.
+    # resolved - it would deep-link into a friendship they already acted on.
     recipient_items = _notifications(test_client, test_client.second_user.token)
     assert not any(item['type'] == 'friend_request' for item in recipient_items)
     assert incoming  # (sanity: there was something to resolve)

@@ -4,7 +4,7 @@ Tests for the two-layer handle profanity check (#278).
 
 No profane term is ever typed into this file. Every case below is built at
 runtime from the wordlist ``better-profanity`` ships in its own installed
-package — the same source ``app/services/handles.py`` reads from — so
+package - the same source ``app/services/handles.py`` reads from - so
 these assertions exercise the real list without a copy of it living here.
 """
 
@@ -64,7 +64,7 @@ def test_hyphen_separated_word_is_rejected(word):
 def test_digit_separated_word_is_rejected(word):
     # A pure library `contains_profanity()` call on this glued string misses
     # it (digits are ALLOWED_CHARACTERS to the library, so they don't
-    # tokenize on their own) — this is the gap the word-boundary pass closes
+    # tokenize on their own) - this is the gap the word-boundary pass closes
     # by splitting on digits itself before handing tokens to the library.
     assert is_profane(f'{word}123') is True
 

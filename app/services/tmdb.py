@@ -84,7 +84,7 @@ def request(path: str, params: Optional[dict] = None) -> dict:
     GET ``path`` (e.g. ``/movie/603``) and return the decoded JSON body.
 
     Retries 429/5xx up to ``_MAX_ATTEMPTS`` times, then raises. A 404 is *not*
-    retried and raises :class:`TmdbError` — callers that treat "no such movie"
+    retried and raises :class:`TmdbError` - callers that treat "no such movie"
     as an empty result should use :func:`try_request` instead.
     """
     settings = get_settings()
@@ -126,7 +126,7 @@ def request(path: str, params: Optional[dict] = None) -> dict:
             return response.json()
         except (requests.RequestException, ValueError) as exc:
             # A non-retryable status (404), a decode error, or a transport
-            # failure — all terminal, since retryable statuses are handled
+            # failure - all terminal, since retryable statuses are handled
             # above before raise_for_status runs.
             last_exc = exc
             break
@@ -137,7 +137,7 @@ def request(path: str, params: Optional[dict] = None) -> dict:
 
 def try_request(path: str, params: Optional[dict] = None) -> Optional[dict]:
     """
-    Best-effort variant of :func:`request` — returns None instead of raising,
+    Best-effort variant of :func:`request` - returns None instead of raising,
     for enrichment paths that must degrade quietly.
     """
     try:

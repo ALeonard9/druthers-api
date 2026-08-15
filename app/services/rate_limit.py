@@ -2,7 +2,7 @@
 Abuse resistance (#148, threat model H1/H2): lightweight sliding-window rate
 limits served as FastAPI dependencies.
 
-Limits are in-memory and therefore per-instance — plenty for a small Cloud
+Limits are in-memory and therefore per-instance - plenty for a small Cloud
 Run service where the caps exist to stop bots and runaway loops, not to
 meter a distributed fleet. Enforcement is on in deployed environments
 (dev/prod) and off in local/CI unless ``RATE_LIMITS_ENABLED`` says otherwise;
@@ -103,7 +103,7 @@ def _allow(key: str, limit: int, window_seconds: int) -> bool:
 def _reject(what: str, retry_after_seconds: int):
     raise HTTPException(
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        detail=f'Too many {what} — try again later',
+        detail=f'Too many {what} - try again later',
         headers={'Retry-After': str(retry_after_seconds)},
     )
 
@@ -123,7 +123,7 @@ def refresh_rate_limit(user) -> None:
 
     Called from inside the endpoint rather than as a dependency: the user is
     only known once the refresh token resolves. Keying on the user instead of
-    the IP matters here — the web BFF refreshes server-to-server, so an IP
+    the IP matters here - the web BFF refreshes server-to-server, so an IP
     bucket would be shared by every browser on the site.
     """
     if not _enforced():
@@ -157,7 +157,7 @@ def friend_request_rate_limit(current_user: list = Depends(get_current_user)) ->
 
     Doubles as the brake on handle probing. Sending a request answers
     identically whether or not the handle exists, so the only way to learn
-    anything from the endpoint is volume — and this counts *attempts*, before
+    anything from the endpoint is volume - and this counts *attempts*, before
     the handle is looked up, so a miss costs an attacker exactly as much as a
     hit. Keyed per user (not per IP) because the web BFF calls the API
     server-to-server and every browser would otherwise share one bucket.
@@ -173,7 +173,7 @@ def follow_rate_limit(current_user: list = Depends(get_current_user)) -> None:
     """
     Per-user cap on follow actions (#276).
 
-    Unlike friend requests, following carries no probing concern — a follow
+    Unlike friend requests, following carries no probing concern - a follow
     only ever targets a profile that is already public. This cap exists
     purely to stop a mass-follow script, so it is looser than the friend
     request one.

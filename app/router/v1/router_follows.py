@@ -4,12 +4,12 @@ Asymmetric follows (#276): follow, unfollow, and the two lists.
 
 Deliberately separate from the mutual friend graph in
 :mod:`app.router.v1.router_friends`. Following needs no approval from the
-followee and unlocks nothing — see the module docstring on
+followee and unlocks nothing - see the module docstring on
 :mod:`app.services.follows` for why the two relationships are kept apart at
 every layer. The one rule this router exists to enforce:
 
     a follow may only be created against a profile whose ``visibility_profile``
-    is exactly ``public`` — never ``friends``, never ``private``, regardless of
+    is exactly ``public`` - never ``friends``, never ``private``, regardless of
     who is asking or what else they can already see.
 
 That check happens once, in :func:`follow_user`, against the *current* tier at
@@ -21,9 +21,9 @@ anything, because nothing in :mod:`app.services.visibility` ever reads it.
 Unlike a friend request, a handle here needs no probing defense: the target
 must already be public to be followable, so there is no relationship whose
 mere existence would leak private state. A handle that does not resolve to a
-public profile therefore 404s exactly like one that resolves to nobody —
+public profile therefore 404s exactly like one that resolves to nobody -
 mirroring the indistinguishable-404 rule ``/v1/public/{handle}`` already
-holds to — but there is no need for the generic-body trick
+holds to - but there is no need for the generic-body trick
 ``router_friends`` uses, since neither outcome exposes anything the caller
 did not already have to know to ask.
 """
@@ -61,7 +61,7 @@ def _followable_target(db: Session, handle: str) -> DbUser:
     """
     The user behind ``handle``, if and only if they are currently followable.
 
-    Followable means the profile tier is exactly ``public`` right now — the
+    Followable means the profile tier is exactly ``public`` right now - the
     same question ``/v1/public/{handle}`` answers for ``visibility_profile``,
     asked directly rather than through a viewer-relationship ceiling, since a
     follow ignores who is asking. An unknown handle and a handle that
@@ -132,7 +132,7 @@ def unfollow_user(
     """
     Stop following someone.
 
-    Deliberately does not require the target to still be public — a follow
+    Deliberately does not require the target to still be public - a follow
     persists through a followee tightening their profile (that's the whole
     point of #276's "grants nothing, persists anyway" rule), and the follower
     must still be able to unfollow after that happens.

@@ -71,7 +71,7 @@ def sweep_movie_releases(db: Session, user_pk: int) -> int:
                 user_id=user_pk,
                 type='movie_release',
                 title=f'{movie.title} hits theaters soon',
-                body=f'{movie.title} releases {release_day} — it\'s on your watchlist.',
+                body=f'{movie.title} releases {release_day} - it\'s on your watchlist.',
                 category='movie',
                 entity_id=movie.id,
                 dedupe_key=key,
@@ -85,7 +85,7 @@ def _raise_friend_notifications(db: Session, user_pk: int, spec: dict, rows) -> 
     """
     Upsert one notification per (friendship, other-user) row, by dedupe_key.
 
-    ``spec`` carries ``type``, ``title``, and ``body_for(other_user)`` — a
+    ``spec`` carries ``type``, ``title``, and ``body_for(other_user)`` - a
     dict rather than three parameters so the two call sites in
     :func:`sweep_friend_requests` read as one shape apiece.
     """
@@ -121,7 +121,7 @@ def sweep_friend_requests(db: Session, user_pk: int) -> int:
     cancelling notifies nobody.
 
     #275 deletes the friendship row outright on decline or cancel rather than
-    recording a terminal status — there is nothing to sweep a "declined"
+    recording a terminal status - there is nothing to sweep a "declined"
     event from. That also means a pending-request notification can outlive
     the request it points at (declined/cancelled, or simply accepted by the
     recipient themselves). Rather than let it deep-link into nothing, this

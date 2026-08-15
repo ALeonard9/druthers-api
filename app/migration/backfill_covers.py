@@ -1,20 +1,20 @@
 """
 Cover URL hygiene for books and games (#163).
 
-Both search services already emit correct URLs for anything added today —
+Both search services already emit correct URLs for anything added today -
 ``book_search._cover`` builds covers.openlibrary.org and ``game_search``
 serves IGDB's ``t_cover_big_2x``. This only repairs rows imported before
 that, so it is a pure data backfill with no service changes:
 
-* **Books** — 221 covers still point at books.google.com, left over from the
+* **Books** - 221 covers still point at books.google.com, left over from the
   Google Books era. Re-pointed to Open Library, keyed on the row's ISBN.
-* **Games** — legacy covers use IGDB's ``t_thumb`` (~90px, blurry at the
+* **Games** - legacy covers use IGDB's ``t_thumb`` (~90px, blurry at the
   size the UI renders). Upgraded by swapping the size token in the URL.
 
 The two domains need different care:
 
 Open Library serves a **blank placeholder with HTTP 200** for an ISBN it has
-no cover for — only ``?default=false`` turns that into a 404. So every book
+no cover for - only ``?default=false`` turns that into a 404. So every book
 candidate is verified before it is written; without that check this would
 silently trade working Google covers for grey boxes.
 
@@ -54,7 +54,7 @@ _LEGACY_BOOK_HOSTS = ('books.google.com', 'books.googleusercontent.com')
 # post-#251 state for a book that's on Google Books for exactly that reason.
 _REASON_NO_ISBN = 'no usable ISBN'
 _REASON_NO_COVER = 'no Open Library cover'
-# ``default=false`` is load-bearing — see the module docstring.
+# ``default=false`` is load-bearing - see the module docstring.
 _OPENLIBRARY_COVER = 'https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg'
 _VERIFY_SUFFIX = '?default=false'
 
@@ -75,7 +75,7 @@ def openlibrary_cover_url(isbn: Optional[str]) -> Optional[str]:
     """
     Open Library cover URL for ``isbn``, or None when the row has no usable
     ISBN. Hyphens and spacing vary across the imported data, so they're
-    stripped — Open Library wants the bare digits (X is a valid check digit).
+    stripped - Open Library wants the bare digits (X is a valid check digit).
     """
     if not isbn:
         return None
@@ -88,7 +88,7 @@ def openlibrary_cover_url(isbn: Optional[str]) -> Optional[str]:
 def upgrade_igdb_size(poster_url: Optional[str]) -> Optional[str]:
     """
     Rewrite an IGDB cover URL to the size the service serves today. Returns
-    None when there's nothing to do — not an IGDB URL, or already correct.
+    None when there's nothing to do - not an IGDB URL, or already correct.
     """
     if not poster_url or 'images.igdb.com' not in poster_url:
         return None
@@ -101,7 +101,7 @@ def upgrade_igdb_size(poster_url: Optional[str]) -> Optional[str]:
 def _cover_exists(url: str) -> bool:
     """
     HEAD the candidate with ``default=false`` so a missing cover 404s instead
-    of returning Open Library's blank placeholder. Redirects are followed —
+    of returning Open Library's blank placeholder. Redirects are followed -
     a real cover answers with a 302 to the CDN.
     """
     try:
@@ -174,7 +174,7 @@ def run(throttle: float = DEFAULT_THROTTLE_SECONDS, dry_run: bool = False) -> No
     db = SessionLocal()
     try:
         if dry_run:
-            print('(dry run — no writes)')
+            print('(dry run - no writes)')
         books_fixed, books_actionable, books_expected = backfill_books(
             db, throttle, dry_run
         )
@@ -186,7 +186,7 @@ def run(throttle: float = DEFAULT_THROTTLE_SECONDS, dry_run: bool = False) -> No
         if books_expected:
             print(
                 f'{books_expected} books correctly stay on Google Books '
-                f'(Open Library has no cover for their ISBN — expected, not a problem)'
+                f'(Open Library has no cover for their ISBN - expected, not a problem)'
             )
         if books_actionable:
             print(f'\n{len(books_actionable)} books need attention:')

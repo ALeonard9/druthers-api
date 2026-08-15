@@ -4,16 +4,16 @@ Find episodes that read as unwatched but almost certainly aren't (#169).
 Two kinds of damage show up as a single stray unwatched episode in an
 otherwise-finished season:
 
-**Duplicate slots** — ``sync_episodes`` used to key only on the TVMaze
+**Duplicate slots** - ``sync_episodes`` used to key only on the TVMaze
 episode id. When TVMaze reassigned an id, the lookup missed and a second
 ``tv_episodes`` row was inserted for the same ``(season, season_number)``.
 Watch history stayed on the original row, so the season grew a phantom
 unwatched episode. Confirmed in prod on Firefly "Trash" (S1E12).
 
-**Lone gaps** — a season where every episode but one is watched, with no
+**Lone gaps** - a season where every episode but one is watched, with no
 duplicate to explain it. Usually a genuine gap (the episode really wasn't
 watched), sometimes an episode orion never had a row for at all. Reported,
-never auto-fixed — only a human knows which.
+never auto-fixed - only a human knows which.
 
 ``--fix`` repairs the first kind only: watch history is moved onto the
 surviving row and the orphan duplicate is deleted. It never invents a watch.
@@ -72,7 +72,7 @@ def _watched_episode_pks(db, user_pk, show_pk):
 def find_duplicate_slots(db, show_pk):
     """
     ``(season, season_number) -> [episode rows]`` for slots holding more than
-    one row — the signature of a TVMaze id reassignment.
+    one row - the signature of a TVMaze id reassignment.
     """
     dupe_slots = (
         db.query(DbTVEpisode.season, DbTVEpisode.season_number)
@@ -100,7 +100,7 @@ def _repair_slot(db, rows):
     """
     Collapse a duplicated slot onto its oldest row.
 
-    The oldest row (lowest pk) is the original — the one carrying history.
+    The oldest row (lowest pk) is the original - the one carrying history.
     Every user's watch and favorite state on the newer rows is merged onto it
     before they're deleted, so a fix never loses another user's history.
     """
@@ -220,7 +220,7 @@ def _audit_gaps(db, state, max_gap, findings):
             for ep in missing:
                 findings['gaps'].append(
                     f'{show.title} S{season}E{ep.season_number} '
-                    f'"{ep.title}" — {len(eps) - len(missing)}/{len(eps)} '
+                    f'"{ep.title}" - {len(eps) - len(missing)}/{len(eps)} '
                     f'watched in this season'
                 )
 
@@ -236,7 +236,7 @@ def audit(db, email=None, fix=False, max_gap=1):
         for show in _tracked_shows(db, user.pk):
             watched = _watched_episode_pks(db, user.pk, show.pk)
             if not watched:
-                continue  # never started — not a gap
+                continue  # never started - not a gap
             dupes = _audit_duplicates(db, show, fix, findings)
             _audit_gaps(db, (show, watched, dupes), max_gap, findings)
 
@@ -262,7 +262,7 @@ def main():
     try:
         findings = audit(db, email=args.email, fix=args.fix, max_gap=args.max_gap)
         for heading, key in (
-            ('Duplicate slots (bug #169 — safe to --fix)', 'duplicates'),
+            ('Duplicate slots (bug #169 - safe to --fix)', 'duplicates'),
             ('Repaired', 'repaired'),
             ('Lone unwatched episodes (review by hand)', 'gaps'),
         ):

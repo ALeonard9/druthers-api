@@ -24,7 +24,7 @@ async def import_goodreads(
     current_user: list = Depends(get_current_user),
 ):
     """
-    Upload the standard Goodreads library export CSV. Idempotent — re-running
+    Upload the standard Goodreads library export CSV. Idempotent - re-running
     the same file updates rather than duplicates. Returns counts plus any
     skipped rows with reasons (nothing is dropped silently).
     """
@@ -46,7 +46,7 @@ async def import_goodreads(
     except UnicodeDecodeError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail='File is not UTF-8 text — upload the raw Goodreads CSV',
+            detail='File is not UTF-8 text - upload the raw Goodreads CSV',
         ) from exc
 
     report = import_goodreads_csv(db, current_user[0].pk, content)

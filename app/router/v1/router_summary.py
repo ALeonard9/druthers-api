@@ -1,6 +1,6 @@
 # pylint: disable=missing-function-docstring
 """
-The home summary endpoint — one bounded call behind the landing page.
+The home summary endpoint - one bounded call behind the landing page.
 """
 
 from fastapi import APIRouter, Depends, Query

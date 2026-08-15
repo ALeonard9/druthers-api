@@ -1,7 +1,7 @@
 """
 TV show search proxy.
 
-Wraps the TVMaze API (https://www.tvmaze.com/api — free, no key) so the web
+Wraps the TVMaze API (https://www.tvmaze.com/api - free, no key) so the web
 and MCP frontends can look up shows by title without talking to TVMaze
 directly. Results are normalized into the shape the ``/v1/tv-shows`` create
 endpoint expects. TVMaze is also the enrichment source: show detail (status,
@@ -255,7 +255,7 @@ def sync_episodes(db, show) -> int:
     airdate refreshed.
 
     Episodes are matched on their TVMaze id first, then on their slot in the
-    show — ``(season, season_number)``. The slot fallback matters because
+    show - ``(season, season_number)``. The slot fallback matters because
     TVMaze reassigns episode ids (#169): keying on the id alone, a reassigned
     episode missed the lookup and was inserted as a *second* row for the same
     slot. Watch history lives on the original row's ``episode_id``, so the

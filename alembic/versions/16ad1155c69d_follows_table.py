@@ -6,8 +6,8 @@ activity feed in api#280. Deliberately separate from ``friendships``
 ``app.services.visibility.ceiling_for``, so there is no column here for a
 migration to ever wire into that function by accident.
 
-One row per *direction* rather than per pair — ``follower_id``,
-``followee_id`` — since A following B and B following A are unrelated
+One row per *direction* rather than per pair - ``follower_id``,
+``followee_id`` - since A following B and B following A are unrelated
 facts. ``uq_follows_pair`` keeps a follower from accumulating duplicate rows
 for the same target; ``ck_follows_not_self`` rules out a self-follow at the
 database layer, the same belt-and-suspenders the service layer's

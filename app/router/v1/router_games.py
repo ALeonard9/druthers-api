@@ -371,7 +371,7 @@ def mark_game(
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
 ):
-    """Add a game to the user's lists (idempotent — merges list membership)."""
+    """Add a game to the user's lists (idempotent - merges list membership)."""
     user_pk = current_user[0].pk
     game = _get_game(db, game_id)
     tracker = _get_tracker(db, user_pk, game.pk)
@@ -405,7 +405,7 @@ def mark_game(
 
     # A game only holds a rank while it's on the ranked list AND was already
     # placed. Entering Rankings (or leaving it) resets to unplaced so it lands
-    # in the "to rank" bucket rather than at a stale/leftover position —
+    # in the "to rank" bucket rather than at a stale/leftover position -
     # unless it's the first ranked game, which auto-places at #1 (#289).
     enforce_single_home(tracker, data)
     default_completed_at(tracker, was_on_rankings)
@@ -453,7 +453,7 @@ def update_user_game(
         tracker.rank = None
         tracker.ranked_at = None
 
-    # A removed placement leaves a gap — shift everything below it up.
+    # A removed placement leaves a gap - shift everything below it up.
     if old_rank is not None and tracker.rank is None:
         _close_rank_gap(db, user_pk, old_rank)
 

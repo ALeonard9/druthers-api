@@ -46,7 +46,7 @@ def _token_response(user: models.DbUser, refresh_token: str) -> dict:
 
 
 def _sign_in_response(user: models.DbUser, db: Session) -> dict:
-    """Token response for a fresh sign-in — starts a new rotation family."""
+    """Token response for a fresh sign-in - starts a new rotation family."""
     return _token_response(user, refresh_tokens.issue_refresh_token(db, user))
 
 
@@ -67,7 +67,7 @@ def get_token(
     if get_settings().disable_password_login:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Password sign-in is disabled — use Google or an API key',
+            detail='Password sign-in is disabled - use Google or an API key',
         )
     user = (
         # OAuth2PasswordRequestForm requires username instead of email
@@ -95,7 +95,7 @@ def google_login(request: GoogleAuthRequest, db: Session = Depends(get_db)):
     Sign in with a Google Identity Services ID token.
 
     Verifies the token against the configured Google client id, then upserts the
-    user (creating one on first sign-in) and returns a JWT — the same shape as
+    user (creating one on first sign-in) and returns a JWT - the same shape as
     the password flow.
     """
     settings = get_settings()
@@ -129,14 +129,14 @@ def google_login(request: GoogleAuthRequest, db: Session = Depends(get_db)):
 
     allowlist = settings.oauth_allowlist_emails
     if allowlist is not None and email.lower() not in allowlist:
-        # Applies to new AND existing accounts — during invite-only phases
+        # Applies to new AND existing accounts - during invite-only phases
         # (#183) the allowlist is the single source of truth for who may
         # sign in, not just who may register.
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
                 'This app is invite-only right now. Your Google account '
-                'isn’t on the access list — contact the administrator '
+                'isn’t on the access list - contact the administrator '
                 'if you believe this is a mistake.'
             ),
         )
@@ -192,7 +192,7 @@ def logout(request: InRefreshToken, db: Session = Depends(get_db)):
     """
     Sign out server-side: the refresh token and its family stop working.
 
-    Deliberately 204 whether or not the token was recognised — sign-out must
+    Deliberately 204 whether or not the token was recognised - sign-out must
     not depend on the client still holding a valid credential, and the status
     shouldn't reveal whether a guessed token existed.
     """

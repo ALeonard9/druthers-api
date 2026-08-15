@@ -42,7 +42,7 @@ def _make_show(test_client: TestClient, tvmaze=180):
 
 
 def _track(test_client: TestClient, show_id):
-    """Put the show on the user's watchlist — the audit only walks tracked shows."""
+    """Put the show on the user's watchlist - the audit only walks tracked shows."""
     test_client.post(
         f'/v1/users/me/tv-shows/{show_id}',
         headers=_user(test_client),
@@ -216,7 +216,7 @@ def test_audit_reports_a_lone_gap_without_touching_it(test_client: TestClient):
     session = test_client.test_db_session
     show_id = _make_show(test_client)
     _track(test_client, show_id)
-    # Aired episodes only — the audit ignores rows with no airdate so an
+    # Aired episodes only - the audit ignores rows with no airdate so an
     # unaired episode never reads as a gap.
     episodes = [
         {

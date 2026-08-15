@@ -182,7 +182,7 @@ def test_clearing_a_handle_only_allowed_while_fully_private(test_client: TestCli
 
     # Every tier now defaults to 'friends' (web#156), so "fully private" must
     # be reached explicitly rather than relying on the untouched fields'
-    # default — this PUT sets all nine, not just the two touched above.
+    # default - this PUT sets all nine, not just the two touched above.
     test_client.put(
         '/v1/users/me/visibility',
         headers=_auth(token),
@@ -220,7 +220,7 @@ def test_the_offending_shelf_is_named_for_watchlists_too(test_client: TestClient
         json={
             'handle': 'avery',
             'visibility_profile': 'private',
-            # Every other tier now defaults to 'friends' (web#156) — pin them
+            # Every other tier now defaults to 'friends' (web#156) - pin them
             # private so visibility_watchlist_games is unambiguously the one
             # field this update leaves in violation.
             'visibility_movies': 'private',
@@ -395,7 +395,7 @@ def test_private_and_unknown_profiles_404_identically(test_client: TestClient):
 
 def test_friends_tier_is_invisible_to_the_public(test_client: TestClient):
     # An anonymous caller is served ``public`` and nothing else, before and
-    # after #277 — the viewer-aware matrix lives in
+    # after #277 - the viewer-aware matrix lives in
     # tests/integration/router_visibility_viewer_test.py.
     token = test_client.first_user.token
     _rank_a_movie(test_client, token, title='Collateral', imdb='tt0369339')

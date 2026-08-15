@@ -7,8 +7,8 @@ and enrichment service are removed in the same change, so the schema and the
 code never disagree.
 
 ``downgrade()`` faithfully recreates ``countries`` and ``user_countries`` at
-their final shape — every column, index, unique/foreign-key constraint, and
-the ``ck_user_countries_rank_1_based`` CHECK — so a rollback lands on a schema
+their final shape - every column, index, unique/foreign-key constraint, and
+the ``ck_user_countries_rank_1_based`` CHECK - so a rollback lands on a schema
 autogenerate would consider identical to the pre-drop one. **The rows are not
 recoverable**: the tables come back empty, and restoring the data needs a
 backup taken before the upgrade ran.

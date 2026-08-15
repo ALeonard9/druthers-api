@@ -104,7 +104,7 @@ class DbUser(DBBaseModel):
     handle = Column(String(length=30), unique=True, index=True, nullable=True)
 
     # The ninth setting: the profile page itself. Invariant enforced in
-    # router_visibility — this is always at least as open as the most-open
+    # router_visibility - this is always at least as open as the most-open
     # shelf below, so no shelf can be reachable through a profile that is
     # more closed than the shelf.
     visibility_profile = tier_column('visibility_profile')
@@ -136,7 +136,7 @@ class DbUser(DBBaseModel):
         server_default=text('true'),
     )
 
-    # --- Display preferences (#122). Viewer-controlled, not visibility —
+    # --- Display preferences (#122). Viewer-controlled, not visibility -
     # how much of a ranked list to read, remembered across sessions and
     # devices. NULL means "unset", read as the default (25) everywhere.
     ranked_list_length = Column(
@@ -151,7 +151,7 @@ class DbUser(DBBaseModel):
         nullable=True,
     )
 
-    # Which IANA zone this user's own hours are rendered in — the greeting,
+    # Which IANA zone this user's own hours are rendered in - the greeting,
     # the schedule's idea of "today", anything that reads as a wall clock.
     # NULL means "never chosen" and reads as the deployment's TIME_ZONE
     # (#322), so the fleet-wide default can move without rewriting rows.
@@ -235,7 +235,7 @@ class DbRefreshToken(DBBaseModel):
 
 class DbFriendship(DBBaseModel):
     """
-    One mutual friendship — or the request that may become one (#275).
+    One mutual friendship - or the request that may become one (#275).
 
     **One row per relationship, not two.** The pair is stored in canonical
     order (``user_low_id < user_high_id``, enforced by a CHECK) with a
@@ -247,7 +247,7 @@ class DbFriendship(DBBaseModel):
 
     ``responded_at`` is NULL exactly while ``status`` is ``pending``. A
     decline or a cancel deletes the row rather than recording a terminal
-    status — see :class:`~app.services.friendships.FriendshipStatus`.
+    status - see :class:`~app.services.friendships.FriendshipStatus`.
 
     Rows are meaningless without both parties, so deleting a user takes their
     friendships with them.
@@ -257,7 +257,7 @@ class DbFriendship(DBBaseModel):
     __table_args__ = (
         UniqueConstraint('user_low_id', 'user_high_id', name='uq_friendships_pair'),
         # The canonical ordering is the whole reason one row can stand in for
-        # two directions, so the database — not just the service layer —
+        # two directions, so the database - not just the service layer -
         # refuses a row that breaks it.
         CheckConstraint(
             'user_low_id < user_high_id', name='ck_friendships_canonical_order'
@@ -322,14 +322,14 @@ class DbFollow(DBBaseModel):
     profile, unapproved and revocable by the follower alone.
 
     Deliberately not shaped like :class:`DbFriendship`. There is exactly one
-    row per *direction* — ``follower_id``, ``followee_id`` — with no
+    row per *direction* - ``follower_id``, ``followee_id`` - with no
     canonical ordering to enforce, because A following B and B following A
     are two unrelated facts, not two views of the same relationship. The
     ``UNIQUE`` pair just keeps a follower from accumulating duplicate rows
     for the same target.
 
     **Following grants no additional visibility.** Nothing in
-    :mod:`app.services.visibility` reads this table — a follower resolves to
+    :mod:`app.services.visibility` reads this table - a follower resolves to
     the exact same tier ceiling as an anonymous visitor. If the followee's
     profile later drops out of the ``public`` tier, this row is not deleted;
     it simply stops admitting anything, same as any other stale grant that

@@ -1,5 +1,5 @@
 '''
-Unit tests for app.config.Settings — focused on the invite-only allowlist
+Unit tests for app.config.Settings - focused on the invite-only allowlist
 parsing added for #183 (the rest of Settings is exercised indirectly by
 every other test that calls get_settings()).
 '''

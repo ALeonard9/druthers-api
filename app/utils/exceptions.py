@@ -18,7 +18,7 @@ async def http_exception_handler(_: Request, exc: HTTPException):
     """
     Custom handler for HTTPException.
 
-    Forwards ``exc.headers`` — auth challenges (WWW-Authenticate) and rate
+    Forwards ``exc.headers`` - auth challenges (WWW-Authenticate) and rate
     limits (Retry-After) are meaningless without them.
     """
     return JSONResponse(
@@ -69,7 +69,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
     """
     Custom handler for generic exceptions.
 
-    Logs the full traceback (severity ERROR) before responding — without this
+    Logs the full traceback (severity ERROR) before responding - without this
     a 500 leaves no trace in the logs, so alerting and Error Reporting
     grouping would never see it.
     """

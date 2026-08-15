@@ -16,7 +16,7 @@ def test_partial_match_popularity_beats_prefix_position():
     # Regression test for a real search bug: an obscure IGDB entry that
     # merely *starts with* the query used to automatically outrank the
     # famous game everyone actually means, which only *contains* the
-    # query. Prefix position alone is not a reliable signal — within the
+    # query. Prefix position alone is not a reliable signal - within the
     # partial-match tier, popularity decides.
     hits = [
         {'title': 'Zelda 64', 'popularity': 3},
@@ -27,7 +27,7 @@ def test_partial_match_popularity_beats_prefix_position():
 
 
 def test_partial_match_without_popularity_preserves_provider_order():
-    # No popularity data (e.g. TVMaze and Open Library don't supply any) —
+    # No popularity data (e.g. TVMaze and Open Library don't supply any) -
     # prefix and contains matches are treated as equally valid partial
     # matches, and the provider's own result order is the tiebreaker.
     hits = [

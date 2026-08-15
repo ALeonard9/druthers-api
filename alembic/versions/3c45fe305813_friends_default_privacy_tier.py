@@ -1,7 +1,7 @@
 """friends default privacy tier
 
 Moves the server-side default for every visibility tier column from
-``private`` to ``friends`` (web#156) — a fresh signup should be visible to
+``private`` to ``friends`` (web#156) - a fresh signup should be visible to
 the friends who invited them, not invisible by default. Mirrors the
 DEFAULT_TIER flip in app.services.visibility, which already changes the
 ORM-side default; this keeps the DB-level default in parity for any insert

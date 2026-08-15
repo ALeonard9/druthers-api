@@ -2,7 +2,7 @@
 The home summary: everything the landing page needs, in bounded queries.
 
 The dashboard used to be assembled client-side from ``/v1/users/me/{movies,
-tv-shows,books,games}`` — four unpaginated collections (~1,400 movie rows
+tv-shows,books,games}`` - four unpaginated collections (~1,400 movie rows
 alone) fetched, validated and shipped so the page could render eight counts
 and twenty titles. This module answers the same question with two small
 indexed queries per shelf, so page cost stops scaling with library size.
@@ -18,7 +18,7 @@ from app.services.shelves import SHELVES, Shelf
 from app.services.visibility import is_public, resolve_tier
 
 # Ranked entries returned per shelf. Five is the product ("your Top 5"), not
-# an arbitrary page size — callers may ask for fewer but not more, so this
+# an arbitrary page size - callers may ask for fewer but not more, so this
 # endpoint can never become another unbounded collection.
 TOP_N = 5
 
@@ -92,7 +92,7 @@ def build_summary(db: Session, user: DbUser, top_n: int = TOP_N) -> dict:
     Assemble the home summary for ``user``.
 
     ``public`` per shelf and the account handle ride along so the share card
-    can print a profile URL that actually resolves — the card used to derive a
+    can print a profile URL that actually resolves - the card used to derive a
     handle from the signed-in email, which is not the profile handle.
     """
     limit = max(1, min(top_n, TOP_N))
@@ -141,7 +141,7 @@ def build_summary(db: Session, user: DbUser, top_n: int = TOP_N) -> dict:
         and any(s['public'] for s in shelves),
         'shelves': shelves,
         'total_ranked': sum(s['ranked_count'] for s in shelves),
-        # Placed + ready-to-rank + queued across every shelf — "has this
+        # Placed + ready-to-rank + queued across every shelf - "has this
         # account added anything at all," for first-run UI (onboarding, the
         # tutorial) that should only show to genuinely empty accounts.
         'total_items': total_items,

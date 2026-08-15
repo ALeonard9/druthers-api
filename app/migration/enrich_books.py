@@ -29,7 +29,7 @@ from app.services.tracker_rules import utc_now
 
 # Be polite to Open Library (they ask for gentle, identifiable traffic).
 THROTTLE_SECONDS = 1.0
-# Consecutive *upstream failures* — not misses. A book the source has no
+# Consecutive *upstream failures* - not misses. A book the source has no
 # record of will never resolve however long we wait, so counting those here
 # would stall the run on an unresolvable row and, because the pending set
 # comes back in the same order, never get past it on a re-run either.

@@ -97,7 +97,7 @@ def test_search_is_rate_limited_per_user(
     mock_settings, mock_search, test_client: TestClient
 ):
     """
-    Search proxies burn external quotas — the per-user cap kicks in.
+    Search proxies burn external quotas - the per-user cap kicks in.
     """
     rate_limit.reset()
     mock_settings.return_value = Settings(**ENABLED, rate_limit_search=2)
@@ -152,7 +152,7 @@ def test_friend_requests_are_rate_limited_per_user(
     """
     Friend requests are the only write that names another user's handle, so
     the cap is also the brake on probing for who exists (#275). Attempts are
-    counted before the lookup — a request to a handle nobody has costs the
+    counted before the lookup - a request to a handle nobody has costs the
     caller exactly as much as one that lands.
     """
     rate_limit.reset()
@@ -178,7 +178,7 @@ def test_friend_requests_are_rate_limited_per_user(
 def test_follows_are_rate_limited_per_user(mock_settings, test_client: TestClient):
     """
     Following (#276) targets only already-public profiles, so this cap is
-    purely a spam brake rather than a probing defense — but it still counts
+    purely a spam brake rather than a probing defense - but it still counts
     attempts before the lookup, same as the friend-request cap does.
     """
     rate_limit.reset()
@@ -198,7 +198,7 @@ def test_follows_are_rate_limited_per_user(mock_settings, test_client: TestClien
 
 def test_limits_are_off_in_ci_by_default(test_client: TestClient):
     """
-    Without the explicit enable, CI/local traffic is never throttled — the
+    Without the explicit enable, CI/local traffic is never throttled - the
     rest of the suite depends on this.
     """
     rate_limit.reset()

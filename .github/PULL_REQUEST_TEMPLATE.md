@@ -3,7 +3,7 @@
 ## Summary
 
 <!--
-Bullets. Lead with the cause, then the fix — not a changelog of files touched.
+Bullets. Lead with the cause, then the fix - not a changelog of files touched.
 Say what does NOT change if that's load-bearing (e.g. "no behavior change to X,
 this only adds a field").
 -->
@@ -17,7 +17,7 @@ Checked boxes with real evidence: actual pass counts, the specific cases added,
 and what you verified against the local dev stack.
 -->
 
-- [ ] `pytest` — N passed, including <the new cases>
+- [ ] `pytest` - N passed, including <the new cases>
 - [ ] Verified against the local dev stack: <what you clicked / curled and what happened>
 
 ## Checklist

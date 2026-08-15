@@ -3,7 +3,7 @@ Backfill TMDB detail (director/actors/genre/plot/year/rating) for movies that
 were imported without it. Throttled and **resumable**: it only processes movies
 still missing detail, so re-running continues where it left off.
 
-Requires ``movies.tmdb`` to be populated — run
+Requires ``movies.tmdb`` to be populated - run
 ``app.migration.backfill_tmdb`` first (#163).
 
 Usage::
@@ -35,7 +35,7 @@ def pending_movies(db):
     Movies still worth a TMDB call.
 
     ``plot``/``director`` are the usual proxy for "never enriched", but a row
-    the OMDb era filled in can carry both and still have no ``year`` — the
+    the OMDb era filled in can carry both and still have no ``year`` - the
     Top 5 and the shelf lists print a blank year for those forever, because
     the proxy says they are done. Selecting on the missing field itself as
     well means a partially-filled row is retried instead of stranded.

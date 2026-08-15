@@ -1,6 +1,6 @@
 # pylint: disable=missing-function-docstring
 """
-API-key management: long-lived credentials for programmatic access — the MCP
+API-key management: long-lived credentials for programmatic access - the MCP
 server running locally, Proxmox crons, scripts. Keys authenticate through the
 normal ``Authorization: Bearer`` header (see app/auth/oauth2.py).
 """
@@ -31,7 +31,7 @@ def create_api_key(
 ):
     """
     Mint a new key. The plaintext secret is in this response and nowhere
-    else — it is never stored or shown again.
+    else - it is never stored or shown again.
     """
     secret = oauth2.generate_api_key()
     row = DbApiKey(
@@ -71,7 +71,7 @@ def revoke_api_key(
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
 ):
-    """Revocation is deletion — the hash is gone, the key can never auth again."""
+    """Revocation is deletion - the hash is gone, the key can never auth again."""
     row = (
         db.query(DbApiKey)
         .filter(DbApiKey.id == key_id, DbApiKey.user_id == current_user[0].pk)

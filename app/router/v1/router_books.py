@@ -99,7 +99,7 @@ def create_book(
     # Any signed-in user may add to the shared catalog (the add-from-search
     # flow); editing and deleting catalog entries stay admin-only.
     del current_user
-    # Normalize before the dedupe check — enrichment stores dash-free ISBNs.
+    # Normalize before the dedupe check - enrichment stores dash-free ISBNs.
     isbn = (request.isbn or '').replace('-', '').strip() or None
     if request.googleid:
         existing = db.query(DbBook).filter(DbBook.googleid == request.googleid).first()
@@ -364,7 +364,7 @@ def mark_book(
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
 ):
-    """Add a book to the user's lists (idempotent — merges list membership)."""
+    """Add a book to the user's lists (idempotent - merges list membership)."""
     user_pk = current_user[0].pk
     book = _get_book(db, book_id)
     tracker = _get_tracker(db, user_pk, book.pk)
@@ -391,7 +391,7 @@ def mark_book(
 
     # A book only holds a rank while it's on the ranked list AND was already
     # placed. Entering Rankings (or leaving it) resets to unplaced so it lands
-    # in the "to rank" bucket rather than at a stale/leftover position —
+    # in the "to rank" bucket rather than at a stale/leftover position -
     # unless it's the first ranked book, which auto-places at #1 (#289).
     enforce_single_home(tracker, data)
     default_completed_at(tracker, was_on_rankings)
@@ -439,7 +439,7 @@ def update_user_book(
         tracker.rank = None
         tracker.ranked_at = None
 
-    # A removed placement leaves a gap — shift everything below it up.
+    # A removed placement leaves a gap - shift everything below it up.
     if old_rank is not None and tracker.rank is None:
         _close_rank_gap(db, user_pk, old_rank)
 

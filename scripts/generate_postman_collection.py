@@ -13,7 +13,7 @@ Usage:
         [--openapi openapi.json] [--out docs/druthers-api.postman_collection.json]
 
 Re-run this after any change to the API surface (new/changed routes) and
-commit the regenerated file — it is a static, versioned artifact, not
+commit the regenerated file - it is a static, versioned artifact, not
 generated at request time.
 """
 
@@ -52,7 +52,7 @@ def resolve_ref(schema: dict, ref: str) -> dict:
 
 
 # A schema-to-example walker necessarily branches on every JSON Schema/
-# OpenAPI construct it supports (object/array/string/enum/anyOf/$ref/...) —
+# OpenAPI construct it supports (object/array/string/enum/anyOf/$ref/...) -
 # splitting it up would scatter one cohesive concept across several
 # functions for no readability gain.
 # pylint: disable=too-many-return-statements,too-many-branches
@@ -64,7 +64,7 @@ def example_for_schema(
 
     Depth-limited and cycle-guarded (via `seen` ref names) so self-referential
     or deeply nested schemas degrade to `{}`/`null` instead of recursing
-    forever — this only needs to be "good enough to show request shape", not
+    forever - this only needs to be "good enough to show request shape", not
     a full example generator.
     """
     if seen is None:
@@ -296,17 +296,17 @@ def build_collection(schema: dict) -> dict:
     description = (
         (info.get('description') or '')
         + '\n\n---\n\n'
-        + '**Auth:** most requests use the collection-level bearer token — set '
+        + '**Auth:** most requests use the collection-level bearer token - set '
         'the `apiToken` variable to a personal API key (`drk_…`), minted at '
         'https://www.druthers.io/settings, or a JWT from `POST /v1/auth/token`. '
         '`POST /v1/auth/token` and `POST /v1/users` are marked "No Auth" since '
         "you don't have a token yet when calling them.\n\n"
         '**Base URL:** the `baseUrl` variable defaults to production '
-        f'(`{DEFAULT_BASE_URL}`) — override it in a Postman environment to '
+        f'(`{DEFAULT_BASE_URL}`) - override it in a Postman environment to '
         'point at localhost (`http://localhost:8000`) or QA '
         '(`https://api-qa.druthers.io`) instead.\n\n'
         'Generated from the checked-in OpenAPI schema by '
-        '`scripts/generate_postman_collection.py` — see `docs/mcp-usage.md` '
+        '`scripts/generate_postman_collection.py` - see `docs/mcp-usage.md` '
         'for the MCP (Claude) integration instead of raw HTTP calls.'
     )
 

@@ -1,7 +1,7 @@
 """
 Video game search proxy.
 
-Wraps the IGDB API (https://api.igdb.com — authenticated with Twitch OAuth
+Wraps the IGDB API (https://api.igdb.com - authenticated with Twitch OAuth
 client credentials, mirroring the legacy orion games page) so the web and
 MCP frontends can look up games without holding the credentials. Results are
 normalized into the shape the ``/v1/games`` create endpoint expects. IGDB is
@@ -32,7 +32,7 @@ _DETAIL_FIELDS = (
     'platforms.abbreviation,summary,cover.image_id,updated_at'
 )
 
-# (token, expires_at_epoch) — Twitch app tokens last ~60 days; refresh early.
+# (token, expires_at_epoch) - Twitch app tokens last ~60 days; refresh early.
 _token_cache: Tuple[Optional[str], float] = (None, 0.0)
 
 
@@ -185,7 +185,7 @@ def search_games(query: str) -> List[dict]:
     if query.isdigit():
         return _search_games_by_id(int(query))
 
-    # Escape backslashes first, then quotes — otherwise a trailing backslash
+    # Escape backslashes first, then quotes - otherwise a trailing backslash
     # (or crafted \" sequence) breaks out of the APIcalypse string literal.
     escaped = query.replace('\\', '\\\\').replace('"', '\\"')
     try:
@@ -197,7 +197,7 @@ def search_games(query: str) -> List[dict]:
         )
     except (requests.RequestException, ValueError) as exc:
         # HTTPExceptions from _igdb_query (503 unconfigured / 502 auth)
-        # propagate untouched — they aren't caught here.
+        # propagate untouched - they aren't caught here.
         logger.error('IGDB search failed for %r: %s', query, exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -215,7 +215,7 @@ def search_games(query: str) -> List[dict]:
                 'year': str(release.year) if release else None,
                 'platforms': _names(game, 'platforms', 'abbreviation'),
                 'poster_url': _cover(game),
-                # Ranking-only signal (see search_ranking.py) — not part of
+                # Ranking-only signal (see search_ranking.py) - not part of
                 # the /v1/games create shape, dropped by the response schema.
                 'popularity': game.get('total_rating_count') or 0,
             }
@@ -284,7 +284,7 @@ def get_game_detail(igdb_id: Optional[int]) -> Optional[dict]:
             f'fields {_DETAIL_FIELDS}; where id = {int(igdb_id)};',
         )
     except HTTPException:
-        # Unconfigured (503) or upstream auth failure — skip enrichment.
+        # Unconfigured (503) or upstream auth failure - skip enrichment.
         return None
     except (requests.RequestException, ValueError) as exc:
         logger.warning('IGDB detail failed for %s: %s', igdb_id, exc)
@@ -323,11 +323,11 @@ def get_time_to_beat(igdb_id: Optional[int]) -> Optional[int]:
 def list_popular_games(limit: int = 500) -> List[dict]:
     """
     The ``limit`` highest-rated-by-volume games, in full catalog-field shape
-    (one request — ``_DETAIL_FIELDS`` already carries everything
+    (one request - ``_DETAIL_FIELDS`` already carries everything
     :func:`get_game_detail` would need a second call for).
 
-    IGDB has no free-text "popular" concept; ``total_rating_count`` — how
-    many people rated it — is the closest proxy and, unlike
+    IGDB has no free-text "popular" concept; ``total_rating_count`` - how
+    many people rated it - is the closest proxy and, unlike
     ``total_rating`` alone, isn't dominated by obscure games with one 10/10
     vote. Used to build the real-catalog dev seed fixture (#228), not by any
     request-serving path.

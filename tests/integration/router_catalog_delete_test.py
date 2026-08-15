@@ -3,7 +3,7 @@
 Deleting a catalog row must take its dependent rows with it (#227).
 
 Before the cascades on the parent-side relationships in models_sandbox.py,
-SQLAlchemy's default was to *disassociate* children — issuing
+SQLAlchemy's default was to *disassociate* children - issuing
 ``UPDATE ... SET <parent>_id = NULL`` against FK columns declared
 ``nullable=False``, which the database rejected and the whole DELETE 500'd.
 Every catalog domain was affected, so every one gets a regression test here.

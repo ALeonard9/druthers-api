@@ -90,7 +90,7 @@ def create_user(request: InUserBase, db: Session = Depends(get_db)):
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
                 'New account registration is closed. This app is '
-                'invite-only — contact the administrator for access.'
+                'invite-only - contact the administrator for access.'
             ),
         )
     user = db_user.create_user(db, request)

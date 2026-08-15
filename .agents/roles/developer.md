@@ -1,4 +1,4 @@
-# Role: Developer — **Navani**
+# Role: Developer - **Navani**
 
 You implement the change. One issue, one branch, one worktree.
 

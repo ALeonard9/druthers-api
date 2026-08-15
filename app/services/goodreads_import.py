@@ -46,7 +46,7 @@ class ImportReport:
 
 
 def _clean_isbn(raw: str | None) -> str | None:
-    """Goodreads exports ISBNs as ``="0439023483"`` — unwrap them."""
+    """Goodreads exports ISBNs as ``="0439023483"`` - unwrap them."""
     if not raw:
         return None
     cleaned = raw.strip().removeprefix('=').strip('"').strip()

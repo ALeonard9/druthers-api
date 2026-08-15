@@ -83,7 +83,7 @@ class InApiKeyCreate(BaseModel):
 
 class OutApiKey(BaseModel):
     """
-    An API key as shown in listings — never includes the secret.
+    An API key as shown in listings - never includes the secret.
     """
 
     id: str
@@ -117,7 +117,7 @@ class OutToken(BaseModel):
 
     Both lifetimes are reported in seconds so a client can size its cookies
     off the response instead of hardcoding guesses that drift from
-    ``ACCESS_TOKEN_EXPIRE_MINUTES`` and ``REFRESH_TOKEN_EXPIRE_DAYS`` — which
+    ``ACCESS_TOKEN_EXPIRE_MINUTES`` and ``REFRESH_TOKEN_EXPIRE_DAYS`` - which
     is exactly how the web session cookie ended up outliving its token.
     """
 
@@ -197,7 +197,7 @@ class OutFriendAck(BaseModel):
     Deliberately contentless acknowledgement of a friend-graph write.
 
     Send and decline both answer with this, and send answers with *exactly*
-    this whether or not the handle resolved to anybody — see
+    this whether or not the handle resolved to anybody - see
     ``router_friends`` for why the response must not vary.
     """
 
@@ -208,7 +208,7 @@ class OutFriendUser(BaseModel):
     """
     The other party in a friendship, as much of them as a friend may see.
 
-    No email, no visibility settings — a friendship is not an introduction to
+    No email, no visibility settings - a friendship is not an introduction to
     someone's account.
     """
 
@@ -380,7 +380,7 @@ class OutSummaryShelf(BaseModel):
 
 class OutSummary(BaseModel):
     """
-    Everything the home page renders, in one bounded response — see
+    Everything the home page renders, in one bounded response - see
     app/services/summary.py for why this endpoint exists.
     """
 

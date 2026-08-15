@@ -1,7 +1,7 @@
 # pylint: disable=missing-function-docstring
 """
 Display preferences (#122): how many entries of a ranked list to show by
-default, and the caller's own time zone. Viewer settings, not sharing ones —
+default, and the caller's own time zone. Viewer settings, not sharing ones -
 see :mod:`app.services.preferences` for why they live apart from visibility.
 """
 

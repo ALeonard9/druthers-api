@@ -48,7 +48,7 @@ def test_normalize_title_strips_only_real_edition_qualifiers():
     assert n('Dune Ebook Collection') == 'Dune'
     assert n('Dune: 50th Anniversary Edition') == 'Dune'
     # 'Complete' is not a printing qualifier, and stripping 'Special Edition'
-    # would leave nothing but an article — both titles stay whole.
+    # would leave nothing but an article - both titles stay whole.
     assert n('The Complete Collection') == 'The Complete Collection'
     assert n('The Special Edition') == 'The Special Edition'
     # Deliberate casing is never flattened.
@@ -69,7 +69,7 @@ def test_pick_title_keeps_the_catalog_title_when_english_editions_have_it():
     assert p(['Star Wars'] * 3 + ['Star Wars: Bloodline'], 'Star Wars - Bloodline') == (
         'Star Wars - Bloodline'
     )
-    # The Dark Tower's English edition is filed as 'Dark Tower' — differs only
+    # The Dark Tower's English edition is filed as 'Dark Tower' - differs only
     # by the article, so the catalog title stays.
     assert p(['Dark Tower'], 'The dark tower') == 'The dark tower'
     # A genuine translation matches nothing English, so the edition wins.
@@ -90,7 +90,7 @@ def test_plain_text_strips_markdown_link_spam():
     out = book_search._plain_text(raw)
     assert 'chesserresources' not in out
     assert '](' not in out and '<u>' not in out
-    # The link was the whole line, so it goes entirely — keeping its text
+    # The link was the whole line, so it goes entirely - keeping its text
     # left the description opening with 'Rich Dad, Poor Dad PDF'.
     assert out == 'April of 2022 marks a 25-year milestone.'
 
@@ -142,7 +142,7 @@ def test_english_edition_prefers_english_cover_and_isbn(mock_get):
     resp.raise_for_status.return_value = None
     resp.json.return_value = {
         'entries': [
-            # Foreign edition first — must not win the cover.
+            # Foreign edition first - must not win the cover.
             {
                 'languages': [{'key': '/languages/jpn'}],
                 'covers': [999],
@@ -461,7 +461,7 @@ def test_google_books_unknown_volume_is_a_miss_not_an_outage(mock_get, mock_sett
     resp.status_code = 404
     mock_get.return_value = resp
 
-    # 404 means "no such volume" — must not look like an upstream failure.
+    # 404 means "no such volume" - must not look like an upstream failure.
     assert book_search._google_books_detail('nope') is None
     resp.raise_for_status.assert_not_called()
 

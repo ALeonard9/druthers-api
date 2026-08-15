@@ -92,7 +92,7 @@ def test_concurrent_refresh_is_not_treated_as_a_replay(test_client: TestClient):
 
     assert winner.status_code == 200
     assert racer.status_code == 200
-    # Both successors work — neither request poisoned the other's session.
+    # Both successors work - neither request poisoned the other's session.
     for response in (winner, racer):
         assert _authed(test_client, response.json()['access_token']).status_code == 200
 
@@ -136,7 +136,7 @@ def test_sign_out_cannot_be_undone_inside_the_grace_window(test_client: TestClie
     """
     An already-spent token can't resurrect a signed-out session.
 
-    The grace window forgives a race, but signing out ends the family — so
+    The grace window forgives a race, but signing out ends the family - so
     replaying the token that was rotated moments before sign-out gets a 401
     rather than a fresh session.
     """
@@ -180,7 +180,7 @@ def test_logout_beats_a_concurrent_refresh(test_client: TestClient):
     """
     Sign-out is never excused by the race window.
 
-    The grace period keys off ``used_at``, which only rotation sets — so a
+    The grace period keys off ``used_at``, which only rotation sets - so a
     token killed at sign-out is rejected immediately, not 30 seconds later.
     """
     token = _sign_in(test_client)['refresh_token']
@@ -244,7 +244,7 @@ def test_refresh_token_is_not_a_bearer_credential(test_client: TestClient):
 
 
 def test_deleting_a_user_takes_their_tokens(test_client: TestClient):
-    """Sessions don't outlive their owner — the rows go, not just the FK."""
+    """Sessions don't outlive their owner - the rows go, not just the FK."""
     user = test_client.first_user
     _sign_in(test_client)
     session = test_client.test_db_session

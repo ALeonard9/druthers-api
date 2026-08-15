@@ -4,8 +4,8 @@ Visibility settings (#143, tiered in #274) and the public read-only profile.
 
 Everything is private by default. A user moves categories up the tier ladder
 (``private`` -> ``friends`` -> ``public``) one by one and claims a handle;
-the public endpoint then serves *ranked lists only* — no notes, no watch
-state, no activity — plus watchlists where those are separately opted in.
+the public endpoint then serves *ranked lists only* - no notes, no watch
+state, no activity - plus watchlists where those are separately opted in.
 
 Two rules hold the model together:
 
@@ -72,7 +72,7 @@ RESERVED_HANDLES = {
 PROFILE_SHELF_LIMIT = 25
 
 # Upper bound on a requested `limit` for a single shelf (#279). A request
-# beyond this clamps rather than 422ing — deliberately looser than the
+# beyond this clamps rather than 422ing - deliberately looser than the
 # tracker endpoints' MAX_PAGE (app/services/tracker_query.py), which error
 # instead: those are for API integrators who should know the max, this is a
 # shared link that has to stay robust to a hand-edited or scraped query
@@ -106,7 +106,7 @@ def _validate_handle(db: Session, user: DbUser, raw: Optional[str]) -> Optional[
             detail='That handle is reserved',
         )
     # Public profile URLs and share cards carry this, so it's checked at
-    # claim time only — an existing handle is never re-checked. The
+    # claim time only - an existing handle is never re-checked. The
     # allowlist (HANDLE_PROFANITY_ALLOWLIST) is Adam's override for a
     # legitimate handle the wordlist flags anyway; see app/services/handles.py.
     if (
@@ -158,7 +158,7 @@ def _assert_handle_present(handle: Optional[str], tiers: dict) -> None:
     A handle is the profile URL, so nothing may leave ``private`` without one.
 
     Stated over the *resulting* state it also covers the reverse: clearing a
-    handle is only allowed while every setting — profile included — is still
+    handle is only allowed while every setting - profile included - is still
     private.
     """
     if handle:
@@ -166,7 +166,7 @@ def _assert_handle_present(handle: Optional[str], tiers: dict) -> None:
     if any(tier is not VisibilityTier.PRIVATE for tier in tiers.values()):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail='Pick a handle before sharing anything — it becomes your '
+            detail='Pick a handle before sharing anything - it becomes your '
             'profile URL',
         )
 
@@ -192,7 +192,7 @@ def _assert_profile_covers_shelves(tiers: dict) -> None:
     raise HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail=f"{label} is set to {required.value}, so your profile must be "
-        f"at least {required.value} — it is currently {profile.value}",
+        f"at least {required.value} - it is currently {profile.value}",
     )
 
 
@@ -214,7 +214,7 @@ def _shelf_payload(  # pylint: disable=too-many-arguments, too-many-positional-a
     watchlist from ever being served for a shelf the viewer cannot see.
 
     ``ranked_limit``/``ranked_offset`` and their watchlist counterparts page
-    each list independently (#279) — a client viewing one shelf's ranked list
+    each list independently (#279) - a client viewing one shelf's ranked list
     in depth has no reason to also pull a deep page of its watchlist, so the
     two default to the small preview size unless the caller specifically
     asked for that one to go deep.
@@ -225,7 +225,7 @@ def _shelf_payload(  # pylint: disable=too-many-arguments, too-many-positional-a
         tracker_model.on_rankings.is_(True),
         tracker_model.rank.isnot(None),
     )
-    # ranked_count is the shelf total, independent of ranked_limit — a client
+    # ranked_count is the shelf total, independent of ranked_limit - a client
     # paging through a long shelf still needs to know how much is left.
     ranked_count = (
         db.query(func.count())  # pylint: disable=not-callable
@@ -322,15 +322,15 @@ def update_visibility(
     Update the handle, activity sharing, and/or any of the nine visibility tiers.
 
     Only fields present in the body change. The result has to satisfy both
-    invariants — a handle for anything non-private, and a profile at least as
-    open as its most-open shelf — or the whole update is rejected. Both are
+    invariants - a handle for anything non-private, and a profile at least as
+    open as its most-open shelf - or the whole update is rejected. Both are
     checked against the *resulting* state before anything is written, so a
     rejection leaves the row exactly as it was.
     """
     user = current_user[0]
     data = request.model_dump(exclude_unset=True)
     # ``share_activity`` is the one field that carries no handle or tier
-    # consequence, so a body containing only it skips the invariants — an
+    # consequence, so a body containing only it skips the invariants - an
     # account that has never claimed a handle can still opt out of the feed.
     changes_visibility = (
         'handle' in data
@@ -375,7 +375,7 @@ def update_visibility(
     '/public/{handle}',
     # FastAPI emits the bearer scheme as the only security requirement, which
     # reads as "credentials required". Appending the empty alternative (extras
-    # concatenate onto the generated list) is how OpenAPI spells "optional" —
+    # concatenate onto the generated list) is how OpenAPI spells "optional" -
     # without it a generated client would refuse to call this anonymously.
     openapi_extra={'security': [{}]},
 )
@@ -384,7 +384,7 @@ def public_profile(  # pylint: disable=too-many-arguments, too-many-positional-a
     response: Response,
     db: Session = Depends(get_db),
     viewer: Optional[DbUser] = Depends(get_optional_current_user),
-    # Depth controls (#279). `shelf` narrows the response to one category —
+    # Depth controls (#279). `shelf` narrows the response to one category -
     # the hub view has no use for a deep page of every shelf at once, so
     # `limit`/`offset` only take effect when a specific shelf is named.
     # `kind` picks which of that shelf's two lists (ranked or watchlist)
@@ -400,18 +400,18 @@ def public_profile(  # pylint: disable=too-many-arguments, too-many-positional-a
 
     Authentication is optional (#277). Anonymous callers and signed-in
     strangers get ``public`` and nothing else; an accepted friend also gets
-    ``friends``; the owner gets everything of their own — including private
-    shelves, and so never a 404 on their own handle — which is why the
+    ``friends``; the owner gets everything of their own - including private
+    shelves, and so never a 404 on their own handle - which is why the
     response carries ``viewer.relationship``: a client rendering this page has
     to be able to say *whose* view it is showing. ``viewer.following`` (#276)
-    rides alongside it for the same reason — whether to render a Follow or
-    Following button — and is computed only *after* every access decision
+    rides alongside it for the same reason - whether to render a Follow or
+    Following button - and is computed only *after* every access decision
     above has already been made: following is never part of the ceiling a
     caller is served, only a fact about the payload once that's settled.
 
     **One ceiling, resolved once.** The caller's relationship is turned into a
-    single tier ceiling before any shelf is read, and every shelf — ranked
-    list and watchlist alike — is then compared against that one value. The
+    single tier ceiling before any shelf is read, and every shelf - ranked
+    list and watchlist alike - is then compared against that one value. The
     alternative, asking "is this viewer a friend?" per shelf, is what lets two
     shelves end up evaluated under different assumptions.
 
@@ -419,15 +419,15 @@ def public_profile(  # pylint: disable=too-many-arguments, too-many-positional-a
     handle, a profile whose tier is above this caller, and a profile with no
     shelf this caller may see all raise the *same* exception object: same
     status, same body, same headers. Since visibility is now
-    viewer-dependent, so is the 404 — a profile a friend can see 404s for
+    viewer-dependent, so is the 404 - a profile a friend can see 404s for
     everybody else exactly as a handle nobody ever claimed does. A named
     ``shelf`` that doesn't exist, or that this ceiling doesn't admit, folds
-    into the same 404 rather than a distinct error — see #279.
+    into the same 404 rather than a distinct error - see #279.
 
     **Depth is viewer-controlled, not owner-controlled** (#279): the owner
     picks a tier, the viewer picks how much of an admitted shelf to read.
-    ``limit`` clamps to ``MAX_PUBLIC_SHELF_LIMIT`` rather than erroring — a
-    shared link has to survive a hand-edited or scraped query string — and
+    ``limit`` clamps to ``MAX_PUBLIC_SHELF_LIMIT`` rather than erroring - a
+    shared link has to survive a hand-edited or scraped query string - and
     only applies once a single ``shelf`` is named; the multi-shelf hub view
     always gets the small preview size for every shelf.
     """
@@ -435,7 +435,7 @@ def public_profile(  # pylint: disable=too-many-arguments, too-many-positional-a
     # One object for every "you get nothing" outcome, so they cannot drift
     # apart. Vary rides on it as well: whether this handle 404s is itself
     # viewer-dependent, so a shared cache must not answer one viewer from
-    # another viewer's copy — of the profile or of its absence.
+    # another viewer's copy - of the profile or of its absence.
     not_found = HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail='No public profile here',
@@ -483,8 +483,8 @@ def public_profile(  # pylint: disable=too-many-arguments, too-many-positional-a
     if shelf is not None and not shelves:
         raise not_found
 
-    # Following (#276) grants no additional visibility — it never touches
-    # `ceiling` or anything above this line — so it is computed only for the
+    # Following (#276) grants no additional visibility - it never touches
+    # `ceiling` or anything above this line - so it is computed only for the
     # response payload, after every access decision has already been made.
     # Self can never be "following" (a self-follow is unrepresentable), and an
     # anonymous caller has no pk to look up, so both skip the query.

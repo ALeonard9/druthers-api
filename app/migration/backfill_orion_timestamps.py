@@ -1,12 +1,12 @@
 """
 Recover the remaining orion timestamps (#160):
 
-1. **Episode watch dates** — ``g_user_tvepisodes.g_first`` was fetched by the
+1. **Episode watch dates** - ``g_user_tvepisodes.g_first`` was fetched by the
    import but never used, so every pre-cutover watch mark carries an
    import-time timestamp. Restores ``watched_at = COALESCE(g_first,
    g_created)`` for watched marks, keyed deterministically through the TVMaze
    episode id.
-2. **Tracker "date added"** — ``g_created`` was dropped (books/games/tv) or
+2. **Tracker "date added"** - ``g_created`` was dropped (books/games/tv) or
    overwritten (movies), so ``created_at`` is wrong across the tracker
    tables. Corrects it from the orion source using the import's natural keys.
 

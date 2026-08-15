@@ -4,13 +4,13 @@ Shared software-development lifecycle for all aleonard.us services
 (`druthers-api`, `druthers-web`, `druthers-mcp`, `www.aleonard.us-docker`).
 Other repos link here instead of duplicating it.
 
-## Branching — trunk-based
+## Branching - trunk-based
 
 - **`main` is protected** and always deployable. No direct pushes.
 - Work on **short-lived branches** off `main`, named by type:
-  - `feat/<slug>` — new capability
-  - `fix/<slug>` — bug fix
-  - `chore/<slug>` — deps, tooling, docs, refactors
+  - `feat/<slug>` - new capability
+  - `fix/<slug>` - bug fix
+  - `chore/<slug>` - deps, tooling, docs, refactors
 - Open a **pull request** early. Merge only when **CI is green**.
 - **Squash-merge** to keep `main` linear; delete the branch after merge.
 - Keep branches small and short-lived; rebase on `main` rather than long-running forks.

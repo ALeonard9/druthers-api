@@ -2,7 +2,7 @@
 """
 The enrichers pick their work by proxy fields (plot/director, description/
 authors, summary/genre). A row that carries those but has no ``year`` used to
-fall outside the filter and stay year-less forever — which is what blanked
+fall outside the filter and stay year-less forever - which is what blanked
 half the years on the home Top 5. These pin the missing field itself as a
 selection criterion.
 """

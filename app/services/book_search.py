@@ -1,7 +1,7 @@
 """
 Book search proxy.
 
-Wraps the Open Library API (https://openlibrary.org — free, no key) so the
+Wraps the Open Library API (https://openlibrary.org - free, no key) so the
 web and MCP frontends can look up books by title/author without talking to
 Open Library directly. Results are normalized into the shape the
 ``/v1/books`` create endpoint expects. Open Library is also the enrichment
@@ -71,7 +71,7 @@ def _pick_isbn(doc: dict) -> Optional[str]:
 
 
 # A single-letter word (optionally with a trailing period) that is not a real
-# English one-letter word — the residue of a mangled transliteration.
+# English one-letter word - the residue of a mangled transliteration.
 _STRAY_LETTER_RE = re.compile(r'(?<!\S)(?![aAiI](?!\w))[b-zB-Z]\.?(?!\S)')
 
 
@@ -152,7 +152,7 @@ def normalize_title(title: Optional[str]) -> Optional[str]:
         return title
     cleaned = _TRAILING_PAREN_RE.sub('', title.strip())
     trimmed = _EDITION_SUFFIX_RE.sub('', cleaned)
-    # Only accept the trim if a real title survives it — 'The Complete
+    # Only accept the trim if a real title survives it - 'The Complete
     # Collection' must not become 'The'.
     if trimmed and any(w.lower() not in _MINOR_WORDS for w in trimmed.split()):
         cleaned = trimmed
@@ -172,7 +172,7 @@ def _pick_title(edition_titles: list, work_title: Optional[str]) -> Optional[str
 
     The work title is only wrong when it came from a translated edition
     ('Fatta Eld' for Catching Fire). If it appears among the English editions
-    at all, it is a legitimate English title and stays — otherwise the most
+    at all, it is a legitimate English title and stays - otherwise the most
     common edition title wins a work like Order of the Phoenix, whose
     editions are catalogued 8x as the bare series name 'Harry Potter' against
     6x for the actual book.
@@ -210,7 +210,7 @@ def _english_edition(work_key: Optional[str]) -> dict:
     count.
 
     The work-level search doc aggregates every edition, so ``cover_i`` is
-    whichever edition Open Library happened to surface — for How to Win
+    whichever edition Open Library happened to surface - for How to Win
     Friends that was a foreign-language jacket. Editions carry a real
     language, so pick from those instead.
 
@@ -256,7 +256,7 @@ def _language(doc: dict) -> Optional[str]:
     Pick the language of the *work*, which Open Library reports as the union
     of every edition's language.
 
-    Taking element 0 is close to arbitrary — it tagged The Stand 'rus' and
+    Taking element 0 is close to arbitrary - it tagged The Stand 'rus' and
     The Da Vinci Code 'mal'. Only claim a language when the work has exactly
     one, or when English is among them (this catalog is English-language);
     otherwise say nothing rather than assert a translation at random.
@@ -306,7 +306,7 @@ def _search_by_isbn(isbn: str) -> List[dict]:
     round-trip to resolve author names from a work reference, unlike the
     ``/isbn/{isbn}.json`` edition endpoint).
 
-    Returns ``[]`` when the ISBN doesn't resolve to a known edition — the
+    Returns ``[]`` when the ISBN doesn't resolve to a known edition - the
     same "no matches" shape a title search produces, not an error.
     """
     try:
@@ -569,7 +569,7 @@ def _google_poster(volume: dict) -> Optional[str]:
 
     The raw thumbnail is http (blocked as mixed content on an https site),
     carries a page-curl overlay, and trails a long ``imgtk`` signature that
-    pushes it past the 254-char poster_url column — where it gets truncated
+    pushes it past the 254-char poster_url column - where it gets truncated
     into a broken link. Rebuild the minimal form instead of patching the
     given one.
     """
@@ -588,12 +588,12 @@ def _google_poster(volume: dict) -> Optional[str]:
 
 _BLOCK_TAG_RE = re.compile(r'</(?:p|div|li|h[1-6])\s*>|<br\s*/?>', re.IGNORECASE)
 _TAG_RE = re.compile(r'<[^>]+>')
-# Open Library descriptions are Markdown, and are open to edit by anyone —
+# Open Library descriptions are Markdown, and are open to edit by anyone -
 # link spam shows up in them. Rich Dad Poor Dad's opened with a Markdown link
 # to a PDF piracy site. Keep the link text, drop the destination.
 _MD_LINK_RE = re.compile(r'\[([^\]]*)\]\(([^)]*)\)')
 # A whole line that is just a Markdown link (with optional trailing hard-break
-# backslashes) — the shape the spam takes.
+# backslashes) - the shape the spam takes.
 _STANDALONE_LINK_RE = re.compile(r'\\*\[[^\]]*\]\([^)]*\)\\*')
 _BARE_URL_RE = re.compile(r'\bhttps?://\S+')
 # Markdown hard line breaks arrive as a literal backslash before the newline.
@@ -660,7 +660,7 @@ def _google_books_detail(googleid: str) -> Optional[dict]:
     Returns None when the key is unset or the volume is unknown; raises
     ``UpstreamUnavailable`` when the call itself failed. Note that Google
     answers an unknown volume id with 404, which is a "no record" result
-    rather than an outage — hence the explicit check before raising.
+    rather than an outage - hence the explicit check before raising.
     """
     api_key = get_settings().google_books_api_key
     if not api_key:
@@ -734,8 +734,8 @@ def resolve_book_detail(
         return fallback
     if not fallback:
         return detail
-    # Open Library wins where it has a value — better ratings coverage, and
-    # first-publish year rather than this printing's date — but it answers
+    # Open Library wins where it has a value - better ratings coverage, and
+    # first-publish year rather than this printing's date - but it answers
     # with partial records (One Mission came back as a title and nothing
     # else), so let Google fill the gaps rather than discarding it.
     return {

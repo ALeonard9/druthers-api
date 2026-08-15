@@ -208,7 +208,7 @@ def test_search_movies_title_query_uses_search_endpoint(mock_get, mock_settings)
 
     assert results[0]['title'] == 'Titanic'
     assert results[0]['tmdb'] == 597
-    # Title search carries no IMDb id — that's why tmdb is the join key.
+    # Title search carries no IMDb id - that's why tmdb is the join key.
     assert results[0]['imdb'] is None
     assert results[0]['popularity'] == 91.2
     # Full release_date (not just year) so the frontend can tell unreleased

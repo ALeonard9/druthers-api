@@ -1,7 +1,7 @@
 """visibility tiers
 
 Replaces the eight Boolean visibility flags on ``users`` with nine
-``private | friends | public`` tier columns (api#274) — one per shelf, one
+``private | friends | public`` tier columns (api#274) - one per shelf, one
 per shelf watchlist, and a ninth governing the profile page itself.
 
 Stored as VARCHAR with a per-column CHECK rather than an integer or a native
@@ -14,8 +14,8 @@ Data mapping:
 * ``True`` -> ``public``; ``False`` and ``NULL`` -> ``private``.
 * ``visibility_profile`` takes the most-open shelf tier found on the row, so
   every existing public shelf keeps resolving through its profile. In
-  practice that is ``public`` if any flag was set and ``private`` otherwise —
-  ``friends`` cannot exist yet — but the statement is written for the general
+  practice that is ``public`` if any flag was set and ``private`` otherwise -
+  ``friends`` cannot exist yet - but the statement is written for the general
   case so a re-run against partly-migrated data still lands correctly.
 
 ``downgrade()`` recreates the booleans as ``tier = 'public'``. **Friends-tier

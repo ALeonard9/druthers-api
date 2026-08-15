@@ -3,7 +3,7 @@
 Adds ranked_at to the five per-user tracker tables (#141): the timestamp of
 the current rank assignment, so the Activity feed stops re-dating rankings
 whenever an unrelated tracker field (notes, flags) bumps updated_at.
-Backfills existing placed ranks from updated_at — the best signal available.
+Backfills existing placed ranks from updated_at - the best signal available.
 
 Revision ID: e9f4a63b7c25
 Revises: d8e3f52a6b14

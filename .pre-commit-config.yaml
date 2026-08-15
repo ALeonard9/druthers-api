@@ -2,7 +2,7 @@ fail_fast: true
 default_stages: [pre-commit]   # existing hooks run per-commit; tests run pre-push (below)
 
 # pre-commit.ci (hosted app) keeps hook versions current and auto-fixes on PRs.
-# Skip hooks that need the local project venv — they can't run in the hosted CI.
+# Skip hooks that need the local project venv - they can't run in the hosted CI.
 ci:
   autoupdate_schedule: weekly
   skip: [pylint, pytest-changed]

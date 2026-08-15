@@ -2,7 +2,7 @@
 Issue, rotate, and revoke refresh tokens (#246).
 
 The access token stays short-lived and stateless; this module owns the piece
-that makes staying signed in safe — a long-lived opaque token that can be
+that makes staying signed in safe - a long-lived opaque token that can be
 killed individually, rotates every time it is spent, and takes its whole
 family down with it if a spent one comes back.
 
@@ -33,12 +33,12 @@ class RefreshTokenError(Exception):
 
 
 def generate_refresh_token() -> str:
-    """Mint the plaintext secret — returned to the caller exactly once."""
+    """Mint the plaintext secret - returned to the caller exactly once."""
     return f'{REFRESH_TOKEN_PREFIX}{secrets.token_urlsafe(32)}'
 
 
 def hash_refresh_token(token: str) -> str:
-    """SHA-256 of the full token — the only form ever stored."""
+    """SHA-256 of the full token - the only form ever stored."""
     return hashlib.sha256(token.encode()).hexdigest()
 
 
@@ -103,7 +103,7 @@ def revoke_family(db: Session, family_id: str) -> None:
 
 def revoke_refresh_token(db: Session, token: str) -> bool:
     """
-    Revoke a token and the rest of its family — this is what sign-out calls.
+    Revoke a token and the rest of its family - this is what sign-out calls.
 
     The family goes too, so signing out on a device can't be undone by a
     token that happened to be minted earlier in the same chain. Returns
@@ -163,7 +163,7 @@ def peek_user(db: Session, token: str) -> Optional[DbUser]:
     """
     Owner of a refresh token without spending it, or ``None`` if unknown.
 
-    Only for checks that must happen *before* rotation — rate limiting a
+    Only for checks that must happen *before* rotation - rate limiting a
     rotation that already consumed the token would destroy the session it was
     meant to protect. Says nothing about whether the token is still valid.
     """
@@ -196,7 +196,7 @@ def rotate_refresh_token(db: Session, token: str) -> Tuple[DbUser, str]:
         if _within_reuse_leeway(db, row):
             # Two of the client's requests raced past the same expiry. Hand
             # out another token in the family rather than reading a race as
-            # theft — the alternative signs people out at random.
+            # theft - the alternative signs people out at random.
             logger.info(
                 'Concurrent refresh for user_id=%s family=%s within the reuse '
                 'window; issuing an additional token',

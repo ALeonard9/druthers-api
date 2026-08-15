@@ -12,7 +12,7 @@ licenses images for application use and has no daily request cap.
 Two TMDB quirks shape this module:
 
 * **Search returns no IMDb id.** ``/search/movie`` yields TMDB ids only, so
-  ``tmdb`` — not ``imdb`` — is the catalog's join key (see
+  ``tmdb`` - not ``imdb`` - is the catalog's join key (see
   ``tracked_status._DOMAIN_CONFIG``). ``imdb`` is still stored, populated
   from the detail call, but nothing joins on it.
 * **There is no IMDb rating.** ``vote_average`` is TMDB's own score and lands
@@ -34,7 +34,7 @@ _IMDB_ID_RE = re.compile(r'^tt\d+$', re.IGNORECASE)
 # OMDb returned 4 principal cast members; match that so the detail page's
 # "Actors" line stays a short list rather than a full credit roll.
 _CAST_LIMIT = 4
-# US ratings only — the catalog is a single-region product (#163/web#26).
+# US ratings only - the catalog is a single-region product (#163/web#26).
 _CERTIFICATION_REGION = 'US'
 
 
@@ -216,7 +216,7 @@ def get_movie_detail(tmdb_id) -> Optional[dict]:
     skip enrichment gracefully.
 
     ``credits`` and ``release_dates`` come back in the same round trip via
-    append_to_response — director, cast and the US rating would each otherwise
+    append_to_response - director, cast and the US rating would each otherwise
     need their own call.
     """
     if not tmdb_id:

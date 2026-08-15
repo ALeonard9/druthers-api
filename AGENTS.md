@@ -1,7 +1,7 @@
 ## Python formatting
 
 The pre-commit `black` hook runs with `--skip-string-normalization` (see
-`.pre-commit-config.yaml`) — it never rewrites quote style. A separate
+`.pre-commit-config.yaml`) - it never rewrites quote style. A separate
 `double-quote-string-fixer` hook converts double quotes to single after.
 If you run `black` by hand instead of relying on the hook, pass
 `--skip-string-normalization` too, or it'll flip the file to double quotes

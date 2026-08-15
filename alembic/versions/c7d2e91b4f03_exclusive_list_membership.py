@@ -2,7 +2,7 @@
 
 One-time cleanup for the one-home rule (#145): an item lives on exactly one
 of Watchlist / To-be-ranked / Ranked. For existing overlaps, Rankings wins
-(ranked > to-rank > watchlist). One-way — the overlap isn't recoverable.
+(ranked > to-rank > watchlist). One-way - the overlap isn't recoverable.
 
 Revision ID: c7d2e91b4f03
 Revises: b41f0a7c9e21
