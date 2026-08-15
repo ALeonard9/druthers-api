@@ -7,9 +7,9 @@ search proxy, lazy enrichment on detail view (keyed on isbn), and per-user
 trackers with independent Watchlist (to-read) / Rankings (read) lists.
 """
 
-from typing import List, Union
+from typing import List, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -53,8 +53,18 @@ router = APIRouter(prefix='/v1', tags=['Books'])
 
 # Global Entity Endpoints
 @router.get('/books', response_model=List[BookSummary])
-def get_all_books(db: Session = Depends(get_db)):
-    return db.query(DbBook).all()
+def get_all_books(
+    googleid: Optional[str] = None,
+    limit: int = Query(25, ge=1),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    del current_user
+    query = db.query(DbBook)
+    if googleid is not None:
+        query = query.filter(DbBook.googleid == googleid)
+    return query.order_by(DbBook.pk).offset(offset).limit(limit).all()
 
 
 @router.get(

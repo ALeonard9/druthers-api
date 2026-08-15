@@ -10,7 +10,7 @@ Watchlist/Rankings lists plus episode-level watched marks.
 from datetime import datetime, time, timedelta
 from typing import List, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -94,8 +94,18 @@ def _local_day_end(user) -> datetime:
 
 # Global Entity Endpoints
 @router.get('/tv-shows', response_model=List[TVShowSummary])
-def get_all_tv_shows(db: Session = Depends(get_db)):
-    return db.query(DbTVShow).all()
+def get_all_tv_shows(
+    tvmaze: Optional[int] = None,
+    limit: int = Query(25, ge=1),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    del current_user
+    query = db.query(DbTVShow)
+    if tvmaze is not None:
+        query = query.filter(DbTVShow.tvmaze == tvmaze)
+    return query.order_by(DbTVShow.pk).offset(offset).limit(limit).all()
 
 
 @router.get(
@@ -231,7 +241,12 @@ def delete_tv_show(
 
 # Episode Catalog Endpoints
 @router.get('/tv-shows/{show_id}/episodes', response_model=List[TVEpisodeResponse])
-def get_all_episodes(show_id: str, db: Session = Depends(get_db)):
+def get_all_episodes(
+    show_id: str,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    del current_user
     show = _get_show(db, show_id)
     return (
         db.query(DbTVEpisode)

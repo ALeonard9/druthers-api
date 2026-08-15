@@ -27,7 +27,8 @@ def test_create_game(test_client: TestClient):
 
 def test_get_games(test_client: TestClient):
     _make_game(test_client)
-    response = test_client.get('/v1/games')
+    headers = {'Authorization': f'Bearer {test_client.first_user.token}'}
+    response = test_client.get('/v1/games', headers=headers)
     assert response.status_code == 200
     assert len(response.json()) > 0
 

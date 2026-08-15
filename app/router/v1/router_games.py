@@ -8,9 +8,9 @@ and per-user trackers with independent Watchlist (backlog) / Rankings
 (played) lists plus a 100%-completion flag.
 """
 
-from typing import List, Union
+from typing import List, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -54,8 +54,18 @@ router = APIRouter(prefix='/v1', tags=['Video Games'])
 
 # Global Entity Endpoints
 @router.get('/games', response_model=List[VideoGameSummary])
-def get_all_games(db: Session = Depends(get_db)):
-    return db.query(DbVideoGame).all()
+def get_all_games(
+    igdb: Optional[int] = None,
+    limit: int = Query(25, ge=1),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    del current_user
+    query = db.query(DbVideoGame)
+    if igdb is not None:
+        query = query.filter(DbVideoGame.igdb == igdb)
+    return query.order_by(DbVideoGame.pk).offset(offset).limit(limit).all()
 
 
 @router.get(

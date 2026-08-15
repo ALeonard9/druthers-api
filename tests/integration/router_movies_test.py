@@ -26,7 +26,7 @@ def test_get_movies(test_client: TestClient):
         '/v1/movies', headers=headers, json={'title': 'Inception', 'imdb': 'tt1375666'}
     )
 
-    response = test_client.get('/v1/movies')
+    response = test_client.get('/v1/movies', headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert len(data) > 0
