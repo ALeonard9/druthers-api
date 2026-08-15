@@ -3,9 +3,9 @@
 This module contains the API routes for Movies.
 """
 
-from typing import List
+from typing import List, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
@@ -25,6 +25,7 @@ from app.schemas.schemas_sandbox import (
     MovieUpdate,
     RankPlacement,
     RankingReorder,
+    TrackerListPage,
     UserMovieCreate,
     UserMovieResponse,
     UserMovieUpdate,
@@ -40,9 +41,9 @@ from app.services.watch_providers import DEFAULT_REGION, get_movie_providers
 from app.services.search_correction import correct_query
 from app.services.tracked_status import attach_tracked_status
 from app.services.tracker_query import (
-    apply_list_params,
-    guard_truncation,
+    list_tracker_items,
     list_params,
+    tracker_list_response,
 )
 
 router = APIRouter(prefix='/v1', tags=['Movies'])
@@ -66,8 +67,18 @@ def _find_duplicate(db: Session, tmdb_id, imdb_id):
 
 # Global Entity Endpoints
 @router.get('/movies', response_model=List[MovieResponse])
-def get_all_movies(db: Session = Depends(get_db)):
-    return db.query(DbMovie).all()
+def get_all_movies(
+    tmdb: Optional[int] = None,
+    limit: int = Query(25, ge=1),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    del current_user
+    query = db.query(DbMovie)
+    if tmdb is not None:
+        query = query.filter(DbMovie.tmdb == tmdb)
+    return query.order_by(DbMovie.pk).offset(offset).limit(limit).all()
 
 
 @router.get(
@@ -254,7 +265,10 @@ def _close_rank_gap(db: Session, user_pk: int, vacated_rank) -> None:
     ).update({DbUserMovie.rank: DbUserMovie.rank - 1}, synchronize_session=False)
 
 
-@router.get('/users/me/movies', response_model=List[UserMovieResponse])
+@router.get(
+    '/users/me/movies',
+    response_model=Union[List[UserMovieResponse], TrackerListPage[UserMovieResponse]],
+)
 def get_user_movies(
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
@@ -265,8 +279,8 @@ def get_user_movies(
         .options(joinedload(DbUserMovie.movie))
         .filter(DbUserMovie.user_id == current_user[0].pk)
     )
-    rows = apply_list_params(query, DbUserMovie, params).all()
-    return guard_truncation(rows, params, 'Movie')
+    rows, total = list_tracker_items(query, DbUserMovie, DbMovie, params)
+    return tracker_list_response(rows, total, params, 'Movie')
 
 
 @router.get('/users/me/movies/{movie_id}', response_model=UserMovieResponse)
@@ -293,11 +307,28 @@ def reorder_rankings(
 ):
     """Persist a new ranking order (drag-and-drop). Rank = position in the list."""
     user_pk = current_user[0].pk
+
+    movies = db.query(DbMovie).filter(DbMovie.id.in_(request.movie_ids)).all()
+    movie_pk_by_id = {m.id: m.pk for m in movies}
+
+    if movie_pk_by_id:
+        trackers = (
+            db.query(DbUserMovie)
+            .filter(
+                DbUserMovie.user_id == user_pk,
+                DbUserMovie.movie_id.in_(movie_pk_by_id.values()),
+            )
+            .all()
+        )
+        tracker_by_movie_pk = {t.movie_id: t for t in trackers}
+    else:
+        tracker_by_movie_pk = {}
+
     for position, movie_id in enumerate(request.movie_ids, start=1):
-        movie = db.query(DbMovie).filter(DbMovie.id == movie_id).first()
-        if not movie:
+        movie_pk = movie_pk_by_id.get(movie_id)
+        if not movie_pk:
             continue
-        tracker = _get_tracker(db, user_pk, movie.pk)
+        tracker = tracker_by_movie_pk.get(movie_pk)
         if tracker:
             if tracker.rank != position:
                 tracker.ranked_at = utc_now()

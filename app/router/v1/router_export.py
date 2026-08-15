@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.auth.oauth2 import get_current_user
 from app.db.database import get_db
@@ -54,16 +54,27 @@ def _state(tracker) -> str:
 
 
 def _movies(db: Session, user_pk: int):
-    return db.query(DbUserMovie).filter(DbUserMovie.user_id == user_pk).all()
+    return (
+        db.query(DbUserMovie)
+        .options(joinedload(DbUserMovie.movie))
+        .filter(DbUserMovie.user_id == user_pk)
+        .all()
+    )
 
 
 def _shows(db: Session, user_pk: int):
-    return db.query(DbUserTVShow).filter(DbUserTVShow.user_id == user_pk).all()
+    return (
+        db.query(DbUserTVShow)
+        .options(joinedload(DbUserTVShow.tv_show))
+        .filter(DbUserTVShow.user_id == user_pk)
+        .all()
+    )
 
 
 def _episode_marks(db: Session, user_pk: int):
     return (
         db.query(DbUserTVEpisode)
+        .options(joinedload(DbUserTVEpisode.episode))
         .join(DbTVEpisode, DbUserTVEpisode.episode_id == DbTVEpisode.pk)
         .filter(DbUserTVEpisode.user_id == user_pk)
         .all()
@@ -71,11 +82,21 @@ def _episode_marks(db: Session, user_pk: int):
 
 
 def _books(db: Session, user_pk: int):
-    return db.query(DbUserBook).filter(DbUserBook.user_id == user_pk).all()
+    return (
+        db.query(DbUserBook)
+        .options(joinedload(DbUserBook.book))
+        .filter(DbUserBook.user_id == user_pk)
+        .all()
+    )
 
 
 def _games(db: Session, user_pk: int):
-    return db.query(DbUserVideoGame).filter(DbUserVideoGame.user_id == user_pk).all()
+    return (
+        db.query(DbUserVideoGame)
+        .options(joinedload(DbUserVideoGame.game))
+        .filter(DbUserVideoGame.user_id == user_pk)
+        .all()
+    )
 
 
 @router.get('')

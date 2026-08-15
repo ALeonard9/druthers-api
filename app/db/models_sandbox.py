@@ -19,7 +19,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref, relationship
 
 from app.db.models import DBBaseModel
 
@@ -79,7 +79,10 @@ class DbNotification(DBBaseModel):
     dedupe_key = Column(String(120), nullable=False)
     read = Column(Boolean, nullable=False, default=False)
 
-    user = relationship('DbUser', backref='notifications')
+    user = relationship(
+        'DbUser',
+        backref=backref('notifications', cascade='all, delete-orphan'),
+    )
 
 
 class DbMovie(DBBaseModel):
@@ -143,8 +146,16 @@ class DbUserMovie(DBBaseModel):
     is_seed_data = Column(Boolean, nullable=False, default=False)
 
     movie = relationship('DbMovie', back_populates='user_movies')
-    user = relationship('DbUser', foreign_keys=[user_id], backref='user_movies')
-    source_user = relationship('DbUser', foreign_keys=[source_user_id])
+    user = relationship(
+        'DbUser',
+        foreign_keys=[user_id],
+        backref=backref('user_movies', cascade='all, delete-orphan'),
+    )
+    source_user = relationship(
+        'DbUser',
+        foreign_keys=[source_user_id],
+        backref='sourced_user_movies',
+    )
 
     @property
     def source_handle(self):
@@ -209,8 +220,16 @@ class DbUserTVShow(DBBaseModel):
     is_seed_data = Column(Boolean, nullable=False, default=False)
 
     tv_show = relationship('DbTVShow', back_populates='user_tv_shows')
-    user = relationship('DbUser', foreign_keys=[user_id], backref='user_tv_shows')
-    source_user = relationship('DbUser', foreign_keys=[source_user_id])
+    user = relationship(
+        'DbUser',
+        foreign_keys=[user_id],
+        backref=backref('user_tv_shows', cascade='all, delete-orphan'),
+    )
+    source_user = relationship(
+        'DbUser',
+        foreign_keys=[source_user_id],
+        backref='sourced_user_tv_shows',
+    )
 
     @property
     def source_handle(self):
@@ -259,7 +278,10 @@ class DbUserTVEpisode(DBBaseModel):
     favorited_at = Column(DateTime, nullable=True)
 
     episode = relationship('DbTVEpisode', back_populates='user_episodes')
-    user = relationship('DbUser', backref='user_tv_episodes')
+    user = relationship(
+        'DbUser',
+        backref=backref('user_tv_episodes', cascade='all, delete-orphan'),
+    )
 
 
 class DbVideoGame(DBBaseModel):
@@ -314,8 +336,16 @@ class DbUserVideoGame(DBBaseModel):
     is_seed_data = Column(Boolean, nullable=False, default=False)
 
     game = relationship('DbVideoGame', back_populates='user_games')
-    user = relationship('DbUser', foreign_keys=[user_id], backref='user_video_games')
-    source_user = relationship('DbUser', foreign_keys=[source_user_id])
+    user = relationship(
+        'DbUser',
+        foreign_keys=[user_id],
+        backref=backref('user_video_games', cascade='all, delete-orphan'),
+    )
+    source_user = relationship(
+        'DbUser',
+        foreign_keys=[source_user_id],
+        backref='sourced_user_video_games',
+    )
 
     @property
     def source_handle(self):
@@ -378,8 +408,16 @@ class DbUserBook(DBBaseModel):
     is_seed_data = Column(Boolean, nullable=False, default=False)
 
     book = relationship('DbBook', back_populates='user_books')
-    user = relationship('DbUser', foreign_keys=[user_id], backref='user_books')
-    source_user = relationship('DbUser', foreign_keys=[source_user_id])
+    user = relationship(
+        'DbUser',
+        foreign_keys=[user_id],
+        backref=backref('user_books', cascade='all, delete-orphan'),
+    )
+    source_user = relationship(
+        'DbUser',
+        foreign_keys=[source_user_id],
+        backref='sourced_user_books',
+    )
 
     @property
     def source_handle(self):

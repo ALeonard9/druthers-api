@@ -8,18 +8,18 @@ and per-user trackers with independent Watchlist (backlog) / Rankings
 (played) lists plus a 100%-completion flag.
 """
 
-from typing import List
+from typing import List, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.db.database import get_db
 from app.services.rate_limit import catalog_add_cap, search_rate_limit
 from app.services.tracker_query import (
-    apply_list_params,
-    guard_truncation,
+    list_tracker_items,
     list_params,
+    tracker_list_response,
 )
 from app.services.tracker_rules import (
     default_completed_at,
@@ -32,6 +32,7 @@ from app.schemas.schemas_sandbox import (
     GameRankingReorder,
     GameSearchResult,
     RankPlacement,
+    TrackerListPage,
     UserVideoGameCreate,
     UserVideoGameResponse,
     UserVideoGameUpdate,
@@ -53,8 +54,18 @@ router = APIRouter(prefix='/v1', tags=['Video Games'])
 
 # Global Entity Endpoints
 @router.get('/games', response_model=List[VideoGameSummary])
-def get_all_games(db: Session = Depends(get_db)):
-    return db.query(DbVideoGame).all()
+def get_all_games(
+    igdb: Optional[int] = None,
+    limit: int = Query(25, ge=1),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    del current_user
+    query = db.query(DbVideoGame)
+    if igdb is not None:
+        query = query.filter(DbVideoGame.igdb == igdb)
+    return query.order_by(DbVideoGame.pk).offset(offset).limit(limit).all()
 
 
 @router.get(
@@ -207,7 +218,12 @@ def _close_rank_gap(db: Session, user_pk: int, vacated_rank) -> None:
     )
 
 
-@router.get('/users/me/games', response_model=List[UserVideoGameResponse])
+@router.get(
+    '/users/me/games',
+    response_model=Union[
+        List[UserVideoGameResponse], TrackerListPage[UserVideoGameResponse]
+    ],
+)
 def get_user_games(
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
@@ -218,8 +234,8 @@ def get_user_games(
         .options(joinedload(DbUserVideoGame.game))
         .filter(DbUserVideoGame.user_id == current_user[0].pk)
     )
-    rows = apply_list_params(query, DbUserVideoGame, params).all()
-    return guard_truncation(rows, params, 'Game')
+    rows, total = list_tracker_items(query, DbUserVideoGame, DbVideoGame, params)
+    return tracker_list_response(rows, total, params, 'Game')
 
 
 @router.put(
@@ -232,11 +248,28 @@ def reorder_rankings(
 ):
     """Persist a new ranking order (drag-and-drop). Rank = position in the list."""
     user_pk = current_user[0].pk
+
+    games = db.query(DbVideoGame).filter(DbVideoGame.id.in_(request.game_ids)).all()
+    game_pk_by_id = {g.id: g.pk for g in games}
+
+    if game_pk_by_id:
+        trackers = (
+            db.query(DbUserVideoGame)
+            .filter(
+                DbUserVideoGame.user_id == user_pk,
+                DbUserVideoGame.game_id.in_(game_pk_by_id.values()),
+            )
+            .all()
+        )
+        tracker_by_game_pk = {t.game_id: t for t in trackers}
+    else:
+        tracker_by_game_pk = {}
+
     for position, game_id in enumerate(request.game_ids, start=1):
-        game = db.query(DbVideoGame).filter(DbVideoGame.id == game_id).first()
-        if not game:
+        game_pk = game_pk_by_id.get(game_id)
+        if not game_pk:
             continue
-        tracker = _get_tracker(db, user_pk, game.pk)
+        tracker = tracker_by_game_pk.get(game_pk)
         if tracker:
             if tracker.rank != position:
                 tracker.ranked_at = utc_now()

@@ -7,18 +7,18 @@ search proxy, lazy enrichment on detail view (keyed on isbn), and per-user
 trackers with independent Watchlist (to-read) / Rankings (read) lists.
 """
 
-from typing import List
+from typing import List, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.db.database import get_db
 from app.services.rate_limit import catalog_add_cap, search_rate_limit
 from app.services.tracker_query import (
-    apply_list_params,
-    guard_truncation,
+    list_tracker_items,
     list_params,
+    tracker_list_response,
 )
 from app.services.tracker_rules import (
     default_completed_at,
@@ -35,6 +35,7 @@ from app.schemas.schemas_sandbox import (
     BookSummary,
     BookUpdate,
     RankPlacement,
+    TrackerListPage,
     UserBookCreate,
     UserBookResponse,
     UserBookUpdate,
@@ -52,8 +53,18 @@ router = APIRouter(prefix='/v1', tags=['Books'])
 
 # Global Entity Endpoints
 @router.get('/books', response_model=List[BookSummary])
-def get_all_books(db: Session = Depends(get_db)):
-    return db.query(DbBook).all()
+def get_all_books(
+    googleid: Optional[str] = None,
+    limit: int = Query(25, ge=1),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    del current_user
+    query = db.query(DbBook)
+    if googleid is not None:
+        query = query.filter(DbBook.googleid == googleid)
+    return query.order_by(DbBook.pk).offset(offset).limit(limit).all()
 
 
 @router.get(
@@ -212,7 +223,10 @@ def _close_rank_gap(db: Session, user_pk: int, vacated_rank) -> None:
     ).update({DbUserBook.rank: DbUserBook.rank - 1}, synchronize_session=False)
 
 
-@router.get('/users/me/books', response_model=List[UserBookResponse])
+@router.get(
+    '/users/me/books',
+    response_model=Union[List[UserBookResponse], TrackerListPage[UserBookResponse]],
+)
 def get_user_books(
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
@@ -223,8 +237,8 @@ def get_user_books(
         .options(joinedload(DbUserBook.book))
         .filter(DbUserBook.user_id == current_user[0].pk)
     )
-    rows = apply_list_params(query, DbUserBook, params).all()
-    return guard_truncation(rows, params, 'Book')
+    rows, total = list_tracker_items(query, DbUserBook, DbBook, params)
+    return tracker_list_response(rows, total, params, 'Book')
 
 
 @router.put('/users/me/books/rankings/order', response_model=List[UserBookResponse])
@@ -235,11 +249,28 @@ def reorder_rankings(
 ):
     """Persist a new ranking order (drag-and-drop). Rank = position in the list."""
     user_pk = current_user[0].pk
+
+    books = db.query(DbBook).filter(DbBook.id.in_(request.book_ids)).all()
+    book_pk_by_id = {b.id: b.pk for b in books}
+
+    if book_pk_by_id:
+        trackers = (
+            db.query(DbUserBook)
+            .filter(
+                DbUserBook.user_id == user_pk,
+                DbUserBook.book_id.in_(book_pk_by_id.values()),
+            )
+            .all()
+        )
+        tracker_by_book_pk = {t.book_id: t for t in trackers}
+    else:
+        tracker_by_book_pk = {}
+
     for position, book_id in enumerate(request.book_ids, start=1):
-        book = db.query(DbBook).filter(DbBook.id == book_id).first()
-        if not book:
+        book_pk = book_pk_by_id.get(book_id)
+        if not book_pk:
             continue
-        tracker = _get_tracker(db, user_pk, book.pk)
+        tracker = tracker_by_book_pk.get(book_pk)
         if tracker:
             if tracker.rank != position:
                 tracker.ranked_at = utc_now()

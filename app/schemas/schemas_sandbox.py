@@ -5,7 +5,7 @@ This module contains Pydantic schemas for Sandbox entities.
 # pylint: disable=missing-class-docstring
 
 from datetime import date, datetime
-from typing import Annotated, List, Optional
+from typing import Annotated, Generic, List, Optional, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -15,6 +15,16 @@ from pydantic import BaseModel, ConfigDict, Field
 # database will reject - or, before the CHECK existed, a silently stored 0
 # that showed up as "0" at the top of the Top 5 board.
 RankPosition = Annotated[int, Field(ge=1)]
+TrackerItem = TypeVar('TrackerItem')
+
+
+class TrackerListPage(BaseModel, Generic[TrackerItem]):
+    """A page from a user's tracker collection."""
+
+    items: List[TrackerItem]
+    total: int
+    limit: int
+    offset: int
 
 
 # --- Watch providers (shared by Movies and TV) ---

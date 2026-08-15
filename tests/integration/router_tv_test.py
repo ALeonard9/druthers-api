@@ -54,7 +54,8 @@ def test_create_tv_show(test_client: TestClient):
 
 def test_get_tv_shows(test_client: TestClient):
     _make_show(test_client)
-    response = test_client.get('/v1/tv-shows')
+    headers = {'Authorization': f'Bearer {test_client.first_user.token}'}
+    response = test_client.get('/v1/tv-shows', headers=headers)
     assert response.status_code == 200
     assert len(response.json()) > 0
 
@@ -331,7 +332,8 @@ def test_create_episode(test_client: TestClient):
     episode_id = _make_episode(test_client, show_id)
     assert episode_id
 
-    listing = test_client.get(f"/v1/tv-shows/{show_id}/episodes")
+    headers = {'Authorization': f'Bearer {test_client.first_user.token}'}
+    listing = test_client.get(f'/v1/tv-shows/{show_id}/episodes', headers=headers)
     assert listing.status_code == 200
     data = listing.json()
     assert len(data) == 1

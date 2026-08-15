@@ -1,4 +1,4 @@
-# pylint: disable=missing-function-docstring, useless-return
+# pylint: disable=missing-function-docstring, useless-return, too-many-lines
 """
 This module contains the API routes for TV Shows and Episodes.
 
@@ -8,9 +8,9 @@ Watchlist/Rankings lists plus episode-level watched marks.
 """
 
 from datetime import datetime, time, timedelta
-from typing import List, Optional
+from typing import List, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -18,9 +18,9 @@ from app.db.database import get_db
 from app.services import preferences
 from app.services.rate_limit import catalog_add_cap, search_rate_limit
 from app.services.tracker_query import (
-    apply_list_params,
-    guard_truncation,
+    list_tracker_items,
     list_params,
+    tracker_list_response,
 )
 from app.services.tracker_rules import (
     default_completed_at,
@@ -43,6 +43,7 @@ from app.schemas.schemas_sandbox import (
     TVShowSearchResult,
     TVShowSummary,
     TVShowUpdate,
+    TrackerListPage,
     UserTVEpisodeResponse,
     UserTVShowCreate,
     UserTVShowResponse,
@@ -93,8 +94,18 @@ def _local_day_end(user) -> datetime:
 
 # Global Entity Endpoints
 @router.get('/tv-shows', response_model=List[TVShowSummary])
-def get_all_tv_shows(db: Session = Depends(get_db)):
-    return db.query(DbTVShow).all()
+def get_all_tv_shows(
+    tvmaze: Optional[int] = None,
+    limit: int = Query(25, ge=1),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    del current_user
+    query = db.query(DbTVShow)
+    if tvmaze is not None:
+        query = query.filter(DbTVShow.tvmaze == tvmaze)
+    return query.order_by(DbTVShow.pk).offset(offset).limit(limit).all()
 
 
 @router.get(
@@ -230,7 +241,12 @@ def delete_tv_show(
 
 # Episode Catalog Endpoints
 @router.get('/tv-shows/{show_id}/episodes', response_model=List[TVEpisodeResponse])
-def get_all_episodes(show_id: str, db: Session = Depends(get_db)):
+def get_all_episodes(
+    show_id: str,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    del current_user
     show = _get_show(db, show_id)
     return (
         db.query(DbTVEpisode)
@@ -377,7 +393,12 @@ def _watch_status(aired: int, watched: int, show_status: Optional[str]) -> str:
     return 'complete' if show_status == 'Ended' else 'up_to_date'
 
 
-@router.get('/users/me/tv-shows', response_model=List[UserTVShowWithStatus])
+@router.get(
+    '/users/me/tv-shows',
+    response_model=Union[
+        List[UserTVShowWithStatus], TrackerListPage[UserTVShowWithStatus]
+    ],
+)
 def get_user_tv_shows(
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
@@ -389,9 +410,7 @@ def get_user_tv_shows(
         .options(joinedload(DbUserTVShow.tv_show))
         .filter(DbUserTVShow.user_id == user_pk)
     )
-    trackers = guard_truncation(
-        apply_list_params(query, DbUserTVShow, params).all(), params, 'TV'
-    )
+    trackers, total = list_tracker_items(query, DbUserTVShow, DbTVShow, params)
     show_pks = [t.tv_show_id for t in trackers]
     aired_before = _local_day_end(current_user[0])
 
@@ -442,7 +461,7 @@ def get_user_tv_shows(
                 watched_count=watched_count,
             )
         )
-    return results
+    return tracker_list_response(results, total, params, 'TV')
 
 
 @router.get('/users/me/schedule', response_model=ScheduleResponse)
@@ -551,11 +570,28 @@ def reorder_rankings(
 ):
     """Persist a new ranking order (drag-and-drop). Rank = position in the list."""
     user_pk = current_user[0].pk
+
+    shows = db.query(DbTVShow).filter(DbTVShow.id.in_(request.show_ids)).all()
+    show_pk_by_id = {s.id: s.pk for s in shows}
+
+    if show_pk_by_id:
+        trackers = (
+            db.query(DbUserTVShow)
+            .filter(
+                DbUserTVShow.user_id == user_pk,
+                DbUserTVShow.tv_show_id.in_(show_pk_by_id.values()),
+            )
+            .all()
+        )
+        tracker_by_show_pk = {t.tv_show_id: t for t in trackers}
+    else:
+        tracker_by_show_pk = {}
+
     for position, show_id in enumerate(request.show_ids, start=1):
-        show = db.query(DbTVShow).filter(DbTVShow.id == show_id).first()
-        if not show:
+        show_pk = show_pk_by_id.get(show_id)
+        if not show_pk:
             continue
-        tracker = _get_tracker(db, user_pk, show.pk)
+        tracker = tracker_by_show_pk.get(show_pk)
         if tracker:
             if tracker.rank != position:
                 tracker.ranked_at = utc_now()

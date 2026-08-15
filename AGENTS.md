@@ -16,206 +16,97 @@ Rules:
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
 
 <!-- BEGIN:druthers-workflow -->
-## Development workflow
+## druthers.io
 
-New functionality gets demoed locally and approved by Adam **before** anything
-is committed. Applies to all the druthers repos (`druthers-api`,
-`druthers-web`, `druthers-mcp`, `druthers-infra`).
+A personal ranking product for movies, TV, books and games. Pairwise duels
+place a title into an ordinal shelf; shelves are private, shared or public.
+Four repos, one product: `druthers-api` (FastAPI, Postgres, Alembic),
+`druthers-web` (Next.js), `druthers-mcp` (MCP server), `druthers-infra`
+(fleet, CI, deploy).
 
-1. **Build it against the local dev stack.** Use the `druthers-up` skill to
-   bring up Postgres + the API + `next dev`. Verify against real upstream data
-   (TMDB, TVMaze, Open Library, IGDB), not just mocks and unit tests.
-2. **Test in browser & demo with local URL + visuals.**
-   Use the browser subagent to interactively test new web functionality on the
-   local dev stack, then embed screenshots for visual review and session
-   recording videos (`.webp`) for complex/important UX flows. Stop and wait for
-   Adam's approval.
+## Commands
 
-   **Write the demo as steps Adam can follow, not as a report of what you
-   saw.** One block per delivered item - per issue, per PR, per distinct
-   change - never one merged narrative for the batch. A batch of three gets
-   three blocks. Each block gives, in this order:
+Run these instead of reasoning about whether the code is correct. They are
+deterministic, they are cheap, and they are the gate.
 
-   1. **Sign in as** - the exact account *and* password, e.g.
-      `follower@example.com` / `change-me`. Every item states its own, even
-      when three in a row use the same seat; "as above" costs a scroll and
-      breaks if the blocks get reordered. If the item is only reachable from
-      the admin seat, say so and say why. For `$ADMIN_EMAIL` /
-      `$ADMIN_PASSWORD`, name the variables and point at `env/dev.env` rather
-      than pasting the values.
-   2. **Go to** - a full clickable URL, not a route fragment.
-      `http://localhost:3000/tv/schedule`, not "the schedule page".
-   3. **Do this** - the numbered clicks, in order, including any setup the
-      screen does not imply (which env the bundle was built for, a preference
-      that has to be set first, a reload needed because the value is
-      server-rendered).
-   4. **You should see** - the specific observable, with the value that makes
-      it checkable. "Day heading reads `Today - Sunday, 08/09`", not "dates
-      look right". If a number is the proof, quote the number.
-   5. **What it looked like before** - one line, when the change is a fix.
-      A corrected greeting is indistinguishable from a working one in a
-      screenshot; the reviewer needs to know what they are no longer seeing.
+| | |
+|---|---|
+| `task validate` | everything below, in order. Run this before you commit. |
+| `task test` | the suite. Run the whole thing, not just your file. |
+| `task lint` | format and lint |
+| `task typecheck` | web only |
+| `task wiring` | every route has a client caller |
+| `task sca` / `task sast` | dependency and static security scans |
 
-   Anything a reviewer would have to discover by trial and error belongs in
-   the steps: a rate limit that bites on repeated sign-ins, a seat that
-   renders nothing in `dev`, data that had to be inserted by hand and will not
-   survive a reseed. State it in the block, not in a footnote.
+Do not spend model tokens re-deriving what these prove. Read their output.
 
-   **Demo from the seat the change applies to.** `druthers-api/docs/dev-cast.md`
-   lists the seeded local accounts - friend, follower, followee, public,
-   private, stranger - with their credentials, what each one is for, and which
-   to reach for per kind of change. Driving everything as the admin user is the
-   single most common way a broken visibility or comparison rule still demos
-   green: that seat is public, friendly with everyone, and holds the whole
-   catalog.
-3. **Only after Adam approves:** spin the local environment down
-   (`task dd -- dev` in `druthers-api`), then commit, push, and open the PR.
-4. **Hand back the PR link.** Merging, releasing, and deploying stay separate
-   asks - never chain them off the same approval.
-5. **Once the PR is merged, return the local repo to `main` and pull** (and
-   delete the now-merged local branch). A repo left checked out on a stale
-   branch is silently inherited by the next session, which either builds new
-   work on top of dead history or has to spend a turn untangling it first.
+## Non-negotiables
 
-Do not push or open a PR ahead of the demo, even when tests and CI would
-pass. The approval gate is the demo, not the green build.
+1. **The approval gate is the demo, not the green build.** Do not `push` or
+   open a PR before Adam has approved the demo, even when CI would pass.
+   Merging, releasing and deploying are separate asks, never chained off the
+   same approval.
+2. **A worker commits to its own branch.** In a worktree this is required, not
+   optional: uncommitted work is invisible to the fleet and gets discarded.
+   That branch reaches nobody until the orchestrator pushes it, so committing
+   there is not shipping. `push` and `gh pr create` are the orchestrator's
+   alone.
+3. **Do not add code nothing calls, and do not leave code nothing calls.** A
+   new route, tool or export needs a caller in this same change or a companion
+   issue with a real number. Two fully built API features shipped to
+   production with zero callers. `task wiring` checks this; run it.
+4. **Keep the four domains in lockstep.** Touching movies, TV, books or games
+   means checking whether the other three need the same change and the same
+   test. Per-domain drift is how one surface ended up destroying rows the
+   other three did not.
+5. **A test must be able to fail.** Asserting that a hardcoded list contains
+   its own hardcoded values satisfies the rule and hides the gap.
+6. **An honest no-op beats a speculative change.** Already fixed, or blocked
+   on a decision only Adam can make, is a valid outcome. Say so; do not invent
+   a direction.
+7. **A bare number is ambiguous.** Issues and PRs share one counter. Confirm
+   with `gh issue view` / `gh pr view` before acting on one.
+8. **No em dashes** in anything written for Adam: code comments, commit
+   messages, issue and PR bodies. Use commas, semicolons or a rewrite.
 
-**Exception, and it is not really one:** a fleet worker commits to its own
-isolated branch in its own worktree (see below). That branch reaches nobody
-until the orchestrator pushes it after Adam approves, so committing there is
-not shipping - it is how the work is handed over. The rule above governs
-`push` and `gh pr create`, which only the orchestrator runs.
+Before starting new work, check `git branch --show-current` and `git status`.
+Do not assume the checkout is `main` or clean.
 
-Before starting new work in any of these repos, check `git branch --show-current`
-and `git status` first - don't assume the checkout is `main` or clean.
+## Architectural boundaries
 
-### Writing
+- **`app/services/shelves.py` is the generic path.** The `SHELVES` registry
+  already handles all four domains and the newer code uses it (summary,
+  comparison, visibility, activity, the feed). The older half predates it and
+  is duplicated four ways. Extend `SHELVES`; do not add a fifth copy of a
+  per-domain helper. Migrate the file you are already in, not as a separate
+  refactor.
+- **The API contract is the API's.** `druthers-web` and `druthers-mcp` consume
+  it. A change to a shared response shape or a new default on a list endpoint
+  is a cross-repo change, and the ordering has to be stated.
+- Alembic has one head. Check before you add a revision.
 
-Never use em dashes (U+2014) in code comments, documentation, issue or PR
-copy, worker handoffs, or other AI-generated text. Use commas, semicolons,
-parentheses, a hyphen, or a rewrite instead.
+## Your role
 
-### Working as a fleet worker
+Read the role you were dispatched as. Do not read the others.
 
-When dispatched by `druthers-infra/fleet`, you are one of several agents
-working in parallel, each in its own git worktree. Additional rules apply:
+| | |
+|---|---|
+| `.agents/roles/agilist.md` | plan it, slice by feature, pick the team |
+| `.agents/roles/developer.md` | implement it |
+| `.agents/roles/reviewer.md` | independent pass over the diff |
+| `.agents/roles/security.md` | trust boundaries, when warranted |
+| `.agents/roles/ux.md` | user impact, on the plan |
 
-- **Never start the local dev stack.** Ports 5432/8000/3000 and the Docker
-  compose project belong to the orchestrator, which runs the batched demo.
-  Starting them collides with other workers and with the demo.
-- **Write tests _and run them_.** Author the test files your change requires
-  (see Testing below), then run the whole suite - `pytest -q` or `npm test` -
-  in your worktree before committing. Neither needs the dev stack.
+Routing and the handoff schema: `.agents/roles/README.md`.
 
-  This rule used to say the opposite, on the theory that a worker running the
-  suite burns budget re-proving what the orchestrator's post-approval sweep
-  will prove anyway. That theory has one hole, and it is not hypothetical: a
-  test file that fails to **load** takes every existing test in that file with
-  it, silently, and a suite that never runs cannot tell you. web#212 shipped a
-  new test block whose mock was evaluated before its own `const` was
-  initialised; the file could not import, four unrelated passing tests
-  disappeared with it, and none of that surfaced until land - after the demo,
-  when the fix was most expensive. Thirty seconds in the worktree beats that
-  every time.
+## Knowledge, loaded only when relevant
 
-  Lint and formatting still stay with the pre-commit hook and the sweep.
-- **Stay in your worktree.** Do not touch other branches, other repos, or
-  anything outside the issue you were dispatched for. Out-of-scope problems
-  you notice go in `WORKER_REPORT.md`, not in the diff.
-- **Commit on your branch** in the house format, then stop. This is required,
-  not optional: uncommitted work in a worktree is invisible to the fleet and
-  gets discarded. The demo-approval rule above governs pushing and opening
-  PRs, both of which are the orchestrator's job - not your commit.
-- **Leave a `WORKER_REPORT.md`** at the worktree root: what you changed, what
-  you could not verify, what the demo should look at, and any decision you
-  made that the issue did not settle.
+| | |
+|---|---|
+| `.agents/knowledge/demo.md` | demo protocol, seeded accounts, approval flow |
+| `.agents/knowledge/github.md` | issue and PR format, numbering, priorities |
+| `.agents/knowledge/graphify.md` | the repo knowledge graph, and when not to use it |
+| `.agents/knowledge/testing.md` | what test a change needs and where it goes |
 
-## Issue vs. PR numbers
-
-GitHub issue numbers and PR numbers share one repo-wide counter, so a bare
-number is ambiguous - `289` could be either, and groomed backlog stories from
-`story-intake` are always issues, never PRs. When told to "pull in" / "start" /
-"work on" a bare number (or a repo-prefixed one like "web 134"), don't assume
-which it is from context or phrasing - confirm with `gh issue view <n>` and/or
-`gh pr view <n>` before branching off it, reporting its status, or otherwise
-acting on it.
-
-Don't trust issue/PR *state* at face value either - it can drift from what's
-actually in the code:
-
-- A PR body listing `Closes #a, #b, #c, ...` as one comma-separated list after
-  a single keyword reliably auto-closes only the **first** issue on merge -
-  the rest silently stay open even though the code shipped (#283 merged and
-  claimed six closes; only one fired). When writing a PR body that closes
-  several issues, repeat the keyword per issue (`Closes #a. Closes #b.`) -
-  don't rely on the comma form. When *reading* a merged PR that lists several
-  issues via the comma form, verify each one's state with `gh issue view`
-  rather than assuming the merge closed all of them.
-- A PR can also be closed **without merging** and silently orphan a whole
-  downstream stack of branches (#287 closed, blocking #279's work and
-  everything branched on top of it from ever reaching `main`). If a
-  dependency issue/PR looks unexpectedly open or blocked, check whether the
-  PR that was supposed to deliver it actually merged - don't assume "closed"
-  means "done," and don't assume a dependency is real work remaining without
-  checking whether it already shipped under a different PR.
-
-## Issue and PR format
-
-Issues follow the forms in `.github/ISSUE_TEMPLATE/` - Story, Problem,
-Acceptance Criteria, Context, Channel Impact, and an Estimate block carrying
-**Recommended model** and **Human effort**. The fleet dispatcher routes work
-off that Estimate block, so it is not decoration.
-
-Every issue also carries exactly one `priority:p1`–`priority:p5` label
-(applied via labels/project board, not the template body):
-
-- **P1** - immediate build; prod or the build is broken.
-- **P2** - high value, time-sensitive.
-- **P3** - chores, done as time permits (default when urgency is unstated).
-- **P4** - backlog / nice-to-have; low urgency and low value.
-- **P5** - roadmap: big, high-value, long-term, not an immediate need.
-
-PRs follow `.github/PULL_REQUEST_TEMPLATE.md`:
-
-- **`## Summary`** - bullets that lead with the cause, then the fix. Not a
-  changelog of files touched. Call out what does *not* change when that is
-  load-bearing.
-- **`## Test plan`** - checked boxes with real evidence: actual pass counts,
-  the specific cases added, and what was verified against the local dev stack.
-- Closing keywords repeated per issue (`Closes #a. Closes #b.`), never the
-  comma form.
-
-## Testing
-
-A new module needs a test file in the same PR that introduces it - not as
-follow-up work. This project's test debt (audited 2026-08-03, tracked in
-issues #290–293) came almost entirely from modules that shipped without one
-and were never revisited.
-
-- **New router/service/job** (`app/router/`, `app/services/`, `app/jobs/`,
-  `app/migration/`): add a matching `tests/integration/<name>_test.py` or
-  `tests/unit/<name>_test.py`. Every existing router already has one -
-  match that, don't be the exception.
-- **Per-domain work** (movies/TV/books/games, or the same pattern in
-  druthers-mcp's tool families): if you're touching one domain, check
-  whether the other three need the same change *and* the same test. Silent
-  gaps like this are exactly what #291 and #39/#40 went back to fix -
-  cheaper to keep the four in lockstep than to backfill later.
-- **New interactive web component** (`src/components/`): add a
-  `<name>.test.tsx` alongside it once the React Testing Library setup from
-  #136/#137 is in place. Pure logic still belongs in `src/lib/*.ts` with a
-  `.test.ts` sibling, not inside the component.
-- **New MCP tool** (`aleonard_mcp/server.py`): add a test in
-  `tests/server_test.py` following the pattern of the nearest existing
-  sibling tool (e.g. a new `set_*_note` tool mirrors `set_note`'s test).
-- Coverage is a floor, not a target: CI fails if total coverage drops below
-  its current baseline (the ratchet from #292/#138), but a passing ratchet
-  only proves nothing else regressed - it's not evidence the new code itself
-  is tested. Don't point to a green build in place of a test for the thing
-  you just wrote.
-- `test`/`lint` are becoming required status checks on `main` alongside the
-  security scan (#24) - once that lands, a PR with failing tests won't merge,
-  not just won't get reviewed. Until then, treat a red `test`/`lint` run as
-  a hard blocker anyway; the check not being enforced yet isn't permission
-  to ignore it.
+Do not read these by reflex. Open the one the task calls for.
 <!-- END:druthers-workflow -->

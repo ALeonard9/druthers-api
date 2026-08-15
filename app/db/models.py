@@ -190,7 +190,10 @@ class DbApiKey(DBBaseModel):
     prefix = Column(String(length=12), nullable=False)
     last_used_at = Column(DateTime, nullable=True)
 
-    user = relationship('DbUser', backref='api_keys')
+    user = relationship(
+        'DbUser',
+        backref=backref('api_keys', cascade='all, delete-orphan'),
+    )
 
 
 class DbRefreshToken(DBBaseModel):
@@ -281,6 +284,16 @@ class DbFriendship(DBBaseModel):
         ForeignKey('users.pk', ondelete='CASCADE'),
         nullable=False,
     )
+    user_low = relationship(
+        'DbUser',
+        foreign_keys=[user_low_id],
+        backref=backref('friendships_as_low', cascade='all, delete-orphan'),
+    )
+    user_high = relationship(
+        'DbUser',
+        foreign_keys=[user_high_id],
+        backref=backref('friendships_as_high', cascade='all, delete-orphan'),
+    )
     status = Column(
         Enum(
             FriendshipStatus,
@@ -343,6 +356,16 @@ class DbFollow(DBBaseModel):
         ForeignKey('users.pk', ondelete='CASCADE'),
         nullable=False,
         index=True,
+    )
+    follower = relationship(
+        'DbUser',
+        foreign_keys=[follower_id],
+        backref=backref('outgoing_follows', cascade='all, delete-orphan'),
+    )
+    followee = relationship(
+        'DbUser',
+        foreign_keys=[followee_id],
+        backref=backref('incoming_follows', cascade='all, delete-orphan'),
     )
     # Explicit rather than created_at/updated_at: those are row bookkeeping
     # and could be rewritten by a future column touch, whereas this is the
