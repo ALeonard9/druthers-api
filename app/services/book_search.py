@@ -29,6 +29,12 @@ COVERS_URL = 'https://covers.openlibrary.org'
 GOOGLE_BOOKS_URL = 'https://www.googleapis.com/books/v1'
 REQUEST_TIMEOUT = 10
 
+# Open Library asks regular applications to identify themselves with a name
+# and contact address; identified traffic gets 3 requests/second against 1
+# for unidentified, and unidentified applications risk a block. Google Books
+# is authenticated by key and stays untouched.
+OPENLIBRARY_HEADERS = {'User-Agent': 'druthers.io (Admin@druthers.io)'}
+
 
 class UpstreamUnavailable(Exception):
     """
@@ -223,6 +229,7 @@ def _english_edition(work_key: Optional[str]) -> dict:
         response = requests.get(
             f'{OPENLIBRARY_URL}{work_key}/editions.json',
             params={'limit': 50},
+            headers=OPENLIBRARY_HEADERS,
             timeout=REQUEST_TIMEOUT,
         )
         response.raise_for_status()
@@ -317,6 +324,7 @@ def _search_by_isbn(isbn: str) -> List[dict]:
                 'format': 'json',
                 'jscmd': 'data',
             },
+            headers=OPENLIBRARY_HEADERS,
             timeout=REQUEST_TIMEOUT,
         )
         response.raise_for_status()
@@ -398,6 +406,7 @@ def search_books(query: str) -> List[dict]:
                 # surface translations ahead of the edition the user means.
                 'language': 'eng',
             },
+            headers=OPENLIBRARY_HEADERS,
             timeout=REQUEST_TIMEOUT,
         )
         response.raise_for_status()
@@ -468,7 +477,9 @@ def _work_description(work_key: Optional[str]) -> Optional[str]:
         return None
     try:
         response = requests.get(
-            f'{OPENLIBRARY_URL}{work_key}.json', timeout=REQUEST_TIMEOUT
+            f'{OPENLIBRARY_URL}{work_key}.json',
+            headers=OPENLIBRARY_HEADERS,
+            timeout=REQUEST_TIMEOUT,
         )
         response.raise_for_status()
         description = response.json().get('description')
@@ -491,6 +502,7 @@ def _openlibrary_detail(isbn: str) -> Optional[dict]:
         response = requests.get(
             f'{OPENLIBRARY_URL}/search.json',
             params={'q': f'isbn:{isbn}', 'limit': 1, 'fields': _SEARCH_FIELDS},
+            headers=OPENLIBRARY_HEADERS,
             timeout=REQUEST_TIMEOUT,
         )
         response.raise_for_status()

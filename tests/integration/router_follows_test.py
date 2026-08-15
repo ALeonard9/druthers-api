@@ -412,14 +412,20 @@ def test_a_follower_sees_exactly_what_a_stranger_sees(
     # the stranger - never 'friend'. `following` is the only field allowed to
     # differ, and it differs in exactly the direction that proves the point:
     # the follower's flag is True, and it still bought them nothing.
-    assert follower_view.json()['viewer'] == {'relationship': 'none', 'following': True}
+    assert follower_view.json()['viewer'] == {
+        'relationship': 'none',
+        'following': True,
+        'friend_request_state': 'none',
+    }
     assert stranger_view.json()['viewer'] == {
         'relationship': 'none',
         'following': False,
+        'friend_request_state': 'none',
     }
     assert anonymous_view.json()['viewer'] == {
         'relationship': 'anonymous',
         'following': False,
+        'friend_request_state': 'none',
     }
 
     # The friends-only shelf and its content never reach any of the three.

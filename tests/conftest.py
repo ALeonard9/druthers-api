@@ -4,9 +4,15 @@ Creates a fixture to provide a database session for testing.
 """
 
 import os
+import secrets
 
 # Ensure test environment mode is set before app config is loaded (#285)
 os.environ['ENV'] = 'test'
+# Deterministic test-only JWT signing key, set before app.auth.oauth2 resolves
+# its own (app.config reads these vars at import). Without it oauth2 logs its
+# "JWT_SECRET_KEY not set" warning at import on every test run. setdefault
+# leaves an explicitly provided key (CI sets the real secret) untouched.
+os.environ.setdefault('JWT_SECRET_KEY', secrets.token_hex(32))
 
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
@@ -183,7 +189,12 @@ def db_session(test_db_engine):
     session = session_local()
     yield session
     session.close()
-    transaction.rollback()
+    # A test that commits, rolls back, or trips an IntegrityError mid-flush
+    # deassociates the fixture's transaction from the connection. Rolling back
+    # a deassociated transaction is a no-op that only raises SAWarning, so
+    # skip it when there is nothing left to roll back.
+    if transaction.is_active:
+        transaction.rollback()
     connection.close()
 
 

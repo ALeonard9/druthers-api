@@ -170,6 +170,7 @@ def test_anonymous_sees_only_public_shelves(profile: TestClient):
     assert response.json()['viewer'] == {
         'relationship': 'anonymous',
         'following': False,
+        'friend_request_state': 'none',
     }
 
 
@@ -179,7 +180,11 @@ def test_a_friend_additionally_sees_friends_shelves(profile: TestClient):
     )
     assert response.status_code == 200
     assert _shelves(response) == ['Movies', 'TV', 'Books']
-    assert response.json()['viewer'] == {'relationship': 'friend', 'following': False}
+    assert response.json()['viewer'] == {
+        'relationship': 'friend',
+        'following': False,
+        'friend_request_state': 'friends',
+    }
 
 
 def test_a_non_friend_gets_the_anonymous_response(profile: TestClient, stranger_token):
@@ -188,7 +193,11 @@ def test_a_non_friend_gets_the_anonymous_response(profile: TestClient, stranger_
 
     # Identical content; the relationship field is the only difference, and it
     # says "signed in, unrelated" rather than "not signed in".
-    assert stranger['viewer'] == {'relationship': 'none', 'following': False}
+    assert stranger['viewer'] == {
+        'relationship': 'none',
+        'following': False,
+        'friend_request_state': 'none',
+    }
     assert {k: v for k, v in stranger.items() if k != 'viewer'} == {
         k: v for k, v in anonymous.items() if k != 'viewer'
     }
@@ -200,7 +209,11 @@ def test_the_owner_sees_every_shelf_including_private(profile: TestClient):
     )
     assert response.status_code == 200
     assert _shelves(response) == ['Movies', 'TV', 'Books', 'Video Games']
-    assert response.json()['viewer'] == {'relationship': 'self', 'following': False}
+    assert response.json()['viewer'] == {
+        'relationship': 'self',
+        'following': False,
+        'friend_request_state': 'none',
+    }
 
 
 def test_friends_shelves_never_reach_a_stranger(profile: TestClient, stranger_token):
@@ -361,7 +374,11 @@ def test_nothing_visible_returns_200_when_profile_tier_admits_you(
     assert data['handle'] == HANDLE
     assert data['shelves'] == []
     assert data['total_ranked'] == 0
-    assert data['viewer'] == {'relationship': 'friend', 'following': False}
+    assert data['viewer'] == {
+        'relationship': 'friend',
+        'following': False,
+        'friend_request_state': 'friends',
+    }
 
     # Querying a specific unadmitted shelf still returns 404.
     named_shelf = test_client.get(
@@ -392,6 +409,31 @@ def test_a_pending_request_is_not_a_friendship(test_client: TestClient):
         f'/v1/public/{HANDLE}', headers=_auth(test_client.second_user.token)
     )
     assert _fingerprint(pending) == _fingerprint(test_client.get('/v1/public/nobody'))
+
+
+def test_profile_reports_a_viewers_outgoing_pending_request(test_client: TestClient):
+    owner_token = test_client.first_user.token
+    viewer_token = test_client.second_user.token
+    _set_visibility(
+        test_client,
+        owner_token,
+        handle=HANDLE,
+        visibility_profile='public',
+    )
+    sent = test_client.post(
+        '/v1/users/me/friends/requests',
+        headers=_auth(viewer_token),
+        json={'handle': HANDLE},
+    )
+    assert sent.status_code == 202, sent.text
+
+    response = test_client.get(f'/v1/public/{HANDLE}', headers=_auth(viewer_token))
+    assert response.status_code == 200, response.text
+    assert response.json()['viewer'] == {
+        'relationship': 'none',
+        'following': False,
+        'friend_request_state': 'pending',
+    }
 
 
 def test_unfriending_takes_the_shelves_back(test_client: TestClient):
@@ -446,7 +488,11 @@ def test_the_owner_of_a_private_profile_still_sees_it(test_client: TestClient):
     assert anonymous.status_code == 404
     owner = test_client.get(f'/v1/public/{HANDLE}', headers=_auth(owner_token))
     assert owner.status_code == 200
-    assert owner.json()['viewer'] == {'relationship': 'self', 'following': False}
+    assert owner.json()['viewer'] == {
+        'relationship': 'self',
+        'following': False,
+        'friend_request_state': 'none',
+    }
 
 
 # --- Credentials ------------------------------------------------------------
@@ -467,6 +513,7 @@ def test_bad_credentials_are_rejected_rather_than_ignored(profile: TestClient, t
         assert response.json()['viewer'] == {
             'relationship': 'anonymous',
             'following': False,
+            'friend_request_state': 'none',
         }
     else:
         assert response.status_code == 401

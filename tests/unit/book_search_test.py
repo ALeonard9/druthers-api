@@ -614,3 +614,50 @@ def test_search_books_title_query_unaffected(mock_get):
     args, kwargs = mock_get.call_args
     assert args[0] == 'https://openlibrary.org/search.json'
     assert kwargs['params']['q'] == 'Dune'
+
+
+@pytest.mark.parametrize(
+    'path',
+    ['editions', 'bibkeys', 'title_search', 'work_description', 'isbn_detail'],
+)
+@patch('app.services.book_search.requests.get')
+def test_openlibrary_requests_identify_druthers(mock_get, path):
+    # Every Open Library path must present the exact application identity;
+    # identified traffic gets 3 requests/second against 1 for unidentified.
+    # An empty upstream answer is enough to exercise each request path.
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    resp.json.return_value = {}
+    mock_get.return_value = resp
+
+    if path == 'editions':
+        book_search._english_edition('/works/OL1W')
+    elif path == 'bibkeys':
+        book_search._search_by_isbn('9780441172719')
+    elif path == 'title_search':
+        book_search.search_books('Dune')
+    elif path == 'work_description':
+        book_search._work_description('/works/OL1W')
+    else:  # isbn_detail
+        book_search._openlibrary_detail('9780441172719')
+
+    assert mock_get.call_args.kwargs['headers'] == {
+        'User-Agent': 'druthers.io (Admin@druthers.io)'
+    }
+
+
+@patch('app.services.book_search.get_settings')
+@patch('app.services.book_search.requests.get')
+def test_google_books_request_carries_no_user_agent(mock_get, mock_settings):
+    # Google Books is authenticated by key, and #374 leaves its requests
+    # untouched - no application-identity header is passed along.
+    mock_settings.return_value.google_books_api_key = 'AIzaTest'
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.raise_for_status.return_value = None
+    resp.json.return_value = _GOOGLE_VOLUME
+    mock_get.return_value = resp
+
+    book_search.get_book_detail_by_googleid('_An-CAAAQBAJ')
+
+    assert 'headers' not in mock_get.call_args.kwargs

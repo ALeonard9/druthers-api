@@ -1,9 +1,15 @@
 # pylint: disable=missing-module-docstring, missing-function-docstring
 import io
-from datetime import datetime, timezone
+import threading
+import time
+from datetime import date, datetime, timezone
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from openpyxl import Workbook, load_workbook
+
+from app.db.models_sandbox import DbMovie, DbUserMovie
+from app.services.generic_movie_import import TMDB_IMPORT_LOOKUP_WORKERS
 
 HEADER = (
     'Title,Author,ISBN,ISBN13,My Rating,Number of Pages,Year Published,'
@@ -31,6 +37,37 @@ def _upload(test_client: TestClient, token: str, content: str = CSV):
         headers=_auth(token),
         files={'file': ('goodreads.csv', io.BytesIO(content.encode()), 'text/csv')},
     )
+
+
+def _movie_upload(
+    test_client: TestClient,
+    token: str,
+    content: bytes,
+    filename: str = 'movies.csv',
+):
+    return test_client.post(
+        '/v1/users/me/import/movies',
+        headers=_auth(token),
+        files={'file': (filename, io.BytesIO(content))},
+    )
+
+
+def _movie_csv(*rows: str) -> bytes:
+    return (
+        'title,release_year,tmdb_id,watched_date\n' + '\n'.join(rows) + '\n'
+    ).encode()
+
+
+def _tmdb_movie(title: str, tmdb_id: int, year: int) -> dict:
+    return {
+        'title': title,
+        'tmdb': tmdb_id,
+        'imdb': f'tt{tmdb_id:07d}',
+        'year': year,
+        'release_date': datetime(year, 1, 1),
+        'runtime': 120,
+        'poster_url': f'https://image.tmdb.org/t/p/w500/{tmdb_id}.jpg',
+    }
 
 
 @patch('app.services.goodreads_import.search_books', return_value=[])
@@ -375,3 +412,262 @@ def test_goodreads_import_rejects_oversized_file(test_client: TestClient):
         files={'file': ('huge.csv', io.BytesIO(content), 'text/csv')},
     )
     assert response.status_code == 413
+
+
+def test_movie_templates_are_downloadable_and_documented(test_client: TestClient):
+    headers = _auth(test_client.first_user.token)
+    csv_response = test_client.get(
+        '/v1/users/me/import/movies/template.csv', headers=headers
+    )
+    assert csv_response.status_code == 200
+    assert csv_response.text == 'title,release_year,tmdb_id,watched_date\r\n'
+    assert 'druthers-movies-template.csv' in csv_response.headers['content-disposition']
+
+    xlsx_response = test_client.get(
+        '/v1/users/me/import/movies/template.xlsx', headers=headers
+    )
+    assert xlsx_response.status_code == 200
+    workbook = load_workbook(io.BytesIO(xlsx_response.content), read_only=True)
+    assert workbook.sheetnames == ['Movies', 'Instructions']
+    assert tuple(cell.value for cell in workbook['Movies'][1]) == (
+        'title',
+        'release_year',
+        'tmdb_id',
+        'watched_date',
+    )
+    workbook.close()
+
+    schema = test_client.get('/openapi.json').json()
+    operation = schema['paths']['/v1/users/me/import/movies']['post']
+    assert (
+        'Every field is required'
+        in schema['paths']['/v1/users/me/import/movies/template.csv']['get'][
+            'description'
+        ]
+    )
+    assert 'no rows were written' in operation['responses']['422']['description']
+
+
+@patch('app.services.generic_movie_import.get_movie_detail')
+def test_movie_csv_import_creates_catalog_and_history_atomically(
+    mock_detail, test_client: TestClient
+):
+    existing = DbMovie(title='The Matrix', tmdb=603, year=1999)
+    test_client.test_db_session.add(existing)
+    test_client.test_db_session.flush()
+    mock_detail.return_value = _tmdb_movie('Spirited Away', 129, 2001)
+    content = _movie_csv(
+        'The Matrix,1999,603,2020-01-02',
+        'Spirited Away,2001,129,2020-02-03',
+    )
+
+    response = _movie_upload(test_client, test_client.first_user.token, content)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body['valid'] is True
+    assert body['summary'] == {'imported': 2, 'matched': 0, 'skipped': 0}
+    assert [row['status'] for row in body['rows']] == ['imported', 'imported']
+    assert [row['catalog_created'] for row in body['rows']] == [False, True]
+    trackers = (
+        test_client.test_db_session.query(DbUserMovie)
+        .filter(DbUserMovie.user_id == test_client.first_user.pk)
+        .order_by(DbUserMovie.pk)
+        .all()
+    )
+    assert len(trackers) == 2
+    assert [tracker.completed_at for tracker in trackers] == [
+        date(2020, 1, 2),
+        date(2020, 2, 3),
+    ]
+    assert trackers[0].rank == 1
+    assert trackers[1].rank is None
+    spirited_away = (
+        test_client.test_db_session.query(DbMovie).filter(DbMovie.tmdb == 129).one()
+    )
+    assert spirited_away.imdb == 'tt0000129'
+    assert spirited_away.poster_url.endswith('/129.jpg')
+
+
+@patch('app.services.generic_movie_import.get_movie_detail')
+def test_movie_import_rejects_every_row_without_partial_writes(
+    mock_detail, test_client: TestClient
+):
+    def detail(tmdb_id):
+        if tmdb_id == 603:
+            return _tmdb_movie('The Matrix', 603, 1999)
+        return None
+
+    mock_detail.side_effect = detail
+    content = _movie_csv(
+        'The Matrix,1999,603,2020-01-02',
+        'Not a real movie,2020,999999999,2020-02-03',
+    )
+
+    response = _movie_upload(test_client, test_client.first_user.token, content)
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body['valid'] is False
+    assert body['rows'] == []
+    assert body['errors'] == [
+        {
+            'row': 3,
+            'column': 'tmdb_id',
+            'message': 'TMDB ID does not resolve to a known movie',
+            'value': '999999999',
+        }
+    ]
+    assert test_client.test_db_session.query(DbMovie).count() == 0
+    assert test_client.test_db_session.query(DbUserMovie).count() == 0
+
+
+@patch('app.services.generic_movie_import.get_movie_detail')
+def test_movie_import_reports_primitive_and_tmdb_errors_together(
+    mock_detail, test_client: TestClient
+):
+    mock_detail.return_value = _tmdb_movie('The Matrix', 603, 1999)
+    content = _movie_csv('Wrong title,2000,603,not-a-date')
+
+    response = _movie_upload(test_client, test_client.first_user.token, content)
+
+    assert response.status_code == 422
+    assert response.json()['errors'] == [
+        {
+            'row': 2,
+            'column': 'watched_date',
+            'message': 'Watched date must use YYYY-MM-DD',
+            'value': 'not-a-date',
+        },
+        {
+            'row': 2,
+            'column': 'title',
+            'message': 'Title does not match TMDB movie "The Matrix"',
+            'value': 'Wrong title',
+        },
+        {
+            'row': 2,
+            'column': 'release_year',
+            'message': 'Release year does not match TMDB year 1999',
+            'value': '2000',
+        },
+    ]
+    assert test_client.test_db_session.query(DbUserMovie).count() == 0
+
+
+@patch('app.services.generic_movie_import.get_movie_detail')
+def test_movie_import_batches_uncached_tmdb_lookups_without_limiting_rows(
+    mock_detail, test_client: TestClient
+):
+    row_count = TMDB_IMPORT_LOOKUP_WORKERS * 3 + 2
+    lock = threading.Lock()
+    active = 0
+    peak_active = 0
+
+    def detail(tmdb_id):
+        nonlocal active, peak_active
+        with lock:
+            active += 1
+            peak_active = max(peak_active, active)
+        time.sleep(0.01)
+        with lock:
+            active -= 1
+        return _tmdb_movie(f'Movie {tmdb_id}', tmdb_id, 2000)
+
+    mock_detail.side_effect = detail
+    content = _movie_csv(
+        *(
+            f'Movie {tmdb_id},2000,{tmdb_id},2020-01-01'
+            for tmdb_id in range(1, row_count + 1)
+        )
+    )
+
+    response = _movie_upload(test_client, test_client.first_user.token, content)
+
+    assert response.status_code == 200
+    assert response.json()['summary'] == {
+        'imported': row_count,
+        'matched': 0,
+        'skipped': 0,
+    }
+    assert mock_detail.call_count == row_count
+    assert 1 < peak_active <= TMDB_IMPORT_LOOKUP_WORKERS
+
+
+def test_movie_import_matches_watchlist_then_skips_same_file(
+    test_client: TestClient,
+):
+    movie = DbMovie(title='The Matrix', tmdb=603, year=1999)
+    test_client.test_db_session.add(movie)
+    test_client.test_db_session.flush()
+    test_client.test_db_session.add(
+        DbUserMovie(
+            user_id=test_client.first_user.pk,
+            movie_id=movie.pk,
+            on_watchlist=True,
+            on_rankings=False,
+        )
+    )
+    test_client.test_db_session.flush()
+    content = _movie_csv('The Matrix,1999,603,2020-01-02')
+
+    first = _movie_upload(test_client, test_client.first_user.token, content)
+    second = _movie_upload(test_client, test_client.first_user.token, content)
+
+    assert first.status_code == 200
+    assert first.json()['summary'] == {'imported': 0, 'matched': 1, 'skipped': 0}
+    assert second.status_code == 200
+    assert second.json()['summary'] == {'imported': 0, 'matched': 0, 'skipped': 1}
+    trackers = test_client.test_db_session.query(DbUserMovie).all()
+    assert len(trackers) == 1
+    assert trackers[0].on_rankings is True
+    assert trackers[0].on_watchlist is False
+    assert trackers[0].completed_at == date(2020, 1, 2)
+    assert trackers[0].rank == 1
+
+
+@patch('app.services.generic_movie_import.get_movie_detail')
+def test_movie_xlsx_import_accepts_native_excel_values(
+    mock_detail, test_client: TestClient
+):
+    mock_detail.return_value = _tmdb_movie('Spirited Away', 129, 2001)
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.append(('title', 'release_year', 'tmdb_id', 'watched_date'))
+    worksheet.append(('Spirited Away', 2001, 129, date(2020, 2, 3)))
+    output = io.BytesIO()
+    workbook.save(output)
+    workbook.close()
+
+    response = _movie_upload(
+        test_client,
+        test_client.first_user.token,
+        output.getvalue(),
+        'movies.xlsx',
+    )
+
+    assert response.status_code == 200
+    assert response.json()['summary']['imported'] == 1
+    tracker = test_client.test_db_session.query(DbUserMovie).one()
+    assert tracker.completed_at == date(2020, 2, 3)
+
+
+def test_movie_import_rejects_missing_columns_and_requires_auth(
+    test_client: TestClient,
+):
+    invalid = _movie_upload(
+        test_client,
+        test_client.first_user.token,
+        b'title,tmdb_id\nThe Matrix,603\n',
+    )
+    assert invalid.status_code == 422
+    assert [error['column'] for error in invalid.json()['errors']] == [
+        'release_year',
+        'watched_date',
+    ]
+
+    unauthorized = test_client.post(
+        '/v1/users/me/import/movies',
+        files={'file': ('movies.csv', io.BytesIO(_movie_csv('X,2000,1,2020-01-01')))},
+    )
+    assert unauthorized.status_code == 401

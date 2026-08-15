@@ -136,6 +136,24 @@ def test_hidden_watchlist_does_not_block_ranked_comparison(test_client: TestClie
     assert movies['shared_ranked_count'] == 5
 
 
+def test_comparison_reports_a_viewers_outgoing_pending_request(test_client: TestClient):
+    _public_movies(test_client, test_client.first_user.token)
+    sent = test_client.post(
+        '/v1/users/me/friends/requests',
+        headers=_auth(test_client.second_user.token),
+        json={'handle': 'brandon'},
+    )
+    assert sent.status_code == 202, sent.text
+
+    response = test_client.get(
+        '/v1/users/me/comparison/brandon',
+        headers=_auth(test_client.second_user.token),
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()['relationship'] == 'none'
+    assert response.json()['friend_request_state'] == 'pending'
+
+
 def test_private_profile_and_unknown_handle_are_the_same_404(test_client: TestClient):
     db = test_client.test_db_session
     target = _user(test_client, test_client.first_user.email)

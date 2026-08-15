@@ -23,10 +23,19 @@ import requests
 
 from app.log.logging_config import logger
 from app.services import tmdb
-from app.services.book_search import OPENLIBRARY_URL, get_book_detail
+from app.services.book_search import (
+    OPENLIBRARY_HEADERS,
+    OPENLIBRARY_URL,
+    get_book_detail,
+)
 from app.services.game_search import list_popular_games
 from app.services.movie_search import get_movie_detail
-from app.services.tv_search import TVMAZE_URL, get_show_episodes, get_tv_show_detail
+from app.services.tv_search import (
+    TVMAZE_HEADERS,
+    TVMAZE_URL,
+    get_show_episodes,
+    get_tv_show_detail,
+)
 
 FIXTURES_DIR = Path(__file__).parent / 'fixtures'
 REQUEST_TIMEOUT = 10
@@ -110,7 +119,10 @@ def build_tv_shows() -> None:
     page = 0
     while len(candidates) < TV_TARGET * 6:
         response = requests.get(
-            f'{TVMAZE_URL}/shows', params={'page': page}, timeout=REQUEST_TIMEOUT
+            f'{TVMAZE_URL}/shows',
+            params={'page': page},
+            headers=TVMAZE_HEADERS,
+            timeout=REQUEST_TIMEOUT,
         )
         if response.status_code == 404:
             break
@@ -147,7 +159,9 @@ def _resolve_isbn(edition_olid: Optional[str]) -> Optional[str]:
         return None
     try:
         response = requests.get(
-            f'{OPENLIBRARY_URL}/books/{edition_olid}.json', timeout=REQUEST_TIMEOUT
+            f'{OPENLIBRARY_URL}/books/{edition_olid}.json',
+            headers=OPENLIBRARY_HEADERS,
+            timeout=REQUEST_TIMEOUT,
         )
         response.raise_for_status()
         data = response.json()
@@ -168,6 +182,7 @@ def build_books() -> None:
         response = requests.get(
             f'{OPENLIBRARY_URL}/subjects/{subject}.json',
             params={'limit': 40},
+            headers=OPENLIBRARY_HEADERS,
             timeout=REQUEST_TIMEOUT,
         )
         response.raise_for_status()

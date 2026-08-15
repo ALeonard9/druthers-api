@@ -10,7 +10,10 @@ from app.auth.oauth2 import get_current_user
 from app.db.database import get_db
 from app.db.models import DbUser
 from app.services.comparison import compare_shelf
-from app.services.profile_access import viewer_relationship
+from app.services.profile_access import (
+    outgoing_friend_request_state,
+    viewer_relationship,
+)
 from app.services.shelves import SHELVES, Shelf
 from app.services.tracker_rules import default_completed_at
 from app.services.visibility import admits, ceiling_for, resolve_tier
@@ -64,10 +67,14 @@ def compare_with_user(
     """Return the four domain comparisons visible to this viewer."""
     viewer = current_user[0]
     target, relationship, ceiling = _target_access(db, viewer, handle)
+    friend_request_state = outgoing_friend_request_state(
+        db, target, viewer, relationship
+    )
     return {
         'handle': target.handle,
         'display_name': target.display_name,
         'relationship': relationship.value,
+        'friend_request_state': friend_request_state,
         'domains': [
             compare_shelf(db, viewer, target, shelf, ceiling) for shelf in SHELVES
         ],

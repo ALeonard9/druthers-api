@@ -20,6 +20,9 @@ from app.log.logging_config import logger
 
 TVMAZE_URL = 'https://api.tvmaze.com'
 REQUEST_TIMEOUT = 10
+# TVMaze asks clients to send an identifying User-Agent so it can contact the
+# operator if an application's traffic causes problems.
+TVMAZE_HEADERS = {'User-Agent': 'druthers.io (Admin@druthers.io)'}
 
 
 def _strip_html(value: Optional[str]) -> Optional[str]:
@@ -86,6 +89,7 @@ def _lookup_show(params: dict) -> List[dict]:
             f'{TVMAZE_URL}/lookup/shows',
             params=params,
             timeout=REQUEST_TIMEOUT,
+            headers=TVMAZE_HEADERS,
         )
         if response.status_code == 404:
             return []
@@ -135,6 +139,7 @@ def search_tv_shows(query: str) -> List[dict]:
             f'{TVMAZE_URL}/search/shows',
             params={'q': query},
             timeout=REQUEST_TIMEOUT,
+            headers=TVMAZE_HEADERS,
         )
         response.raise_for_status()
         payload = response.json()
@@ -189,6 +194,7 @@ def get_tv_show_detail(tvmaze_id: Optional[int]) -> Optional[dict]:
         response = requests.get(
             f'{TVMAZE_URL}/shows/{int(tvmaze_id)}',
             timeout=REQUEST_TIMEOUT,
+            headers=TVMAZE_HEADERS,
         )
         response.raise_for_status()
         payload = response.json()
@@ -227,6 +233,7 @@ def get_show_episodes(tvmaze_id: Optional[int]) -> List[dict]:
         response = requests.get(
             f'{TVMAZE_URL}/shows/{int(tvmaze_id)}/episodes',
             timeout=REQUEST_TIMEOUT,
+            headers=TVMAZE_HEADERS,
         )
         response.raise_for_status()
         payload = response.json()
