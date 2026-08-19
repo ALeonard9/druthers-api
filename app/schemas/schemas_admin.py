@@ -7,12 +7,33 @@ returned from a user-facing route, and none of them reuse an existing
 response model.
 """
 
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Annotated, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, PlainSerializer
 
 from app.services.visibility import VisibilityTier
+
+
+def _serialize_utc(value: datetime) -> str:
+    """
+    Stamp a naive datetime as UTC before emitting it (aware ones are just
+    normalized to UTC). The backing columns are Postgres ``timestamp without
+    time zone``, but every value written to them is already UTC
+    (:func:`datetime.now` called with ``timezone.utc`` throughout the
+    codebase) - only the serialization was silently dropping the
+    designator. Per ECMAScript, a date-time string with no offset parses as
+    *local* time, so every JS client was quietly shifting these by its own
+    UTC offset (api#344 review).
+    """
+    aware = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    return aware.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+
+
+# Same wire type as `datetime`, but always serializes with an explicit UTC
+# designator. See `_serialize_utc`. Use this in place of a bare `datetime`
+# on any field this branch introduces.
+UtcDatetime = Annotated[datetime, PlainSerializer(_serialize_utc, return_type=str)]
 
 
 class OutAdminUserSummary(BaseModel):
@@ -24,11 +45,11 @@ class OutAdminUserSummary(BaseModel):
     email: str
     user_group: str
     status: str
-    created_at: datetime
+    created_at: UtcDatetime
     # Max(updated_at) across the four tracker tables - "wrote something",
     # not "visited". Deliberately not last_active_at; real sign-in data is a
     # later increment's separate field.
-    last_tracked_at: Optional[datetime] = None
+    last_tracked_at: Optional[UtcDatetime] = None
     tracked_total: int
 
     model_config = ConfigDict(from_attributes=True)
@@ -84,8 +105,8 @@ class OutAdminUserDetail(BaseModel):
     email: str
     user_group: str
     status: str
-    created_at: datetime
-    last_tracked_at: Optional[datetime] = None
+    created_at: UtcDatetime
+    last_tracked_at: Optional[UtcDatetime] = None
     visibility: OutAdminVisibility
     domains: dict[str, OutAdminDomainCounts]
     social: OutAdminSocialCounts
@@ -111,7 +132,7 @@ class OutAdminAuditEvent(BaseModel):
     """One row of ``GET /v1/admin/audit``."""
 
     id: int
-    created_at: datetime
+    created_at: UtcDatetime
     actor: Optional[OutAdminAuditActor] = None
     target: Optional[OutAdminAuditTarget] = None
     action: str

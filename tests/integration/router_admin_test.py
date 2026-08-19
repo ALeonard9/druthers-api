@@ -184,6 +184,7 @@ def test_admin_reads_are_audited(test_client: TestClient):
     assert search_row is not None
     assert search_row.result == 'allowed'
     assert search_row.actor_user_pk == test_client.admin_user.pk
+    assert search_row.status_code == 200
 
     view_row = (
         db.query(DbAdminAuditLog)
@@ -194,6 +195,36 @@ def test_admin_reads_are_audited(test_client: TestClient):
     assert view_row is not None
     assert view_row.target_user_pk == target.pk
     assert view_row.target_email == target.email
+    assert view_row.status_code == 200
+
+
+def test_admin_datetime_fields_carry_a_utc_designator(test_client: TestClient):
+    """
+    A naive ISO string (no ``Z``/offset) parses as *local* time under
+    ECMAScript, so every JS client would silently shift these by its own
+    UTC offset even though the underlying values are UTC. Assert on the
+    wire string itself, not a round-trip through Python's own datetime
+    parser - that would happily accept the broken naive form too and prove
+    nothing (api#344 review).
+    """
+    list_resp = test_client.get('/v1/admin/users', headers=_admin(test_client))
+    assert list_resp.status_code == 200
+    users = list_resp.json()['users']
+    assert users
+    assert users[0]['created_at'].endswith('Z')
+
+    target = test_client.first_user
+    detail_resp = test_client.get(
+        f'/v1/admin/users/{target.id}', headers=_admin(test_client)
+    )
+    assert detail_resp.status_code == 200
+    assert detail_resp.json()['created_at'].endswith('Z')
+
+    audit_resp = test_client.get('/v1/admin/audit', headers=_admin(test_client))
+    assert audit_resp.status_code == 200
+    events = audit_resp.json()['events']
+    assert events
+    assert events[0]['created_at'].endswith('Z')
 
 
 def test_admin_audit_trail_lists_and_filters(test_client: TestClient):

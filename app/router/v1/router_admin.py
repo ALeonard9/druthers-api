@@ -175,6 +175,10 @@ def search_users(  # pylint: disable=too-many-arguments, too-many-positional-arg
         result=AdminAuditResult.ALLOWED,
         request=request,
         detail={'q': q, 'limit': limit, 'offset': offset, 'total': total},
+        # These three routes are read-only and either return this exact
+        # 200 or raise before reaching this call (get_user_detail's 404),
+        # so the response's real status is already known here.
+        status_code=200,
     )
     return OutAdminUserListResponse(
         total=total, limit=limit, offset=offset, users=_user_summaries(db, rows)
@@ -203,6 +207,7 @@ def get_user_detail(
         action='admin.user.view',
         result=AdminAuditResult.ALLOWED,
         request=request,
+        status_code=200,
     )
     return OutAdminUserDetail(
         id=user.id,
@@ -310,6 +315,7 @@ def list_audit(  # pylint: disable=too-many-arguments, too-many-positional-argum
             'target_filter': target,
             'action_filter': action,
         },
+        status_code=200,
     )
     return OutAdminAuditResponse(
         total=total,
