@@ -36,7 +36,14 @@ def _not_found() -> HTTPException:
 
 
 def _target_access(db: Session, viewer: DbUser, handle: str):
-    target = db.query(DbUser).filter(DbUser.handle == handle.lower()).first()
+    # A disabled account is invisible everywhere a deleted one would be
+    # (#344 D2) - excluded at the lookup so it 404s the same way an
+    # unclaimed handle does, below.
+    target = (
+        db.query(DbUser)
+        .filter(DbUser.handle == handle.lower(), DbUser.disabled_at.is_(None))
+        .first()
+    )
     if target is None or target.pk == viewer.pk:
         raise _not_found()
     relationship = viewer_relationship(db, target, viewer)

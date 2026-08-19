@@ -271,6 +271,9 @@ def search_users(
     """
     Search users by handle or display name, case-insensitive.
     Returns only public profiles and accepted friends.
+
+    Excludes a disabled account (#344 D2) - not discoverable by search, same
+    as if it had been deleted outright.
     """
     if not query:
         return []
@@ -285,6 +288,7 @@ def search_users(
     return (
         db.query(DbUser)
         .filter(
+            DbUser.disabled_at.is_(None),
             or_(
                 DbUser.display_name.ilike(q_str),
                 DbUser.handle.ilike(q_str),

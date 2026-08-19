@@ -83,6 +83,14 @@ def get_token(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail='Invalid credentials'
         )
+    if user.disabled_at is not None:
+        # Correct credentials, but this account is not allowed to sign in.
+        # The resolver in oauth2.py would reject the token on its very next
+        # use anyway; rejecting here too means the client never sees a
+        # "successful" sign-in that dies on the following request.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail='Account disabled'
+        )
 
     return _sign_in_response(user, db)
 
@@ -153,6 +161,10 @@ def google_login(request: GoogleAuthRequest, db: Session = Depends(get_db)):
         db.add(user)
         db.commit()
         db.refresh(user)
+    elif user.disabled_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail='Account disabled'
+        )
 
     return _sign_in_response(user, db)
 

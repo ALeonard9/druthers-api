@@ -196,6 +196,13 @@ async def admin_audit_denial_middleware(request, call_next):
     token) - a prober who never authenticates at all is exactly the case an
     audit trail of an admin surface should not go blind on.
 
+    Skipped when ``request.state.admin_audit_recorded`` is set: a handler
+    that reached its own body and denied the action for a business reason
+    (``disable_user`` refusing a self- or another-admin target) already
+    wrote its own, more specific row via ``admin_audit.record`` - logging
+    again here would duplicate it as a generic, less informative
+    ``admin.access`` entry for the exact same request.
+
     The whole block is guarded: a DB failure here must come back as the
     denial response the caller already has, not an unhandled exception. An
     exception escaping a ``@app.middleware`` handler surfaces at
@@ -205,11 +212,11 @@ async def admin_audit_denial_middleware(request, call_next):
     underlying error.
     """
     response = await call_next(request)
-    is_admin_denial = request.url.path.startswith(
-        '/v1/admin'
-    ) and response.status_code in (
-        status.HTTP_401_UNAUTHORIZED,
-        status.HTTP_403_FORBIDDEN,
+    is_admin_denial = (
+        request.url.path.startswith('/v1/admin')
+        and response.status_code
+        in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
+        and not getattr(request.state, 'admin_audit_recorded', False)
     )
     if is_admin_denial:
         try:

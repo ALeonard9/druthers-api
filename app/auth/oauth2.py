@@ -70,6 +70,31 @@ def hash_api_key(key: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()
 
 
+def _disabled_exception() -> HTTPException:
+    """
+    Raised by both credential resolvers below for a disabled account.
+
+    Distinct from ``credentials_exception`` (401) on purpose: a 401 tells a
+    web BFF the token expired and sends it into a refresh, which also fails
+    for a disabled user and leaves the client looping. 403 says plainly that
+    the credential itself was fine and the account is the reason - the only
+    answer that lets a client stop retrying and show the right message.
+
+    This is the enforcement point, not ``/auth/token``/``/auth/google``/
+    ``/auth/refresh`` alone: access JWTs are stateless with no ``jti``, so a
+    live one keeps resolving successfully for its full TTL unless the
+    resolver itself checks on every use. Refresh tokens and API keys are
+    also revoked/deleted outright when an account is disabled (see
+    ``app.router.v1.router_admin.disable_user``), so this check is a second,
+    belt-and-suspenders layer for anything minted in the window before that
+    ran, not the only thing stopping a disabled account.
+    """
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail='Account disabled',
+    )
+
+
 def _user_from_api_key(token: str, db: Session, credentials_exception):
     """
     Resolve a ``drk_`` bearer token to its owner, or raise.
@@ -84,6 +109,8 @@ def _user_from_api_key(token: str, db: Session, credentials_exception):
     row = db.query(DbApiKey).filter(DbApiKey.key_hash == hash_api_key(token)).first()
     if row is None:
         raise credentials_exception
+    if row.user.disabled_at is not None:
+        raise _disabled_exception()
     row.last_used_at = datetime.now(timezone.utc)
     db.commit()
     return [row.user]
@@ -103,6 +130,8 @@ def _user_from_access_token(token: str, db: Session, credentials_exception):
     user = db_user.get_user(db, uuid)
     if user is None:
         raise credentials_exception
+    if user[0].disabled_at is not None:
+        raise _disabled_exception()
     return user
 
 
@@ -181,6 +210,10 @@ def get_optional_current_user(
     *Every credential failure answers the same way.* The 404 lookup inside
     :func:`get_current_user` becomes the same 401 as everything else, so an
     expired token and a token for a deleted account are indistinguishable.
+    A disabled account is the one deliberate exception: it stays a 403
+    (see :func:`_disabled_exception`) rather than folding into the generic
+    401, for the same reason it does everywhere else - a 401 here would send
+    a disabled user's client into a refresh loop instead of telling it why.
 
     Unlike :func:`get_current_user`, this returns the ``DbUser`` itself (or
     ``None``) rather than a one-element list - there is nothing to unwrap.
@@ -190,6 +223,8 @@ def get_optional_current_user(
     try:
         return get_current_user(token, db)[0]
     except HTTPException as exc:
+        if exc.status_code == status.HTTP_403_FORBIDDEN:
+            raise
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Could not validate credentials',

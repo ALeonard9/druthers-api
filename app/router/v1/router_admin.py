@@ -11,22 +11,22 @@ PR). Each route still separately depends on ``get_current_user`` to get the
 resolved actor for the audit row; FastAPI caches that dependency per
 request, so it costs no extra query.
 
-Disable/enable and its auth-path enforcement, impersonation, and reports are
-later increments - not built here. This increment adds the ``disabled_at``
-column and reads it into ``status``, but nothing writes it yet.
+Impersonation and reports are later increments - not built here.
 """
 
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
+from app.auth import refresh_tokens
 from app.auth.oauth2 import get_current_user, require_admin
 from app.db.database import get_db
 from app.db.db_follow import count_followers, list_following
 from app.db.db_friendship import friend_pks
-from app.db.models import DbAdminAuditLog, DbUser
+from app.db.models import DbAdminAuditLog, DbApiKey, DbUser
 from app.schemas.schemas_admin import (
     OutAdminAuditActor,
     OutAdminAuditEvent,
@@ -191,29 +191,14 @@ def search_users(  # pylint: disable=too-many-arguments, too-many-positional-arg
     )
 
 
-@router.get('/users/{uuid}', response_model=OutAdminUserDetail)
-def get_user_detail(
-    request: Request,
-    uuid: str,
-    db: Session = Depends(get_db),
-    current_user: list = Depends(get_current_user),
-):
-    """Per-user aggregates: tracked counts, visibility tiers, social counts."""
-    user = db.query(DbUser).filter(DbUser.id == uuid).first()
-    if user is None:
-        raise HTTPException(status_code=404, detail='User not found')
-
+def _build_user_detail(db: Session, user: DbUser) -> OutAdminUserDetail:
+    """
+    The full per-user aggregate payload. Shared by ``GET /users/{uuid}`` and
+    the disable/enable actions below, which return this exact shape so the
+    console can swap the row in place without a refetch.
+    """
     domains = _domain_counts_bulk(db, [user.pk])[user.pk]
     last_tracked_at = _last_tracked_bulk(db, [user.pk])[user.pk]
-
-    admin_audit.record(
-        request,
-        actor=current_user[0],
-        target=user,
-        action='admin.user.view',
-        result=AdminAuditResult.ALLOWED,
-        status_code=200,
-    )
     return OutAdminUserDetail(
         id=user.id,
         handle=user.handle,
@@ -246,6 +231,133 @@ def get_user_detail(
             following=len(list_following(db, user.pk)),
         ),
     )
+
+
+def _get_target_or_404(db: Session, uuid: str) -> DbUser:
+    user = db.query(DbUser).filter(DbUser.id == uuid).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail='User not found')
+    return user
+
+
+@router.get('/users/{uuid}', response_model=OutAdminUserDetail)
+def get_user_detail(
+    request: Request,
+    uuid: str,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    """Per-user aggregates: tracked counts, visibility tiers, social counts."""
+    user = _get_target_or_404(db, uuid)
+    admin_audit.record(
+        request,
+        actor=current_user[0],
+        target=user,
+        action='admin.user.view',
+        result=AdminAuditResult.ALLOWED,
+        status_code=200,
+    )
+    return _build_user_detail(db, user)
+
+
+@router.post('/users/{uuid}/disable', response_model=OutAdminUserDetail)
+def disable_user(
+    request: Request,
+    uuid: str,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    """
+    Disable an account: blocks sign-in, kills every live credential, and
+    (D2, per product decision) makes the user disappear everywhere a
+    deleted user would - see the read-path filters in router_visibility,
+    router_comparison, router_friends, router_follows, router_activity, and
+    db_user.search_users.
+
+    Self-disable and disabling another admin are both refused outright
+    (403) rather than merely discouraged: with a small operator pool,
+    either one risks a lockout with nobody left to undo it. Both refusals
+    are audited as denials, same as the router-level admin gate.
+    """
+    actor = current_user[0]
+    target = _get_target_or_404(db, uuid)
+
+    if target.pk == actor.pk:
+        admin_audit.record(
+            request,
+            actor=actor,
+            target=target,
+            action='admin.user.disable',
+            result=AdminAuditResult.DENIED,
+            status_code=403,
+            detail={'reason': 'self'},
+        )
+        raise HTTPException(
+            status_code=403, detail='You cannot disable your own account'
+        )
+    if target.user_group == 'admin':
+        admin_audit.record(
+            request,
+            actor=actor,
+            target=target,
+            action='admin.user.disable',
+            result=AdminAuditResult.DENIED,
+            status_code=403,
+            detail={'reason': 'target_is_admin'},
+        )
+        raise HTTPException(
+            status_code=403, detail='Cannot disable another admin account'
+        )
+
+    if target.disabled_at is None:
+        # One transaction: the flag, every refresh-token family, and every
+        # API key all have to change together, or a request already mid-
+        # flight against this account could keep a stale credential alive.
+        target.disabled_at = datetime.now(timezone.utc)
+        refresh_tokens.revoke_all_for_user(db, target.pk)
+        db.query(DbApiKey).filter(DbApiKey.user_id == target.pk).delete(
+            synchronize_session=False
+        )
+        db.commit()
+
+    admin_audit.record(
+        request,
+        actor=actor,
+        target=target,
+        action='admin.user.disable',
+        result=AdminAuditResult.ALLOWED,
+        status_code=200,
+    )
+    return _build_user_detail(db, target)
+
+
+@router.post('/users/{uuid}/enable', response_model=OutAdminUserDetail)
+def enable_user(
+    request: Request,
+    uuid: str,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    """
+    Re-enable an account. Restores sign-in only - the refresh tokens and
+    API keys a disable revoked are gone for good (this is load-bearing for
+    the confirmation copy on the disable action: re-enabling is not
+    "undo," the user has to sign in again and reissue any API keys).
+    """
+    target = _get_target_or_404(db, uuid)
+    if target.disabled_at is not None:
+        target.disabled_at = None
+        db.commit()
+
+    admin_audit.record(
+        request,
+        actor=current_user[0],
+        target=target,
+        action='admin.user.enable',
+        result=AdminAuditResult.ALLOWED,
+        status_code=200,
+    )
+    return _build_user_detail(db, target)
 
 
 def _audit_actor_out(row: DbAdminAuditLog) -> Optional[OutAdminAuditActor]:

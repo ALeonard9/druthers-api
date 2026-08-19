@@ -43,6 +43,7 @@ ALLOWED_DETAIL_FIELDS = frozenset(
         'actor_filter',
         'target_filter',
         'action_filter',
+        'reason',
     }
 )
 
@@ -122,6 +123,14 @@ def record(  # pylint: disable=too-many-arguments
         audit_db.add(row)
         audit_db.commit()
         audit_db.refresh(row)
+    # Lets admin_audit_denial_middleware (app/run.py) tell "this request
+    # never reached a handler" (require_admin's own 403/401 - the one case
+    # it exists to catch) apart from "the handler ran and denied the action
+    # itself" (disable_user's self/another-admin guards, which call this
+    # directly). Without the flag, a handler-level denial gets logged twice:
+    # once here with the specific action, once more by the middleware as a
+    # generic admin.access - both true, but the second is redundant noise.
+    request.state.admin_audit_recorded = True
     return row
 
 

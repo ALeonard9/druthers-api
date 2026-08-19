@@ -6008,6 +6008,102 @@
         }
       }
     },
+    "/v1/admin/users/{uuid}/disable": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Disable User",
+        "description": "Disable an account: blocks sign-in, kills every live credential, and\n(D2, per product decision) makes the user disappear everywhere a\ndeleted user would - see the read-path filters in router_visibility,\nrouter_comparison, router_friends, router_follows, router_activity, and\ndb_user.search_users.\n\nSelf-disable and disabling another admin are both refused outright\n(403) rather than merely discouraged: with a small operator pool,\neither one risks a lockout with nobody left to undo it. Both refusals\nare audited as denials, same as the router-level admin gate.",
+        "operationId": "disable_user_v1_admin_users__uuid__disable_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutAdminUserDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/users/{uuid}/enable": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Enable User",
+        "description": "Re-enable an account. Restores sign-in only - the refresh tokens and\nAPI keys a disable revoked are gone for good (this is load-bearing for\nthe confirmation copy on the disable action: re-enabling is not\n\"undo,\" the user has to sign in again and reissue any API keys).",
+        "operationId": "enable_user_v1_admin_users__uuid__enable_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutAdminUserDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/admin/audit": {
       "get": {
         "tags": [

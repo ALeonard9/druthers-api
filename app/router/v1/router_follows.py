@@ -66,9 +66,15 @@ def _followable_target(db: Session, handle: str) -> DbUser:
     asked directly rather than through a viewer-relationship ceiling, since a
     follow ignores who is asking. An unknown handle and a handle that
     resolves to a non-public profile are the same 404, so neither leaks
-    anything the other doesn't.
+    anything the other doesn't. A disabled account folds into the same
+    404 (#344 D2) - it is not newly followable, same as an unclaimed
+    handle.
     """
-    target = db.query(DbUser).filter(DbUser.handle == handle.lower()).first()
+    target = (
+        db.query(DbUser)
+        .filter(DbUser.handle == handle.lower(), DbUser.disabled_at.is_(None))
+        .first()
+    )
     if target is None or not is_public(target.visibility_profile):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=NOT_FOUND_PROFILE
