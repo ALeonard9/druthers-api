@@ -8656,6 +8656,17 @@
               }
             ],
             "title": "Status Code"
+          },
+          "source_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ip"
           }
         },
         "type": "object",

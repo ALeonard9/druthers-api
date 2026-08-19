@@ -272,7 +272,9 @@ def test_admin_datetime_fields_carry_a_utc_designator(test_client: TestClient):
 
 def test_admin_audit_trail_lists_and_filters(test_client: TestClient):
     target = test_client.second_user
-    test_client.get(f'/v1/admin/users/{target.id}', headers=_admin(test_client))
+    headers = _admin(test_client)
+    headers['X-Forwarded-For'] = '203.0.113.42'
+    test_client.get(f'/v1/admin/users/{target.id}', headers=headers)
 
     resp = test_client.get(
         '/v1/admin/audit',
@@ -291,6 +293,12 @@ def test_admin_audit_trail_lists_and_filters(test_client: TestClient):
     assert event['path'] == f'/v1/admin/users/{target.id}'
     assert event['status_code'] == 200
     assert event['request_id']
+    # Attribution is the point of an audit trail - the console has to be
+    # able to answer "where was this taken from" without a psql session.
+    # user_agent is deliberately not exposed alongside it (too long, wrecks
+    # a table row) - it stays database-only.
+    assert event['source_ip'] == '203.0.113.42'
+    assert 'user_agent' not in event
 
 
 def test_admin_audit_trail_excludes_its_own_reads_by_default(test_client: TestClient):

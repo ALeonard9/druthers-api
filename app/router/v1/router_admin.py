@@ -475,6 +475,7 @@ def list_audit(  # pylint: disable=too-many-arguments, too-many-positional-argum
                 method=row.method,
                 path=row.path,
                 status_code=row.status_code,
+                source_ip=row.source_ip,
             )
             for row in rows
         ],

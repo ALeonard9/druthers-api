@@ -151,6 +151,14 @@ class OutAdminAuditEvent(BaseModel):
     method: Optional[str] = None
     path: Optional[str] = None
     status_code: Optional[int] = None
+    # Captured via services.rate_limit.client_ip (rightmost X-Forwarded-For
+    # hop) since request.client.host is the ingress proxy in prod. Exposed
+    # deliberately - attribution is the whole point of an audit trail, and
+    # this is the field that answers "where was this taken from" without
+    # someone opening psql. user_agent is captured too but stays
+    # database-only: long, wrecks a table row, and nobody scans it - it
+    # belongs in a future detail expansion, not the list view.
+    source_ip: Optional[str] = None
 
 
 class OutAdminAuditResponse(BaseModel):
