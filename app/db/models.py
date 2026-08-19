@@ -173,6 +173,13 @@ class DbUser(DBBaseModel):
         server_default=text('false'),
     )
 
+    # Admin disable/enable toggle (#344). NULL means active. Adding the
+    # column and reading it (``status`` on the admin endpoints) lands in this
+    # increment; the toggle itself and enforcing it on the auth path are a
+    # later increment - this is only here so the web directory has a real
+    # status column from the start instead of a placeholder computed field.
+    disabled_at = Column(DateTime, nullable=True)
+
 
 class DbApiKey(DBBaseModel):
     """
@@ -373,6 +380,58 @@ class DbFollow(DBBaseModel):
     followed_at = Column(
         DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
     )
+
+
+class DbAdminAuditLog(DBBaseModel):
+    """
+    Append-only trail of every admin-console action (#344).
+
+    Deliberately has no update or delete path anywhere in the codebase - a
+    row records what happened, and a row that could be edited afterwards
+    would not be a trail. ``target_user_pk`` is ``SET NULL`` rather than
+    cascading so deleting the target does not take the record of having
+    viewed or acted on them with it; ``target_user_id`` and ``target_email``
+    are stored again as plain text for the same reason, so the row still
+    reads sensibly after the user row is gone. ``detail`` is a JSON blob of
+    changed fields only, built by an allowlist in
+    :mod:`app.services.admin_audit` - never a password, hash, bearer token,
+    API key, refresh token, or raw request body.
+    """
+
+    __tablename__ = 'admin_audit_log'
+
+    # Overrides DBBaseModel's un-indexed created_at: the audit endpoint's
+    # default sort and ``created_at``-adjacent filters both need it.
+    created_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), index=True
+    )
+
+    actor_user_pk = Column(
+        Integer,
+        ForeignKey('users.pk', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    target_user_pk = Column(
+        Integer,
+        ForeignKey('users.pk', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    target_user_id = Column(String, nullable=True)
+    target_email = Column(String, nullable=True)
+    action = Column(String, nullable=False, index=True)
+    result = Column(String(length=16), nullable=False)
+    detail = Column(JSON, nullable=True)
+    request_id = Column(String, nullable=True)
+    method = Column(String(length=10), nullable=True)
+    path = Column(String, nullable=True)
+    status_code = Column(Integer, nullable=True)
+    source_ip = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
+
+    actor = relationship('DbUser', foreign_keys=[actor_user_pk])
+    target = relationship('DbUser', foreign_keys=[target_user_pk])
 
 
 # Import sandbox models to ensure they are registered with the Base metadata

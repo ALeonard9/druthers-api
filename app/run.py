@@ -6,9 +6,10 @@ import asyncio
 import json
 import os
 import time
+import uuid
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -23,6 +24,7 @@ from .log.logging_config import logger
 from .router.v1 import (
     user,
     router_activity,
+    router_admin,
     router_api_keys,
     router_export,
     router_follows,
@@ -40,6 +42,7 @@ from .router.v1 import (
     router_tv,
 )
 from .schemas.model_schemas import OutResponseBaseModel
+from .services import admin_audit
 from .utils.exceptions import (
     generic_exception_handler,
     http_exception_handler,
@@ -102,6 +105,10 @@ app = FastAPI(
             'name': 'Summary',
             'description': 'Home summary - per-shelf Top 5 and counts',
         },
+        {
+            'name': 'Admin',
+            'description': 'Admin-only user directory and audit trail',
+        },
     ],
     openapi_url='/openapi.json',
     servers=[
@@ -150,6 +157,66 @@ async def log_request_latency(request, call_next):
     return response
 
 
+@app.middleware('http')
+async def request_id_middleware(request, call_next):
+    """
+    Stamp every request with an id an application log line and, for the
+    admin router, an audit row can both carry - the only way to join the two
+    later. Starlette runs ``@app.middleware`` handlers in registration order
+    on the way in (each wraps everything registered after it), so as long as
+    this is registered before ``router_admin`` and its audit-denial
+    middleware are reached, ``request.state.request_id`` is set before
+    either one runs.
+    """
+    request.state.request_id = uuid.uuid4().hex
+    response = await call_next(request)
+    response.headers['X-Request-Id'] = request.state.request_id
+    return response
+
+
+@app.middleware('http')
+async def admin_audit_denial_middleware(request, call_next):
+    """
+    Log a denied admin-router request that never reached a route handler.
+
+    ``require_admin`` is a router-level dependency (see
+    ``router_admin.router``), so it raises before any endpoint body - and
+    therefore before that endpoint's own ``admin_audit.record`` call - runs.
+    This is the one place a denial can still be recorded. A 403 here always
+    followed a successful ``get_current_user`` resolution (an invalid or
+    missing token is a 401, raised earlier), so the actor lookup below is
+    expected to succeed; it degrades to an actor-less row rather than ever
+    turning a denial into a 500.
+    """
+    response = await call_next(request)
+    is_admin_denial = (
+        request.url.path.startswith('/v1/admin')
+        and response.status_code == status.HTTP_403_FORBIDDEN
+    )
+    if is_admin_denial:
+        # Middleware sits outside FastAPI's dependency graph, so a bare
+        # SessionLocal() would bind to the real engine even under a test
+        # client that has overridden ``get_db`` (dependency_overrides only
+        # intercepts Depends() resolution). Going through the same override
+        # lookup FastAPI itself uses keeps this on the test's session too.
+        db_dependency = app.dependency_overrides.get(get_db, get_db)
+        db_generator = db_dependency()
+        db = next(db_generator)
+        try:
+            actor = admin_audit.resolve_actor_best_effort(request, db)
+            admin_audit.record(
+                db,
+                actor=actor,
+                action='admin.access',
+                result=admin_audit.AdminAuditResult.DENIED,
+                request=request,
+                status_code=response.status_code,
+            )
+        finally:
+            next(db_generator, None)
+    return response
+
+
 app.include_router(authentication.router, prefix='/v1/auth')
 app.include_router(user.router, prefix='/v1/users')
 app.include_router(router_movies.router)
@@ -168,6 +235,7 @@ app.include_router(router_friends.router)
 app.include_router(router_follows.router)
 app.include_router(router_preferences.router)
 app.include_router(router_summary.router)
+app.include_router(router_admin.router)
 
 # Serve static files
 app.mount('/static', StaticFiles(directory='app/static'), name='static')

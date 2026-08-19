@@ -197,6 +197,18 @@ def get_optional_current_user(
         ) from exc
 
 
+def is_admin(current_user: list) -> bool:
+    """
+    Whether the resolved caller belongs to the admin group.
+
+    The one predicate :func:`require_admin` and any mixed admin-or-self
+    route (``app.router.v1.user``) both test against, so "is this user an
+    admin" has a single definition rather than the same string comparison
+    copied at each call site.
+    """
+    return bool(current_user) and current_user[0].user_group == 'admin'
+
+
 def require_admin(current_user: list = Depends(get_current_user)) -> list:
     """
     Dependency that allows only admin users through.
@@ -204,7 +216,7 @@ def require_admin(current_user: list = Depends(get_current_user)) -> list:
     ``get_current_user`` returns a one-element list (``[DbUser]``); reuse it so
     the same object is available to the route.
     """
-    if not current_user or current_user[0].user_group != 'admin':
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='Admin privileges required',

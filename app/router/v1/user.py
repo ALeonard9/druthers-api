@@ -5,7 +5,12 @@ This module contains the API routes for user-related operations.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.auth.oauth2 import get_current_session_user, get_current_user
+from app.auth.oauth2 import (
+    get_current_session_user,
+    get_current_user,
+    is_admin,
+    require_admin,
+)
 from app.config import get_settings
 from app.db import db_user
 from app.db.database import get_db
@@ -17,10 +22,10 @@ router = APIRouter(
 
 
 # Read all users
-@router.get('', response_model=OutResponseUserModel)
-def get_all_users(
-    db: Session = Depends(get_db), current_user: InUserBase = Depends(get_current_user)
-):
+@router.get(
+    '', response_model=OutResponseUserModel, dependencies=[Depends(require_admin)]
+)
+def get_all_users(db: Session = Depends(get_db)):
     """
     Retrieve all users from the database. Must be an admin to view all users.
 
@@ -30,14 +35,8 @@ def get_all_users(
     Returns:
         List: OutUserDisplay: A list of users.
     """
-    if current_user[0].user_group == 'admin':
-        users = db_user.get_all_users(db)
-        return OutResponseUserModel(data=users, message='Users found')
-
-    raise HTTPException(
-        status_code=403,
-        detail='User does not have permission to view all users.',
-    )
+    users = db_user.get_all_users(db)
+    return OutResponseUserModel(data=users, message='Users found')
 
 
 # Read user
@@ -117,7 +116,7 @@ def update_user(
     Returns:
         List: OutUserDisplay: The updated user data.
     """
-    if current_user[0].user_group == 'admin':
+    if is_admin(current_user):
         user = db_user.update_user(db, uuid, request)
         return OutResponseUserModel(data=user, message='User updated')
 

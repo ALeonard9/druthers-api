@@ -122,12 +122,13 @@ def _fingerprint(response) -> tuple:
     Everything a caller can observe, minus what varies run to run.
 
     ``Server-Timing`` is a duration and ``Date`` a clock reading; both differ
-    between any two responses, including two identical ones.
+    between any two responses, including two identical ones. ``X-Request-Id``
+    (#344) is a fresh id minted per request for the same reason.
     """
     headers = {
         key: value
         for key, value in response.headers.items()
-        if key.lower() not in ('server-timing', 'date')
+        if key.lower() not in ('server-timing', 'date', 'x-request-id')
     }
     return response.status_code, response.json(), headers
 
