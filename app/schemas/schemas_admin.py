@@ -168,3 +168,31 @@ class OutAdminAuditResponse(BaseModel):
     limit: int
     offset: int
     events: list[OutAdminAuditEvent]
+
+
+class InImpersonationStart(BaseModel):
+    """``POST /v1/admin/impersonation`` request."""
+
+    target_uuid: str
+    reason: Optional[str] = None
+
+
+class OutImpersonationParty(BaseModel):
+    """Either side of a view-as session."""
+
+    id: str
+    handle: Optional[str] = None
+    display_name: Optional[str] = None
+    email: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OutImpersonationSession(BaseModel):
+    """``POST /v1/admin/impersonation``."""
+
+    token: str
+    session_id: str
+    expires_at: UtcDatetime
+    target: OutImpersonationParty
+    acting_admin: OutImpersonationParty

@@ -14,7 +14,7 @@ request, so it costs no extra query.
 Impersonation and reports are later increments - not built here.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -22,12 +22,25 @@ from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
 from app.auth import refresh_tokens
-from app.auth.oauth2 import get_current_user, require_admin
+from app.auth.oauth2 import (
+    IMPERSONATION_TOKEN_MINUTES,
+    create_impersonation_token,
+    get_current_user,
+    is_impersonation_token,
+    oauth2_scheme,
+    require_admin,
+)
 from app.db.database import get_db
 from app.db.db_follow import count_followers, list_following
 from app.db.db_friendship import friend_pks
-from app.db.models import DbAdminAuditLog, DbApiKey, DbUser
+from app.db.models import (
+    DbAdminAuditLog,
+    DbApiKey,
+    DbImpersonationSession,
+    DbUser,
+)
 from app.schemas.schemas_admin import (
+    InImpersonationStart,
     OutAdminAuditActor,
     OutAdminAuditEvent,
     OutAdminAuditResponse,
@@ -38,6 +51,8 @@ from app.schemas.schemas_admin import (
     OutAdminUserListResponse,
     OutAdminUserSummary,
     OutAdminVisibility,
+    OutImpersonationParty,
+    OutImpersonationSession,
 )
 from app.services import admin_audit
 from app.services.admin_audit import AdminAuditResult
@@ -480,3 +495,121 @@ def list_audit(  # pylint: disable=too-many-arguments, too-many-positional-argum
             for row in rows
         ],
     )
+
+
+@router.post('/impersonation', response_model=OutImpersonationSession)
+def start_impersonation(
+    request: Request,
+    payload: InImpersonationStart,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+    current_user: list = Depends(get_current_user),
+):
+    """
+    Begin a read-only view-as session (#341).
+
+    Read-only is a blanket denial with no override: the "act on their behalf"
+    criterion was cut from #341 on 2026-08-18, so there is no per-action flag
+    to build. Enforcement lives in the auth resolver, not here, so a route
+    added later cannot opt out of it.
+
+    Impersonating a DISABLED account is allowed on purpose. "Why can't I sign
+    in" is exactly the question this tool exists to answer, and the write
+    block already covers the risk.
+    """
+    actor = current_user[0]
+    target = _get_target_or_404(db, uuid=payload.target_uuid)
+
+    def _deny(reason: str, message: str):
+        admin_audit.record(
+            request,
+            actor=actor,
+            target=target,
+            action='admin.impersonation.start',
+            result=AdminAuditResult.DENIED,
+            status_code=403,
+            detail={'reason': reason},
+        )
+        return HTTPException(status_code=403, detail=message)
+
+    # Nesting: an impersonated caller must not mint a further session.
+    # require_admin already refuses them, since the swapped identity is not an
+    # admin; this covers the case where an admin target slipped through.
+    if is_impersonation_token(token):
+        raise _deny('nested', 'Cannot impersonate from a view-as session')
+    if target.pk == actor.pk:
+        raise _deny('self', 'You are already yourself')
+    if target.user_group == 'admin':
+        raise _deny('target_is_admin', 'An admin cannot be impersonated')
+
+    session = DbImpersonationSession(
+        admin_user_pk=actor.pk,
+        target_user_pk=target.pk,
+        reason=payload.reason,
+        expires_at=datetime.now(timezone.utc)
+        + timedelta(minutes=IMPERSONATION_TOKEN_MINUTES),
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    impersonation_token, expires = create_impersonation_token(
+        target_id=target.id, admin_id=actor.id, session_id=session.id
+    )
+    admin_audit.record(
+        request,
+        actor=actor,
+        target=target,
+        action='admin.impersonation.start',
+        result=AdminAuditResult.ALLOWED,
+        status_code=200,
+        detail={'session_id': session.id, 'reason': payload.reason},
+    )
+    return OutImpersonationSession(
+        token=impersonation_token,
+        session_id=session.id,
+        expires_at=expires,
+        target=OutImpersonationParty.model_validate(target),
+        acting_admin=OutImpersonationParty.model_validate(actor),
+    )
+
+
+@router.delete('/impersonation')
+def stop_impersonation(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    """
+    End every live view-as session this admin owns. Idempotent.
+
+    Reached with the admin's OWN token, not the impersonation one: the
+    impersonation credential cannot call this, because every ``/v1/admin/*``
+    route is behind ``require_admin`` and the swapped identity is not an
+    admin. The web client keeps the admin session in a separate cookie for
+    exactly this reason, so "Back to admin" is one call plus a cookie delete.
+    """
+    actor = current_user[0]
+    now = datetime.now(timezone.utc)
+    live = (
+        db.query(DbImpersonationSession)
+        .filter(
+            DbImpersonationSession.admin_user_pk == actor.pk,
+            DbImpersonationSession.ended_at.is_(None),
+        )
+        .all()
+    )
+    for session in live:
+        session.ended_at = now
+    if live:
+        db.commit()
+    admin_audit.record(
+        request,
+        actor=actor,
+        target=None,
+        action='admin.impersonation.stop',
+        result=AdminAuditResult.ALLOWED,
+        status_code=200,
+        detail={'ended': len(live)},
+    )
+    return {'ended': len(live)}

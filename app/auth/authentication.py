@@ -3,6 +3,7 @@ This module creates tokens for users.
 """
 
 import secrets
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.param_functions import Depends
@@ -207,5 +208,17 @@ def logout(request: InRefreshToken, db: Session = Depends(get_db)):
     Deliberately 204 whether or not the token was recognised - sign-out must
     not depend on the client still holding a valid credential, and the status
     shouldn't reveal whether a guessed token existed.
+
+    Signing out also ends any view-as session the owner of that refresh token
+    is running (#341). Otherwise an admin could sign out believing they had
+    closed everything down while a live impersonation token kept working
+    until its own expiry.
     """
+    owner_pk = refresh_tokens.owner_pk_for_token(db, request.refresh_token)
     refresh_tokens.revoke_refresh_token(db, request.refresh_token)
+    if owner_pk is not None:
+        db.query(models.DbImpersonationSession).filter(
+            models.DbImpersonationSession.admin_user_pk == owner_pk,
+            models.DbImpersonationSession.ended_at.is_(None),
+        ).update({'ended_at': datetime.now(timezone.utc)}, synchronize_session=False)
+        db.commit()

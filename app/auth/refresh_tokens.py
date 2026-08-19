@@ -116,6 +116,22 @@ def revoke_all_for_user(db: Session, user_pk: int) -> None:
     ).update({'revoked_at': _now()}, synchronize_session=False)
 
 
+def owner_pk_for_token(db: Session, token: str):
+    """
+    The ``users.pk`` behind a refresh token, or ``None`` if unrecognised.
+
+    Sign-out needs the owner before revoking, so it can also end any view-as
+    session that admin is running (#341). Read-only on purpose: handed a
+    junk token it must change nothing and say so.
+    """
+    row = (
+        db.query(DbRefreshToken)
+        .filter(DbRefreshToken.token_hash == hash_refresh_token(token))
+        .first()
+    )
+    return row.user_id if row is not None else None
+
+
 def revoke_refresh_token(db: Session, token: str) -> bool:
     """
     Revoke a token and the rest of its family - this is what sign-out calls.

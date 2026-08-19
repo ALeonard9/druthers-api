@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "druthers.io API local",
+    "title": "druthers.io API dev",
     "description": "API for druthers.io - track and rank the movies, TV, books, and games you actually care about.",
     "contact": {
       "name": "Druthers",
@@ -156,7 +156,7 @@
           "authentication"
         ],
         "summary": "Logout",
-        "description": "Sign out server-side: the refresh token and its family stop working.\n\nDeliberately 204 whether or not the token was recognised - sign-out must\nnot depend on the client still holding a valid credential, and the status\nshouldn't reveal whether a guessed token existed.",
+        "description": "Sign out server-side: the refresh token and its family stop working.\n\nDeliberately 204 whether or not the token was recognised - sign-out must\nnot depend on the client still holding a valid credential, and the status\nshouldn't reveal whether a guessed token existed.\n\nSigning out also ends any view-as session the owner of that refresh token\nis running (#341). Otherwise an admin could sign out believing they had\nclosed everything down while a live impersonation token kept working\nuntil its own expiry.",
         "operationId": "logout_v1_auth_logout_post",
         "requestBody": {
           "content": {
@@ -6211,6 +6211,76 @@
         }
       }
     },
+    "/v1/admin/impersonation": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Start Impersonation",
+        "description": "Begin a read-only view-as session (#341).\n\nRead-only is a blanket denial with no override: the \"act on their behalf\"\ncriterion was cut from #341 on 2026-08-18, so there is no per-action flag\nto build. Enforcement lives in the auth resolver, not here, so a route\nadded later cannot opt out of it.\n\nImpersonating a DISABLED account is allowed on purpose. \"Why can't I sign\nin\" is exactly the question this tool exists to answer, and the write\nblock already covers the risk.",
+        "operationId": "start_impersonation_v1_admin_impersonation_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InImpersonationStart"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutImpersonationSession"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Stop Impersonation",
+        "description": "End every live view-as session this admin owns. Idempotent.\n\nReached with the admin's OWN token, not the impersonation one: the\nimpersonation credential cannot call this, because every ``/v1/admin/*``\nroute is behind ``require_admin`` and the swapped identity is not an\nadmin. The web client keeps the admin session in a separate cookie for\nexactly this reason, so \"Back to admin\" is one call plus a cookie delete.",
+        "operationId": "stop_impersonation_v1_admin_impersonation_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
     "/": {
       "get": {
         "tags": [
@@ -7306,6 +7376,31 @@
         ],
         "title": "InFriendRequest",
         "description": "Request body for sending a friend request (#275).\n\nA handle and nothing else: there is no endpoint that lists or searches\nusers, so an exact handle someone told you is the only way to reach them."
+      },
+      "InImpersonationStart": {
+        "properties": {
+          "target_uuid": {
+            "type": "string",
+            "title": "Target Uuid"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target_uuid"
+        ],
+        "title": "InImpersonationStart",
+        "description": "``POST /v1/admin/impersonation`` request."
       },
       "InPreferencesUpdate": {
         "properties": {
@@ -9322,6 +9417,85 @@
         ],
         "title": "OutFriendUser",
         "description": "The other party in a friendship, as much of them as a friend may see.\n\nNo email, no visibility settings - a friendship is not an introduction to\nsomeone's account."
+      },
+      "OutImpersonationParty": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handle"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "OutImpersonationParty",
+        "description": "Either side of a view-as session."
+      },
+      "OutImpersonationSession": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "expires_at": {
+            "type": "string",
+            "title": "Expires At"
+          },
+          "target": {
+            "$ref": "#/components/schemas/OutImpersonationParty"
+          },
+          "acting_admin": {
+            "$ref": "#/components/schemas/OutImpersonationParty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "session_id",
+          "expires_at",
+          "target",
+          "acting_admin"
+        ],
+        "title": "OutImpersonationSession",
+        "description": "``POST /v1/admin/impersonation``."
       },
       "OutPendingFriendRequests": {
         "properties": {

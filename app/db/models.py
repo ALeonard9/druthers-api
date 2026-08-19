@@ -181,6 +181,44 @@ class DbUser(DBBaseModel):
     disabled_at = Column(DateTime, nullable=True)
 
 
+class DbImpersonationSession(DBBaseModel):
+    """
+    One admin "view as user" session (#341).
+
+    The impersonation JWT is the capability, but a pure-stateless token cannot
+    satisfy two of the issue's requirements: that an admin can end a session
+    "at any time", and that a session dies when the acting admin is demoted or
+    disabled. Both need server-side state, so every impersonated request loads
+    this row by the token's session id and re-checks it. That is two extra
+    lookups on impersonated requests only; ordinary traffic never touches this
+    table.
+
+    ``ended_at`` is set by the stop endpoint and by sign-out. ``expires_at``
+    mirrors the token's own expiry so a session cannot outlive its credential
+    even if the row is never explicitly ended.
+    """
+
+    __tablename__ = 'impersonation_sessions'
+    admin_user_pk = Column(
+        Integer,
+        ForeignKey('users.pk', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    target_user_pk = Column(
+        Integer,
+        ForeignKey('users.pk', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    reason = Column(String, nullable=True)
+    expires_at = Column(DateTime, nullable=False)
+    ended_at = Column(DateTime, nullable=True)
+
+    admin = relationship('DbUser', foreign_keys=[admin_user_pk])
+    target = relationship('DbUser', foreign_keys=[target_user_pk])
+
+
 class DbApiKey(DBBaseModel):
     """
     Long-lived API key for programmatic access (MCP servers, crons).

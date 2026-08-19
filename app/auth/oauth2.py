@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -58,6 +58,15 @@ ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
 # API keys ride the same Authorization: Bearer header as JWTs; the prefix is
 # how we tell them apart (and lets secret scanners recognize leaked keys).
 API_KEY_PREFIX = 'drk_'
+
+# Impersonation access tokens carry this in ``typ`` so an ordinary session
+# token can never be mistaken for one, and vice versa (#341).
+IMPERSONATION_TOKEN_TYPE = 'impersonation'
+# Absolute, and deliberately short. There is no refresh path: expiry is the
+# escape hatch for a session somebody walked away from.
+IMPERSONATION_TOKEN_MINUTES = 15
+# Everything else is refused while impersonating.
+_SAFE_METHODS = frozenset({'GET', 'HEAD', 'OPTIONS'})
 
 
 def generate_api_key() -> str:
@@ -116,7 +125,84 @@ def _user_from_api_key(token: str, db: Session, credentials_exception):
     return [row.user]
 
 
-def _user_from_access_token(token: str, db: Session, credentials_exception):
+def _impersonation_exception(detail: str) -> HTTPException:
+    """Raised when an impersonation credential is presented but not honoured."""
+    return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+
+def _resolve_impersonation(payload: dict, db: Session, request, credentials_exception):
+    """
+    Swap the resolved identity to the impersonation target, or raise.
+
+    Called from :func:`_user_from_access_token` rather than from
+    :func:`get_current_user`, and that placement is the whole security story.
+    ``get_current_session_user`` is a second, independent decode path into
+    this same function; swapping one level up would leave it resolving an
+    impersonation token's ``sub`` to the target with no impersonation context
+    attached, which reaches the self-delete branch of
+    ``DELETE /v1/users/{uuid}``. A session documented as read-only would
+    delete the account. Swapping here covers both callers, and sitting below
+    the ``drk_`` branch in :func:`get_current_user` means no API key can ever
+    reach impersonation.
+    """
+    # Local import keeps the auth module's import surface narrow, matching
+    # the pattern used for DbApiKey above.
+    from app.db.models import (  # pylint: disable=import-outside-toplevel
+        DbImpersonationSession,
+    )
+
+    session_id = payload.get('sid')
+    admin_id = payload.get('act')
+    if not session_id or not admin_id:
+        raise credentials_exception
+
+    row = (
+        db.query(DbImpersonationSession)
+        .filter(DbImpersonationSession.id == session_id)
+        .first()
+    )
+    now = datetime.now(timezone.utc)
+    if row is None or row.ended_at is not None:
+        raise _impersonation_exception('Impersonation session has ended')
+    if (
+        row.expires_at is not None
+        and row.expires_at.replace(tzinfo=timezone.utc) <= now
+    ):
+        raise _impersonation_exception('Impersonation session has expired')
+
+    # Re-check the acting admin on every request, not just at mint: they can
+    # be demoted, disabled or deleted mid-session, and the session must die
+    # with their privilege rather than outliving it.
+    admin = row.admin
+    if admin is None or admin.user_group != 'admin' or admin.disabled_at is not None:
+        raise _impersonation_exception('Acting admin is no longer an administrator')
+
+    target = row.target
+    if target is None:
+        raise credentials_exception
+    # Also re-checked per request: a target promoted to admin mid-session must
+    # stop being impersonable immediately.
+    if target.user_group == 'admin':
+        raise _impersonation_exception('An admin cannot be impersonated')
+
+    # Read-only, with no override path by design (#341 was amended on
+    # 2026-08-18 to cut "act on their behalf"). Enforced here, at the one
+    # point every authenticated route funnels through, so a route cannot opt
+    # out by forgetting a dependency. Deliberately not middleware: middleware
+    # runs before dependency resolution and would have to decode the token
+    # itself, creating exactly the second decode path this function exists to
+    # avoid.
+    if request is not None and request.method not in _SAFE_METHODS:
+        raise _impersonation_exception(
+            'This view-as session is read-only. End it to act as yourself.'
+        )
+
+    return [target]
+
+
+def _user_from_access_token(
+    token: str, db: Session, credentials_exception, request=None
+):
     """Resolve a signed, expiring access JWT to its user."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -127,6 +213,8 @@ def _user_from_access_token(token: str, db: Session, credentials_exception):
         raise credentials_exception from exc
     except jwt.InvalidTokenError as exc:
         raise credentials_exception from exc
+    if payload.get('typ') == IMPERSONATION_TOKEN_TYPE:
+        return _resolve_impersonation(payload, db, request, credentials_exception)
     user = db_user.get_user(db, uuid)
     if user is None:
         raise credentials_exception
@@ -151,11 +239,59 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
+def create_impersonation_token(target_id: str, admin_id: str, session_id: str):
+    """
+    Mint the credential for one view-as session, and only that.
+
+    Deliberately not built on the sign-in helpers in
+    :mod:`app.auth.authentication`: both of those mint a refresh token, and an
+    impersonation session must never be refreshable. Expiry has to be a hard
+    stop, or a diagnostic tool becomes a permanent alternate login.
+    """
+    expires = datetime.now(timezone.utc) + timedelta(
+        minutes=IMPERSONATION_TOKEN_MINUTES
+    )
+    payload = {
+        'sub': target_id,
+        'act': admin_id,
+        'typ': IMPERSONATION_TOKEN_TYPE,
+        'sid': session_id,
+        'exp': expires,
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM), expires
+
+
+def is_impersonation_token(token: str) -> bool:
+    """
+    Whether a bearer token is an impersonation credential.
+
+    Used to refuse nesting: an impersonated caller must not be able to mint a
+    further session. ``require_admin`` already refuses them (the swapped
+    identity is not an admin), so this is defence in depth for the case where
+    an admin target somehow slipped through.
+    """
+    if not token or token.startswith(API_KEY_PREFIX):
+        return False
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.InvalidTokenError:
+        return False
+    return payload.get('typ') == IMPERSONATION_TOKEN_TYPE
+
+
 def get_current_user(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    request: Request = None,
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
 ):
     """
     This function verifies the current user
+
+    ``request`` is injected so the impersonation read-only rule can see the
+    method at the single point every authenticated route already funnels
+    through. It defaults to ``None`` because
+    :func:`get_optional_current_user` calls this directly rather than through
+    dependency injection.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -163,12 +299,17 @@ def get_current_user(
         headers={'WWW-Authenticate': 'Bearer'},
     )
     if token.startswith(API_KEY_PREFIX):
+        # API keys share this header with JWTs, so an API key must never be
+        # able to carry impersonation claims. It cannot: this branch never
+        # reads the token's payload at all.
         return _user_from_api_key(token, db, credentials_exception)
-    return _user_from_access_token(token, db, credentials_exception)
+    return _user_from_access_token(token, db, credentials_exception, request)
 
 
 def get_current_session_user(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    request: Request = None,
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
 ):
     """
     Authenticate only an expiring interactive-session access token.
@@ -183,7 +324,7 @@ def get_current_session_user(
         detail='Could not validate credentials',
         headers={'WWW-Authenticate': 'Bearer'},
     )
-    return _user_from_access_token(token, db, credentials_exception)
+    return _user_from_access_token(token, db, credentials_exception, request)
 
 
 def get_optional_current_user(
@@ -221,7 +362,11 @@ def get_optional_current_user(
     if not token:
         return None
     try:
-        return get_current_user(token, db)[0]
+        # Keyword arguments, not positional: ``get_current_user`` gained a
+        # leading ``request`` parameter for the impersonation read-only rule,
+        # and this is the only direct (non-DI) call to it in the codebase.
+        # Passing no request is correct here - this dependency serves reads.
+        return get_current_user(token=token, db=db)[0]
     except HTTPException as exc:
         if exc.status_code == status.HTTP_403_FORBIDDEN:
             raise
