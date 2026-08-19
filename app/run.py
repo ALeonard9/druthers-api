@@ -230,13 +230,20 @@ async def admin_audit_denial_middleware(request, call_next):
             db_generator = db_dependency()
             db = next(db_generator)
             try:
-                actor = admin_audit.resolve_actor_best_effort(request, db)
+                actor, via_impersonation = admin_audit.resolve_actor_best_effort(
+                    request, db
+                )
                 admin_audit.record(
                     request,
                     actor=actor,
                     action='admin.access',
                     result=admin_audit.AdminAuditResult.DENIED,
                     status_code=response.status_code,
+                    # Marks a denial made from a live impersonation session
+                    # so the trail is explicit that this was the acting
+                    # admin probing the admin surface from behind another
+                    # user's identity, not that user themself doing it.
+                    detail=({'via_impersonation': True} if via_impersonation else None),
                 )
             finally:
                 next(db_generator, None)

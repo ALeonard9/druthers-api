@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "druthers.io API dev",
+    "title": "druthers.io API local",
     "description": "API for druthers.io - track and rank the movies, TV, books, and games you actually care about.",
     "contact": {
       "name": "Druthers",

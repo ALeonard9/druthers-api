@@ -535,6 +535,12 @@ def start_impersonation(
     # Nesting: an impersonated caller must not mint a further session.
     # require_admin already refuses them, since the swapped identity is not an
     # admin; this covers the case where an admin target slipped through.
+    # In practice this line is currently unreachable: POST is a non-safe
+    # method, so an impersonation token gets refused by the write-block in
+    # _resolve_impersonation before this handler body ever runs. Left in as
+    # defense in depth for that check's own placement changing later - two
+    # independent reasons a nested session can never mint is a better
+    # invariant than relying on one.
     if is_impersonation_token(token):
         raise _deny('nested', 'Cannot impersonate from a view-as session')
     if target.pk == actor.pk:
@@ -542,19 +548,26 @@ def start_impersonation(
     if target.user_group == 'admin':
         raise _deny('target_is_admin', 'An admin cannot be impersonated')
 
+    # One instant for both the row and the token below, so their expiries
+    # cannot drift apart by however long two separate `now()` calls take.
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        minutes=IMPERSONATION_TOKEN_MINUTES
+    )
     session = DbImpersonationSession(
         admin_user_pk=actor.pk,
         target_user_pk=target.pk,
         reason=payload.reason,
-        expires_at=datetime.now(timezone.utc)
-        + timedelta(minutes=IMPERSONATION_TOKEN_MINUTES),
+        expires_at=expires_at,
     )
     db.add(session)
     db.commit()
     db.refresh(session)
 
     impersonation_token, expires = create_impersonation_token(
-        target_id=target.id, admin_id=actor.id, session_id=session.id
+        target_id=target.id,
+        admin_id=actor.id,
+        session_id=session.id,
+        expires_at=expires_at,
     )
     admin_audit.record(
         request,
@@ -599,17 +612,34 @@ def stop_impersonation(
         )
         .all()
     )
+    # One target per row, not one row for the whole call: an admin can have
+    # more than one live session, and a single aggregate row with no target
+    # cannot say which one ended or who was being viewed.
     for session in live:
         session.ended_at = now
     if live:
         db.commit()
-    admin_audit.record(
-        request,
-        actor=actor,
-        target=None,
-        action='admin.impersonation.stop',
-        result=AdminAuditResult.ALLOWED,
-        status_code=200,
-        detail={'ended': len(live)},
-    )
+    if live:
+        for session in live:
+            admin_audit.record(
+                request,
+                actor=actor,
+                target=session.target,
+                action='admin.impersonation.stop',
+                result=AdminAuditResult.ALLOWED,
+                status_code=200,
+            )
+    else:
+        # Still worth a row: a stop call with nothing live is a caller
+        # asking to end a session that was already gone (or never existed),
+        # not a no-op that vanishes without a trace.
+        admin_audit.record(
+            request,
+            actor=actor,
+            target=None,
+            action='admin.impersonation.stop',
+            result=AdminAuditResult.ALLOWED,
+            status_code=200,
+            detail={'ended': 0},
+        )
     return {'ended': len(live)}

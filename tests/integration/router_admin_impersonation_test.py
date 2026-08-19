@@ -87,7 +87,16 @@ def test_impersonation_cannot_delete_the_target_account(test_client: TestClient)
     assert db.query(DbUser).filter(DbUser.id == target.id).first() is not None
 
 
+WRITE_BLOCK_MESSAGE = 'This view-as session is read-only. End it to act as yourself.'
+
+
 def test_impersonation_refuses_every_write(test_client: TestClient):
+    """
+    Asserting only the status code here would also pass against a build
+    where the feature is completely dead (``_resolve_impersonation``
+    raising 403 unconditionally, before ever reaching the write-block
+    check) - the message is what proves this specific check fired.
+    """
     headers = _impersonating(test_client, test_client.first_user)
     writes = (
         ('post', '/v1/users/me/api-keys', {'name': 'stolen'}),
@@ -106,6 +115,9 @@ def test_impersonation_refuses_every_write(test_client: TestClient):
     for method, path, payload in writes:
         resp = getattr(test_client, method)(path, json=payload, headers=headers)
         assert resp.status_code == 403, f'{method} {path} was not refused'
+        assert (
+            resp.json()['message'] == WRITE_BLOCK_MESSAGE
+        ), f'{method} {path} was refused for the wrong reason: {resp.json()}'
 
     db = test_client.test_db_session
     owner_pk = (
@@ -114,10 +126,52 @@ def test_impersonation_refuses_every_write(test_client: TestClient):
     assert db.query(DbApiKey).filter(DbApiKey.user_id == owner_pk).count() == 0
 
 
+def test_impersonation_refused_writes_are_audited(test_client: TestClient):
+    """
+    A denied *start* was already audited; a denied *write* from an already-
+    live session previously left no trace at all - the more dangerous of
+    the two attempts was the one going unrecorded.
+    """
+    target = test_client.first_user
+    headers = _impersonating(test_client, target)
+    db = test_client.test_db_session
+    before = db.query(DbAdminAuditLog).count()
+
+    resp = test_client.put(
+        '/v1/users/me/preferences', json={'theme': 'dark'}, headers=headers
+    )
+    assert resp.status_code == 403
+
+    db.expire_all()
+    row = db.query(DbAdminAuditLog).order_by(DbAdminAuditLog.pk.desc()).first()
+    assert db.query(DbAdminAuditLog).count() == before + 1
+    assert row.action == 'admin.impersonation.write_blocked'
+    assert row.result == 'denied'
+    assert row.status_code == 403
+    # The acting admin, not the target whose identity the token swapped in -
+    # the same attribution rule as the admin.access denial below.
+    assert row.actor_user_pk == test_client.admin_user.pk
+    assert row.target_user_pk == target.pk
+
+
 def test_impersonation_cannot_reach_admin_routes(test_client: TestClient):
+    """
+    The two GETs alone would pass under a plain non-admin identity too -
+    ``require_admin`` refuses those regardless of impersonation, so they
+    only prove the swap resolved to a non-admin, not that impersonation
+    itself is blocked from the admin surface. ``DELETE /v1/admin/
+    impersonation`` is the case that actually distinguishes them: it is a
+    write, so the read-only rule has to refuse it before ``require_admin``
+    is ever reached - and it is exactly the route a compromised or
+    careless impersonation token would want to reach, to end (or interfere
+    with) a session that is not its own.
+    """
     headers = _impersonating(test_client, test_client.first_user)
     for path in ('/v1/admin/users', '/v1/admin/audit'):
         assert test_client.get(path, headers=headers).status_code == 403
+    stop_resp = test_client.delete('/v1/admin/impersonation', headers=headers)
+    assert stop_resp.status_code == 403
+    assert stop_resp.json()['message'] == WRITE_BLOCK_MESSAGE
 
 
 def test_an_api_key_can_never_impersonate(test_client: TestClient):
@@ -165,13 +219,20 @@ def test_an_api_key_can_never_impersonate(test_client: TestClient):
 
 
 def test_admin_cannot_impersonate_another_admin(test_client: TestClient):
+    """
+    ``'admin' in message.lower()`` would also pass against
+    ``require_admin``'s own 'Admin privileges required' - not a message
+    this endpoint could even produce here, since the caller already IS an
+    admin, but a weak enough assertion to miss the swap. Assert the exact,
+    specific refusal instead.
+    """
     db = test_client.test_db_session
     other = db.query(DbUser).filter(DbUser.id == test_client.first_user.id).first()
     other.user_group = 'admin'
     db.commit()
     resp = _start(test_client, test_client.first_user)
     assert resp.status_code == 403
-    assert 'admin' in resp.json()['message'].lower()
+    assert resp.json()['message'] == 'An admin cannot be impersonated'
 
 
 def test_target_promoted_mid_session_stops_being_impersonable(
@@ -222,12 +283,160 @@ def test_demoting_the_acting_admin_kills_the_session(test_client: TestClient):
 
 
 def test_start_and_stop_are_audited(test_client: TestClient):
-    _impersonating(test_client, test_client.first_user)
+    """
+    Checking only that the action strings exist would also pass with the
+    detail column silently empty - which is exactly the defect this pins:
+    ``session_id``/``reason``/``ended`` were dropped by the redact
+    allowlist until they were added to it, and the commit message claiming
+    ``session_id`` was recorded was wrong.
+    """
+    target = test_client.first_user
+    start_resp = _start(test_client, target, reason='diagnosing a bug')
+    session_id = start_resp.json()['session_id']
     test_client.delete('/v1/admin/impersonation', headers=_admin(test_client))
+
     db = test_client.test_db_session
-    actions = {row.action for row in db.query(DbAdminAuditLog).all()}
-    assert 'admin.impersonation.start' in actions
-    assert 'admin.impersonation.stop' in actions
+    db.expire_all()
+    start_row = (
+        db.query(DbAdminAuditLog)
+        .filter(DbAdminAuditLog.action == 'admin.impersonation.start')
+        .order_by(DbAdminAuditLog.pk.desc())
+        .first()
+    )
+    assert start_row is not None
+    assert start_row.result == 'allowed'
+    assert start_row.target_user_pk == target.pk
+    assert start_row.detail == {
+        'session_id': session_id,
+        'reason': 'diagnosing a bug',
+    }
+
+    stop_row = (
+        db.query(DbAdminAuditLog)
+        .filter(DbAdminAuditLog.action == 'admin.impersonation.stop')
+        .order_by(DbAdminAuditLog.pk.desc())
+        .first()
+    )
+    assert stop_row is not None
+    assert stop_row.result == 'allowed'
+    # One row per ended session names which target it was, so with more
+    # than one live session the trail can still say who was being viewed.
+    assert stop_row.target_user_pk == target.pk
+
+
+def test_stopping_with_nothing_live_still_leaves_a_row(test_client: TestClient):
+    db = test_client.test_db_session
+    before = db.query(DbAdminAuditLog).count()
+    resp = test_client.delete('/v1/admin/impersonation', headers=_admin(test_client))
+    assert resp.status_code == 200
+    assert resp.json() == {'ended': 0}
+
+    db.expire_all()
+    row = (
+        db.query(DbAdminAuditLog)
+        .filter(DbAdminAuditLog.action == 'admin.impersonation.stop')
+        .order_by(DbAdminAuditLog.pk.desc())
+        .first()
+    )
+    assert db.query(DbAdminAuditLog).count() == before + 1
+    assert row.target_user_pk is None
+    assert row.detail == {'ended': 0}
+
+
+def test_a_second_start_leaves_the_first_session_live(test_client: TestClient):
+    first_target = test_client.first_user
+    second_target = test_client.second_user
+    first_headers = _impersonating(test_client, first_target)
+    second_headers = _impersonating(test_client, second_target)
+
+    probe_first = f'/v1/users/{first_target.id}'
+    probe_second = f'/v1/users/{second_target.id}'
+    assert test_client.get(probe_first, headers=first_headers).status_code == 200
+    assert test_client.get(probe_second, headers=second_headers).status_code == 200
+
+    stop = test_client.delete('/v1/admin/impersonation', headers=_admin(test_client))
+    assert stop.status_code == 200
+    assert stop.json() == {'ended': 2}
+    assert test_client.get(probe_first, headers=first_headers).status_code == 403
+    assert test_client.get(probe_second, headers=second_headers).status_code == 403
+
+
+def test_denied_admin_route_while_impersonating_is_attributed_to_the_admin(
+    test_client: TestClient,
+):
+    """
+    The bug: the denial middleware re-decodes the raw token to attribute a
+    request that never reached a handler, and an impersonation token's
+    resolved identity is the swapped-in target - so without the fix, this
+    denial would land on the TARGET's permanent audit record instead of
+    the admin who was actually at the keyboard.
+    """
+    target = test_client.first_user
+    headers = _impersonating(test_client, target)
+    db = test_client.test_db_session
+    before = db.query(DbAdminAuditLog).count()
+
+    resp = test_client.get('/v1/admin/users', headers=headers)
+    assert resp.status_code == 403
+
+    db.expire_all()
+    row = db.query(DbAdminAuditLog).order_by(DbAdminAuditLog.pk.desc()).first()
+    assert db.query(DbAdminAuditLog).count() == before + 1
+    assert row.action == 'admin.access'
+    assert row.result == 'denied'
+    assert row.actor_user_pk == test_client.admin_user.pk
+    assert row.actor_user_pk != target.pk
+    assert row.detail == {'via_impersonation': True}
+
+
+def test_sign_out_ends_a_live_impersonation_session(test_client: TestClient):
+    admin_signin = test_client.post(
+        '/v1/auth/token',
+        files={
+            'username': (None, test_client.admin_user.email),
+            'password': (None, test_client.admin_user.plain_password),
+        },
+    )
+    assert admin_signin.status_code == 200
+    admin_refresh_token = admin_signin.json()['refresh_token']
+
+    headers = _impersonating(test_client, test_client.first_user)
+    probe = f'/v1/users/{test_client.first_user.id}'
+    assert test_client.get(probe, headers=headers).status_code == 200
+
+    logout = test_client.post(
+        '/v1/auth/logout', json={'refresh_token': admin_refresh_token}
+    )
+    assert logout.status_code == 204
+
+    assert test_client.get(probe, headers=headers).status_code == 403
+
+
+def test_get_optional_current_user_under_impersonation_serves_the_target(
+    test_client: TestClient,
+):
+    """
+    ``GET /v1/public/{handle}`` resolves its optional viewer through
+    ``get_optional_current_user``, the one dependency in this file not
+    exercised by the other tests. Now that ``request`` is a required,
+    forwarded parameter there instead of an omitted one, it must not error
+    - and the resolved viewer must be the TARGET (a private profile is
+    visible to its own owner, but not to a stranger), proving the swap
+    reaches this second entry point too, not just ``get_current_user``.
+    """
+    target = test_client.first_user
+    target.handle = 'impersonation-optional-probe'
+    target.visibility_profile = 'private'
+    db = test_client.test_db_session
+    db.commit()
+
+    admin_headers = _admin(test_client)
+    as_admin = test_client.get(f'/v1/public/{target.handle}', headers=admin_headers)
+    assert as_admin.status_code == 404
+
+    headers = _impersonating(test_client, target)
+    as_target = test_client.get(f'/v1/public/{target.handle}', headers=headers)
+    assert as_target.status_code == 200
 
 
 def test_a_non_admin_cannot_start_impersonation(test_client: TestClient):

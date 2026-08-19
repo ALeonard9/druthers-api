@@ -44,6 +44,9 @@ ALLOWED_DETAIL_FIELDS = frozenset(
         'target_filter',
         'action_filter',
         'reason',
+        'session_id',
+        'ended',
+        'via_impersonation',
     }
 )
 
@@ -134,7 +137,9 @@ def record(  # pylint: disable=too-many-arguments
     return row
 
 
-def resolve_actor_best_effort(request: Request, db: Session) -> Optional[DbUser]:
+def resolve_actor_best_effort(
+    request: Request, db: Session
+) -> tuple[Optional[DbUser], bool]:
     """
     Best-effort bearer-token resolution for a request that never reached a
     route handler, used only to attribute a denied admin request in the
@@ -145,25 +150,39 @@ def resolve_actor_best_effort(request: Request, db: Session) -> Optional[DbUser]
     bumps and commits ``last_used_at`` as a matter of course on every real
     request.
 
+    Returns ``(actor, via_impersonation)``. An impersonation token's
+    resolved identity is the swapped-in TARGET, not the caller - if this
+    attributed a denial to that resolved identity the way the normal auth
+    path does, a denied admin-route probe made while impersonating would
+    land on the innocent target's permanent audit record and hide the
+    acting admin behind it. So an impersonation token is attributed to the
+    admin named in its ``act`` claim instead, decoded directly rather than
+    through the normal resolver (which would apply the read-only write-block
+    and other session checks that do not matter for mere attribution, and
+    would return the target regardless).
+
     A 403 or 401 on ``/v1/admin/*`` is the only case this is called for. A
     403 always follows a successful token resolution (an invalid/missing
     token fails earlier as a 401), so this succeeds whenever it's called for
     one; a 401 means resolution already failed once, so this fails closed
-    (returns ``None``) the same way rather than raise - losing one denial's
-    actor is far cheaper than a 500 in a piece of logging middleware.
+    (returns ``(None, False)``) the same way rather than raise - losing one
+    denial's actor is far cheaper than a 500 in a piece of logging
+    middleware.
     """
     # Local imports: keeps this module's import surface centered on the
     # audit table rather than the whole auth stack.
     from app.auth.oauth2 import (  # pylint: disable=import-outside-toplevel
         API_KEY_PREFIX,
+        IMPERSONATION_TOKEN_TYPE,
         _user_from_access_token,
+        decode_token_payload_best_effort,
         hash_api_key,
     )
     from app.db.models import DbApiKey  # pylint: disable=import-outside-toplevel
 
     auth_header = request.headers.get('authorization', '')
     if not auth_header.lower().startswith('bearer '):
-        return None
+        return None, False
     token = auth_header[len('bearer ') :]
     try:
         if token.startswith(API_KEY_PREFIX):
@@ -172,7 +191,23 @@ def resolve_actor_best_effort(request: Request, db: Session) -> Optional[DbUser]
                 .filter(DbApiKey.key_hash == hash_api_key(token))
                 .first()
             )
-            return row.user if row else None
-        return _user_from_access_token(token, db, ValueError('unresolvable actor'))[0]
+            return (row.user if row else None), False
+
+        payload = decode_token_payload_best_effort(token)
+        if payload is not None and payload.get('typ') == IMPERSONATION_TOKEN_TYPE:
+            admin_id = payload.get('act')
+            admin = (
+                db.query(DbUser).filter(DbUser.id == admin_id).first()
+                if admin_id
+                else None
+            )
+            return admin, True
+
+        return (
+            _user_from_access_token(
+                token, db, ValueError('unresolvable actor'), request
+            )[0],
+            False,
+        )
     except Exception:  # pylint: disable=broad-exception-caught
-        return None
+        return None, False
