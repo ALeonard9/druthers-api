@@ -56,7 +56,9 @@ def test_admin_denial_is_audited(test_client: TestClient):
     db = test_client.test_db_session
     before = db.query(DbAdminAuditLog).count()
 
-    resp = test_client.get('/v1/admin/users', headers=_as(test_client.first_user))
+    headers = _as(test_client.first_user)
+    headers['X-Forwarded-For'] = '203.0.113.9'
+    resp = test_client.get('/v1/admin/users', headers=headers)
     assert resp.status_code == 403
 
     db.expire_all()
@@ -65,8 +67,36 @@ def test_admin_denial_is_audited(test_client: TestClient):
     row = rows[0]
     assert row.result == 'denied'
     assert row.actor_user_pk == test_client.first_user.pk
+    assert row.actor_user_id == test_client.first_user.id
+    assert row.actor_email == test_client.first_user.email
     assert row.path == '/v1/admin/users'
     assert row.status_code == 403
+    assert row.request_id
+    # Rightmost X-Forwarded-For hop (rate_limit.client_ip's convention), not
+    # the connecting peer - behind Cloud Run/Cloudflare that peer is always
+    # the ingress proxy, never the real caller.
+    assert row.source_ip == '203.0.113.9'
+
+
+def test_admin_anonymous_probe_is_audited(test_client: TestClient):
+    """
+    A 401 (missing/expired token) is a denial too - a prober who never even
+    authenticates is exactly the case an admin surface's audit trail should
+    not go blind on.
+    """
+    db = test_client.test_db_session
+    before = db.query(DbAdminAuditLog).count()
+
+    resp = test_client.get('/v1/admin/users')
+    assert resp.status_code == 401
+
+    db.expire_all()
+    rows = db.query(DbAdminAuditLog).order_by(DbAdminAuditLog.pk.desc()).all()
+    assert len(rows) == before + 1
+    row = rows[0]
+    assert row.result == 'denied'
+    assert row.actor_user_pk is None
+    assert row.status_code == 401
 
 
 def test_admin_search_by_display_name_handle_and_email(test_client: TestClient):
@@ -103,6 +133,15 @@ def test_admin_search_pagination_and_total(test_client: TestClient, test_create_
     test_create_user(test_client, user_count=5)
     db = test_client.test_db_session
     expected_total = db.query(DbUser).count()
+    # Same tiebreaker as the endpoint (created_at desc, pk desc) - a
+    # secondary sort on a non-unique created_at, so this is the one order
+    # the endpoint is allowed to return, not just "an" order.
+    expected_ids = [
+        user.id
+        for user in db.query(DbUser)
+        .order_by(DbUser.created_at.desc(), DbUser.pk.desc())
+        .all()
+    ]
 
     first_page = test_client.get(
         '/v1/admin/users', headers=_admin(test_client), params={'limit': 2, 'offset': 0}
@@ -112,12 +151,12 @@ def test_admin_search_pagination_and_total(test_client: TestClient, test_create_
     assert body['total'] == expected_total
     assert body['limit'] == 2
     assert body['offset'] == 0
-    assert len(body['users']) == 2
+    assert [u['id'] for u in body['users']] == expected_ids[0:2]
 
     second_page = test_client.get(
         '/v1/admin/users', headers=_admin(test_client), params={'limit': 2, 'offset': 2}
     )
-    assert second_page.json()['users'] != first_page.json()['users']
+    assert [u['id'] for u in second_page.json()['users']] == expected_ids[2:4]
 
 
 def test_admin_user_detail_aggregates(test_client: TestClient, test_create_user):
@@ -185,6 +224,7 @@ def test_admin_reads_are_audited(test_client: TestClient):
     assert search_row.result == 'allowed'
     assert search_row.actor_user_pk == test_client.admin_user.pk
     assert search_row.status_code == 200
+    assert search_row.request_id
 
     view_row = (
         db.query(DbAdminAuditLog)
@@ -196,6 +236,9 @@ def test_admin_reads_are_audited(test_client: TestClient):
     assert view_row.target_user_pk == target.pk
     assert view_row.target_email == target.email
     assert view_row.status_code == 200
+    assert view_row.request_id
+    # Same request never reused the search's id - each carries its own.
+    assert view_row.request_id != search_row.request_id
 
 
 def test_admin_datetime_fields_carry_a_utc_designator(test_client: TestClient):
@@ -246,4 +289,34 @@ def test_admin_audit_trail_lists_and_filters(test_client: TestClient):
     assert event['actor']['id'] == test_client.admin_user.id
     assert event['method'] == 'GET'
     assert event['path'] == f'/v1/admin/users/{target.id}'
-    assert event['status_code'] is None or isinstance(event['status_code'], int)
+    assert event['status_code'] == 200
+    assert event['request_id']
+
+
+def test_admin_audit_trail_excludes_its_own_reads_by_default(test_client: TestClient):
+    """
+    Reading the trail is itself audited (``admin.audit.view``), but the
+    default (unfiltered) listing must not include those rows - otherwise
+    paging through the trail during an investigation keeps pushing the
+    events under investigation off page one.
+    """
+    # At least one admin.audit.view row to try to hide.
+    test_client.get('/v1/admin/audit', headers=_admin(test_client))
+
+    default_view = test_client.get('/v1/admin/audit', headers=_admin(test_client))
+    assert default_view.status_code == 200
+    actions = {event['action'] for event in default_view.json()['events']}
+    assert 'admin.audit.view' not in actions
+
+    # Still retrievable when asked for explicitly.
+    filtered_view = test_client.get(
+        '/v1/admin/audit',
+        headers=_admin(test_client),
+        params={'action': 'admin.audit.view'},
+    )
+    assert filtered_view.status_code == 200
+    assert filtered_view.json()['total'] >= 1
+    assert all(
+        event['action'] == 'admin.audit.view'
+        for event in filtered_view.json()['events']
+    )

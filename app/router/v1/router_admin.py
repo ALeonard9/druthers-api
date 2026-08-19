@@ -166,14 +166,20 @@ def search_users(  # pylint: disable=too-many-arguments, too-many-positional-arg
             )
         )
     total = query.count()
-    rows = query.order_by(DbUser.created_at.desc()).offset(offset).limit(limit).all()
+    # created_at alone is not unique - a secondary sort on pk keeps paging
+    # stable instead of occasionally skipping or repeating a row that ties.
+    rows = (
+        query.order_by(DbUser.created_at.desc(), DbUser.pk.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
 
     admin_audit.record(
-        db,
+        request,
         actor=current_user[0],
         action='admin.user.search',
         result=AdminAuditResult.ALLOWED,
-        request=request,
         detail={'q': q, 'limit': limit, 'offset': offset, 'total': total},
         # These three routes are read-only and either return this exact
         # 200 or raise before reaching this call (get_user_detail's 404),
@@ -201,12 +207,11 @@ def get_user_detail(
     last_tracked_at = _last_tracked_bulk(db, [user.pk])[user.pk]
 
     admin_audit.record(
-        db,
+        request,
         actor=current_user[0],
         target=user,
         action='admin.user.view',
         result=AdminAuditResult.ALLOWED,
-        request=request,
         status_code=200,
     )
     return OutAdminUserDetail(
@@ -244,11 +249,18 @@ def get_user_detail(
 
 
 def _audit_actor_out(row: DbAdminAuditLog) -> Optional[OutAdminAuditActor]:
-    if row.actor is None:
-        return None
-    return OutAdminAuditActor(
-        id=row.actor.id, handle=row.actor.handle, email=row.actor.email
-    )
+    if row.actor is not None:
+        return OutAdminAuditActor(
+            id=row.actor.id, handle=row.actor.handle, email=row.actor.email
+        )
+    if row.actor_user_id or row.actor_email:
+        # The actor row is gone (self-delete is permitted); fall back to
+        # what was denormalized at write time so the row still names who
+        # did it instead of going anonymous.
+        return OutAdminAuditActor(
+            id=row.actor_user_id, handle=None, email=row.actor_email
+        )
+    return None
 
 
 def _audit_target_out(row: DbAdminAuditLog) -> Optional[OutAdminAuditTarget]:
@@ -280,8 +292,18 @@ def list_audit(  # pylint: disable=too-many-arguments, too-many-positional-argum
     limit, offset = _clamp_page(limit, offset)
     query = db.query(DbAdminAuditLog)
     if actor:
-        query = query.join(DbUser, DbAdminAuditLog.actor_user_pk == DbUser.pk).filter(
-            or_(DbUser.handle == actor, DbUser.email == actor, DbUser.id == actor)
+        # outerjoin, not join: an actor whose account is gone (SET NULL on
+        # delete) still has to be findable by the denormalized fields below.
+        query = query.outerjoin(
+            DbUser, DbAdminAuditLog.actor_user_pk == DbUser.pk
+        ).filter(
+            or_(
+                DbUser.handle == actor,
+                DbUser.email == actor,
+                DbUser.id == actor,
+                DbAdminAuditLog.actor_user_id == actor,
+                DbAdminAuditLog.actor_email == actor,
+            )
         )
     if target:
         query = query.filter(
@@ -292,21 +314,28 @@ def list_audit(  # pylint: disable=too-many-arguments, too-many-positional-argum
         )
     if action:
         query = query.filter(DbAdminAuditLog.action == action)
+    else:
+        # Reading the trail is itself an audited action (below). Without
+        # this, paging through the trail during an investigation pushes the
+        # very events under investigation off page one. Still writable and
+        # still retrievable - just excluded from the unfiltered default view.
+        query = query.filter(DbAdminAuditLog.action != 'admin.audit.view')
 
     total = query.count()
+    # created_at alone is not unique - a secondary sort on pk keeps paging
+    # stable instead of occasionally skipping or repeating a row that ties.
     rows = (
-        query.order_by(DbAdminAuditLog.created_at.desc())
+        query.order_by(DbAdminAuditLog.created_at.desc(), DbAdminAuditLog.pk.desc())
         .offset(offset)
         .limit(limit)
         .all()
     )
 
     admin_audit.record(
-        db,
+        request,
         actor=current_user[0],
         action='admin.audit.view',
         result=AdminAuditResult.ALLOWED,
-        request=request,
         detail={
             'limit': limit,
             'offset': offset,

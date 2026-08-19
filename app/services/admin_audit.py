@@ -12,14 +12,17 @@ because it happened to be sitting in the same dict as something worth
 recording - it has to be named in :data:`ALLOWED_DETAIL_FIELDS` first.
 """
 
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from enum import StrEnum
-from typing import Optional
+from typing import Iterator, Optional
 
 from fastapi import Request
 from sqlalchemy.orm import Session
 
+from app.db.database import get_db
 from app.db.models import DbAdminAuditLog, DbUser
+from app.services.rate_limit import client_ip
 
 
 class AdminAuditResult(StrEnum):
@@ -54,43 +57,71 @@ def _redact(detail: Optional[dict]) -> Optional[dict]:
     return allowed or None
 
 
+@contextmanager
+def _short_lived_session(request: Request) -> Iterator[Session]:
+    """
+    A session of its own for the audit write, resolved the same way FastAPI
+    resolves ``get_db`` (so a test's ``dependency_overrides`` is honored,
+    and the write lands in the same database the caller is using).
+
+    Writing through the caller's own request-scoped session would work, but
+    that session has ``expire_on_commit=True`` (the default on
+    ``SessionLocal``): committing on it invalidates every ORM object the
+    caller already loaded, so the next attribute access on any of them
+    refetches one row at a time. In ``search_users`` that turned the bulk
+    aggregate queries this router exists to batch into one query per user
+    again. A short-lived session sidesteps that entirely, and as a bonus
+    means the audit row still gets written even if the caller's own
+    transaction later rolls back.
+    """
+    db_dependency = request.app.dependency_overrides.get(get_db, get_db)
+    generator = db_dependency()
+    try:
+        session = next(generator)
+    except StopIteration as exc:
+        # PEP 479: an un-caught StopIteration inside this generator function
+        # (this is a @contextmanager) becomes a confusing RuntimeError -
+        # translate it into a real error about what actually went wrong.
+        raise RuntimeError('get_db dependency yielded no session') from exc
+    try:
+        yield session
+    finally:
+        next(generator, None)
+
+
 def record(  # pylint: disable=too-many-arguments
-    db: Session,
+    request: Request,
     *,
     actor: Optional[DbUser],
     action: str,
     result: AdminAuditResult,
-    request: Optional[Request] = None,
     target: Optional[DbUser] = None,
     detail: Optional[dict] = None,
     status_code: Optional[int] = None,
 ) -> DbAdminAuditLog:
-    """
-    Write one audit row and commit it immediately.
-
-    Committed on its own rather than folded into the caller's transaction:
-    the trail has to survive even if the surrounding request later rolls
-    back, and it must never be the reason a read endpoint fails.
-    """
+    """Write one audit row, on its own short-lived session, and commit it."""
     row = DbAdminAuditLog(
         actor_user_pk=actor.pk if actor else None,
+        actor_user_id=actor.id if actor else None,
+        actor_email=actor.email if actor else None,
         target_user_pk=target.pk if target else None,
         target_user_id=target.id if target else None,
         target_email=target.email if target else None,
         action=action,
         result=AdminAuditResult(result).value,
         detail=_redact(detail),
-        request_id=getattr(request.state, 'request_id', None) if request else None,
-        method=request.method if request else None,
-        path=request.url.path if request else None,
+        request_id=getattr(request.state, 'request_id', None),
+        method=request.method,
+        path=request.url.path,
         status_code=status_code,
-        source_ip=request.client.host if request and request.client else None,
-        user_agent=request.headers.get('user-agent') if request else None,
+        source_ip=client_ip(request),
+        user_agent=request.headers.get('user-agent'),
         created_at=datetime.now(timezone.utc),
     )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
+    with _short_lived_session(request) as audit_db:
+        audit_db.add(row)
+        audit_db.commit()
+        audit_db.refresh(row)
     return row
 
 
@@ -98,29 +129,41 @@ def resolve_actor_best_effort(request: Request, db: Session) -> Optional[DbUser]
     """
     Best-effort bearer-token resolution for a request that never reached a
     route handler, used only to attribute a denied admin request in the
-    audit log. A 403 from :func:`app.auth.oauth2.require_admin` only ever
-    follows a *successful* :func:`app.auth.oauth2.get_current_user`
-    resolution (an invalid/missing token fails earlier, with a 401), so this
-    is expected to succeed whenever it is called; it still fails closed
-    (returns ``None``) rather than raise, since losing one denial's actor is
-    far cheaper than a 500 in a piece of logging middleware.
+    audit log. Deliberately read-only: unlike the normal auth path, this
+    must never have a side effect on the credential it is only trying to
+    attribute, so it looks up an API key directly instead of going through
+    :func:`app.auth.oauth2.get_current_user`'s ``_user_from_api_key`, which
+    bumps and commits ``last_used_at`` as a matter of course on every real
+    request.
+
+    A 403 or 401 on ``/v1/admin/*`` is the only case this is called for. A
+    403 always follows a successful token resolution (an invalid/missing
+    token fails earlier as a 401), so this succeeds whenever it's called for
+    one; a 401 means resolution already failed once, so this fails closed
+    (returns ``None``) the same way rather than raise - losing one denial's
+    actor is far cheaper than a 500 in a piece of logging middleware.
     """
-    # Local import: keeps this module's import surface centered on the audit
-    # table rather than the whole auth stack.
+    # Local imports: keeps this module's import surface centered on the
+    # audit table rather than the whole auth stack.
     from app.auth.oauth2 import (  # pylint: disable=import-outside-toplevel
         API_KEY_PREFIX,
         _user_from_access_token,
-        _user_from_api_key,
+        hash_api_key,
     )
+    from app.db.models import DbApiKey  # pylint: disable=import-outside-toplevel
 
     auth_header = request.headers.get('authorization', '')
     if not auth_header.lower().startswith('bearer '):
         return None
     token = auth_header[len('bearer ') :]
-    unresolvable = ValueError('unresolvable actor')
     try:
         if token.startswith(API_KEY_PREFIX):
-            return _user_from_api_key(token, db, unresolvable)[0]
-        return _user_from_access_token(token, db, unresolvable)[0]
+            row = (
+                db.query(DbApiKey)
+                .filter(DbApiKey.key_hash == hash_api_key(token))
+                .first()
+            )
+            return row.user if row else None
+        return _user_from_access_token(token, db, ValueError('unresolvable actor'))[0]
     except Exception:  # pylint: disable=broad-exception-caught
         return None

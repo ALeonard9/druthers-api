@@ -31,6 +31,8 @@ def upgrade() -> None:
     op.create_table(
         'admin_audit_log',
         sa.Column('actor_user_pk', sa.Integer(), nullable=True),
+        sa.Column('actor_user_id', sa.String(), nullable=True),
+        sa.Column('actor_email', sa.String(), nullable=True),
         sa.Column('target_user_pk', sa.Integer(), nullable=True),
         sa.Column('target_user_id', sa.String(), nullable=True),
         sa.Column('target_email', sa.String(), nullable=True),

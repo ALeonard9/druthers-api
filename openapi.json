@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "druthers.io API local",
-    "description": "API for druthers.io \u2014 track and rank the movies, TV, books, and games you actually care about.",
+    "description": "API for druthers.io - track and rank the movies, TV, books, and games you actually care about.",
     "contact": {
       "name": "Druthers",
       "url": "https://www.druthers.io/"
@@ -72,7 +72,7 @@
           "authentication"
         ],
         "summary": "Google Login",
-        "description": "Sign in with a Google Identity Services ID token.\n\nVerifies the token against the configured Google client id, then upserts the\nuser (creating one on first sign-in) and returns a JWT \u2014 the same shape as\nthe password flow.",
+        "description": "Sign in with a Google Identity Services ID token.\n\nVerifies the token against the configured Google client id, then upserts the\nuser (creating one on first sign-in) and returns a JWT - the same shape as\nthe password flow.",
         "operationId": "google_login_v1_auth_google_post",
         "requestBody": {
           "content": {
@@ -156,7 +156,7 @@
           "authentication"
         ],
         "summary": "Logout",
-        "description": "Sign out server-side: the refresh token and its family stop working.\n\nDeliberately 204 whether or not the token was recognised \u2014 sign-out must\nnot depend on the client still holding a valid credential, and the status\nshouldn't reveal whether a guessed token existed.",
+        "description": "Sign out server-side: the refresh token and its family stop working.\n\nDeliberately 204 whether or not the token was recognised - sign-out must\nnot depend on the client still holding a valid credential, and the status\nshouldn't reveal whether a guessed token existed.",
         "operationId": "logout_v1_auth_logout_post",
         "requestBody": {
           "content": {
@@ -409,17 +409,72 @@
         ],
         "summary": "Get All Movies",
         "operationId": "get_all_movies_v1_movies_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tmdb",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tmdb"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 25,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/MovieResponse"
                   },
-                  "type": "array",
                   "title": "Response Get All Movies V1 Movies Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -432,15 +487,20 @@
         ],
         "summary": "Create Movie",
         "operationId": "create_movie_v1_movies_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/MovieCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -463,12 +523,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       }
     },
     "/v1/movies/search": {
@@ -669,7 +724,7 @@
           "Movies"
         ],
         "summary": "Get Movie Watch Providers",
-        "description": "Where this movie can be streamed, rented or bought in ``region`` (web#26).\n\nLive TMDB/JustWatch data, not catalog data, so nothing here is stored. A\nmovie with no availability \u2014 or one the backfill never keyed onto TMDB \u2014\nreturns empty buckets rather than an error; only an unknown movie 404s.",
+        "description": "Where this movie can be streamed, rented or bought in ``region`` (web#26).\n\nLive TMDB/JustWatch data, not catalog data, so nothing here is stored. A\nmovie with no availability - or one the backfill never keyed onto TMDB -\nreturns empty buckets rather than an error; only an unknown movie 404s.",
         "operationId": "get_movie_watch_providers_v1_movies__movie_id__watch_providers_get",
         "security": [
           {
@@ -796,6 +851,55 @@
               "title": "Offset"
             },
             "description": "Entries to skip"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^-?(rank|title|completed_at)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Order by rank, title, or completed_at; prefix with - for descending",
+              "title": "Sort"
+            },
+            "description": "Order by rank, title, or completed_at; prefix with - for descending"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive substring match against the title",
+              "title": "Search"
+            },
+            "description": "Case-insensitive substring match against the title"
+          },
+          {
+            "name": "include_total",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Return an {items, total, limit, offset} envelope instead of the legacy array response",
+              "default": false,
+              "title": "Include Total"
+            },
+            "description": "Return an {items, total, limit, offset} envelope instead of the legacy array response"
           }
         ],
         "responses": {
@@ -804,10 +908,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/UserMovieResponse"
-                  },
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/UserMovieResponse"
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/TrackerListPage_UserMovieResponse_"
+                    }
+                  ],
                   "title": "Response Get User Movies V1 Users Me Movies Get"
                 }
               }
@@ -878,7 +989,7 @@
           "Movies"
         ],
         "summary": "Mark Movie",
-        "description": "Add a movie to the user's lists (idempotent \u2014 merges list membership).",
+        "description": "Add a movie to the user's lists (idempotent - merges list membership).",
         "operationId": "mark_movie_v1_users_me_movies__movie_id__post",
         "security": [
           {
@@ -1140,17 +1251,72 @@
         ],
         "summary": "Get All Games",
         "operationId": "get_all_games_v1_games_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "igdb",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Igdb"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 25,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/VideoGameSummary"
                   },
-                  "type": "array",
                   "title": "Response Get All Games V1 Games Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1163,15 +1329,20 @@
         ],
         "summary": "Create Game",
         "operationId": "create_game_v1_games_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/VideoGameCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -1194,12 +1365,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       }
     },
     "/v1/games/search": {
@@ -1469,6 +1635,55 @@
               "title": "Offset"
             },
             "description": "Entries to skip"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^-?(rank|title|completed_at)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Order by rank, title, or completed_at; prefix with - for descending",
+              "title": "Sort"
+            },
+            "description": "Order by rank, title, or completed_at; prefix with - for descending"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive substring match against the title",
+              "title": "Search"
+            },
+            "description": "Case-insensitive substring match against the title"
+          },
+          {
+            "name": "include_total",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Return an {items, total, limit, offset} envelope instead of the legacy array response",
+              "default": false,
+              "title": "Include Total"
+            },
+            "description": "Return an {items, total, limit, offset} envelope instead of the legacy array response"
           }
         ],
         "responses": {
@@ -1477,10 +1692,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/UserVideoGameResponse"
-                  },
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/UserVideoGameResponse"
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/TrackerListPage_UserVideoGameResponse_"
+                    }
+                  ],
                   "title": "Response Get User Games V1 Users Me Games Get"
                 }
               }
@@ -1602,7 +1824,7 @@
           "Video Games"
         ],
         "summary": "Mark Game",
-        "description": "Add a game to the user's lists (idempotent \u2014 merges list membership).",
+        "description": "Add a game to the user's lists (idempotent - merges list membership).",
         "operationId": "mark_game_v1_users_me_games__game_id__post",
         "security": [
           {
@@ -1813,17 +2035,88 @@
         ],
         "summary": "Get All Books",
         "operationId": "get_all_books_v1_books_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "googleid",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Googleid"
+            }
+          },
+          {
+            "name": "isbn",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Isbn"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 25,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/BookSummary"
                   },
-                  "type": "array",
                   "title": "Response Get All Books V1 Books Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1836,15 +2129,20 @@
         ],
         "summary": "Create Book",
         "operationId": "create_book_v1_books_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/BookCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -1867,12 +2165,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       }
     },
     "/v1/books/search": {
@@ -2142,6 +2435,55 @@
               "title": "Offset"
             },
             "description": "Entries to skip"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^-?(rank|title|completed_at)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Order by rank, title, or completed_at; prefix with - for descending",
+              "title": "Sort"
+            },
+            "description": "Order by rank, title, or completed_at; prefix with - for descending"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive substring match against the title",
+              "title": "Search"
+            },
+            "description": "Case-insensitive substring match against the title"
+          },
+          {
+            "name": "include_total",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Return an {items, total, limit, offset} envelope instead of the legacy array response",
+              "default": false,
+              "title": "Include Total"
+            },
+            "description": "Return an {items, total, limit, offset} envelope instead of the legacy array response"
           }
         ],
         "responses": {
@@ -2150,10 +2492,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/UserBookResponse"
-                  },
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/UserBookResponse"
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/TrackerListPage_UserBookResponse_"
+                    }
+                  ],
                   "title": "Response Get User Books V1 Users Me Books Get"
                 }
               }
@@ -2275,7 +2624,7 @@
           "Books"
         ],
         "summary": "Mark Book",
-        "description": "Add a book to the user's lists (idempotent \u2014 merges list membership).",
+        "description": "Add a book to the user's lists (idempotent - merges list membership).",
         "operationId": "mark_book_v1_users_me_books__book_id__post",
         "security": [
           {
@@ -2486,17 +2835,88 @@
         ],
         "summary": "Get All Tv Shows",
         "operationId": "get_all_tv_shows_v1_tv_shows_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tvmaze",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tvmaze"
+            }
+          },
+          {
+            "name": "imdb",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Imdb"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 25,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/TVShowSummary"
                   },
-                  "type": "array",
                   "title": "Response Get All Tv Shows V1 Tv Shows Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -2509,15 +2929,20 @@
         ],
         "summary": "Create Tv Show",
         "operationId": "create_tv_show_v1_tv_shows_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/TVShowCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -2540,12 +2965,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       }
     },
     "/v1/tv-shows/search": {
@@ -2805,6 +3225,11 @@
         ],
         "summary": "Get All Episodes",
         "operationId": "get_all_episodes_v1_tv_shows__show_id__episodes_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "show_id",
@@ -3121,6 +3546,55 @@
               "title": "Offset"
             },
             "description": "Entries to skip"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^-?(rank|title|completed_at)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Order by rank, title, or completed_at; prefix with - for descending",
+              "title": "Sort"
+            },
+            "description": "Order by rank, title, or completed_at; prefix with - for descending"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive substring match against the title",
+              "title": "Search"
+            },
+            "description": "Case-insensitive substring match against the title"
+          },
+          {
+            "name": "include_total",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Return an {items, total, limit, offset} envelope instead of the legacy array response",
+              "default": false,
+              "title": "Include Total"
+            },
+            "description": "Return an {items, total, limit, offset} envelope instead of the legacy array response"
           }
         ],
         "responses": {
@@ -3129,10 +3603,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/UserTVShowWithStatus"
-                  },
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/UserTVShowWithStatus"
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/TrackerListPage_UserTVShowWithStatus_"
+                    }
+                  ],
                   "title": "Response Get User Tv Shows V1 Users Me Tv Shows Get"
                 }
               }
@@ -3157,7 +3638,7 @@
           "TV"
         ],
         "summary": "Get Schedule",
-        "description": "What to watch: unwatched episodes airing within +/- ``window_days`` of\ntoday, everything overdue and unwatched (catch-up), and shows the user\nhas frozen (paused tracking on, so they're excluded from both).",
+        "description": "What to watch: unwatched episodes airing within +/- ``window_days`` of\ntoday, everything overdue and unwatched (catch-up), and shows the user\nhas frozen (paused tracking on, so they're excluded from both).\n\n\"Today\" is the caller's own calendar day (their ``time_zone``\npreference, falling back to the deployment's ``TIME_ZONE``), so the\nwindow turns over at their midnight rather than the server's.",
         "operationId": "get_schedule_v1_users_me_schedule_get",
         "security": [
           {
@@ -3303,7 +3784,7 @@
           "TV"
         ],
         "summary": "Mark Tv Show",
-        "description": "Add a show to the user's lists (idempotent \u2014 merges list membership).",
+        "description": "Add a show to the user's lists (idempotent - merges list membership).",
         "operationId": "mark_tv_show_v1_users_me_tv_shows__show_id__post",
         "security": [
           {
@@ -3868,6 +4349,74 @@
         }
       }
     },
+    "/v1/users/me/feed": {
+      "get": {
+        "tags": [
+          "Activity"
+        ],
+        "summary": "Get Social Activity",
+        "description": "Recent ranking and watchlist activity from friends and followed users.\n\nRelationships and the owner's current sharing tiers are joined into each\nshelf query. Nothing about visibility is copied onto a tracker row, so an\nunfriend, unfollow, opt-out, or tier reduction takes effect on old entries\nimmediately. Keyset paging avoids an increasingly expensive offset scan\nas a caller moves deeper into the feed.",
+        "operationId": "get_social_activity_v1_users_me_feed_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SocialActivityPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/users/me/bored": {
       "get": {
         "tags": [
@@ -4131,6 +4680,53 @@
         }
       }
     },
+    "/v1/search/users": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Search Users Route",
+        "operationId": "search_users_route_v1_search_users_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutUserSearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/users/me/api-keys": {
       "get": {
         "tags": [
@@ -4165,7 +4761,7 @@
           "API keys"
         ],
         "summary": "Create Api Key",
-        "description": "Mint a new key. The plaintext secret is in this response and nowhere\nelse \u2014 it is never stored or shown again.",
+        "description": "Mint a new key. The plaintext secret is in this response and nowhere\nelse - it is never stored or shown again.",
         "operationId": "create_api_key_v1_users_me_api_keys_post",
         "requestBody": {
           "content": {
@@ -4212,7 +4808,7 @@
           "API keys"
         ],
         "summary": "Revoke Api Key",
-        "description": "Revocation is deletion \u2014 the hash is gone, the key can never auth again.",
+        "description": "Revocation is deletion - the hash is gone, the key can never auth again.",
         "operationId": "revoke_api_key_v1_users_me_api_keys__key_id__delete",
         "security": [
           {
@@ -4253,7 +4849,7 @@
           "Export"
         ],
         "summary": "Export Json",
-        "description": "Full-fidelity JSON export of every domain, using the same schemas the\nAPI serves \u2014 anything the UI can show is in here.",
+        "description": "Full-fidelity JSON export of every domain, using the same schemas the\nAPI serves - anything the UI can show is in here.",
         "operationId": "export_json_v1_users_me_export_get",
         "responses": {
           "200": {
@@ -4318,13 +4914,100 @@
         }
       }
     },
+    "/v1/users/me/import/movies/template.csv": {
+      "get": {
+        "tags": [
+          "Import"
+        ],
+        "summary": "Download Movie Csv Template",
+        "description": "Download the movies CSV template.\n\nRequired columns are ``title`` (text, max 255 characters),\n``release_year`` (YYYY), ``tmdb_id`` (positive integer), and\n``watched_date`` (YYYY-MM-DD, not in the future). Every field is required;\ntitle and release year must agree with the referenced TMDB movie. Uploads\nare limited to 5 MiB and 5,000 movie rows.",
+        "operationId": "download_movie_csv_template_v1_users_me_import_movies_template_csv_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/users/me/import/movies/template.xlsx": {
+      "get": {
+        "tags": [
+          "Import"
+        ],
+        "summary": "Download Movie Xlsx Template",
+        "description": "Download the movies XLSX template.\n\nThe Movies sheet has the required upload columns. The Instructions sheet\ndocuments accepted formats, examples, TMDB matching rules, and row limits.",
+        "operationId": "download_movie_xlsx_template_v1_users_me_import_movies_template_xlsx_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/users/me/import/movies": {
+      "post": {
+        "tags": [
+          "Import"
+        ],
+        "summary": "Import Movies",
+        "description": "Validate and atomically import a filled movies CSV or XLSX template.\n\nValidation checks the required columns and values, rejects duplicate TMDB\nIDs, resolves each reference against the local catalog or TMDB, and checks\nthat title and release year identify the same movie. A 422 returns every\nfield error with its source row and performs no writes.\n\nA valid file commits once and returns one outcome per row: ``imported``\nfor a new history tracker, ``matched`` when an existing tracker was\npromoted or completed, and ``skipped`` when it was already present.\nRe-importing the same file is therefore safe and creates no duplicates.",
+        "operationId": "import_movies_v1_users_me_import_movies_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_movies_v1_users_me_import_movies_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MovieImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The complete per-row validation report; no rows were written.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MovieImportResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
     "/v1/users/me/import/goodreads": {
       "post": {
         "tags": [
           "Import"
         ],
         "summary": "Import Goodreads",
-        "description": "Upload the standard Goodreads library export CSV. Idempotent \u2014 re-running\nthe same file updates rather than duplicates. Returns counts plus any\nskipped rows with reasons (nothing is dropped silently).",
+        "description": "Upload the standard Goodreads library export CSV. Idempotent - re-running\nthe same file updates rather than duplicates. Returns counts plus any\nskipped rows with reasons (nothing is dropped silently).",
         "operationId": "import_goodreads_v1_users_me_import_goodreads_post",
         "requestBody": {
           "content": {
@@ -4393,7 +5076,7 @@
           "Visibility"
         ],
         "summary": "Update Visibility",
-        "description": "Update the handle and/or any of the nine visibility tiers.\n\nOnly fields present in the body change. The result has to satisfy both\ninvariants \u2014 a handle for anything non-private, and a profile at least as\nopen as its most-open shelf \u2014 or the whole update is rejected. Both are\nchecked against the *resulting* state before anything is written, so a\nrejection leaves the row exactly as it was.",
+        "description": "Update the handle, activity sharing, and/or any of the nine visibility tiers.\n\nOnly fields present in the body change. The result has to satisfy both\ninvariants - a handle for anything non-private, and a profile at least as\nopen as its most-open shelf - or the whole update is rejected. Both are\nchecked against the *resulting* state before anything is written, so a\nrejection leaves the row exactly as it was.",
         "operationId": "update_visibility_v1_users_me_visibility_put",
         "requestBody": {
           "content": {
@@ -4440,7 +5123,7 @@
           "Visibility"
         ],
         "summary": "Public Profile",
-        "description": "Read-only profile: ranked lists of the categories the owner has opted in,\nbest first, filtered to what *this* caller may see.\n\nAuthentication is optional (#277). Anonymous callers and signed-in\nstrangers get ``public`` and nothing else; an accepted friend also gets\n``friends``; the owner gets everything of their own \u2014 including private\nshelves, and so never a 404 on their own handle \u2014 which is why the\nresponse carries ``viewer.relationship``: a client rendering this page has\nto be able to say *whose* view it is showing. ``viewer.following`` (#276)\nrides alongside it for the same reason \u2014 whether to render a Follow or\nFollowing button \u2014 and is computed only *after* every access decision\nabove has already been made: following is never part of the ceiling a\ncaller is served, only a fact about the payload once that's settled.\n\n**One ceiling, resolved once.** The caller's relationship is turned into a\nsingle tier ceiling before any shelf is read, and every shelf \u2014 ranked\nlist and watchlist alike \u2014 is then compared against that one value. The\nalternative, asking \"is this viewer a friend?\" per shelf, is what lets two\nshelves end up evaluated under different assumptions.\n\n**Nothing visible is indistinguishable from nothing there.** An unknown\nhandle, a profile whose tier is above this caller, and a profile with no\nshelf this caller may see all raise the *same* exception object: same\nstatus, same body, same headers. Since visibility is now\nviewer-dependent, so is the 404 \u2014 a profile a friend can see 404s for\neverybody else exactly as a handle nobody ever claimed does.",
+        "description": "Read-only profile: ranked lists of the categories the owner has opted in,\nbest first, filtered to what *this* caller may see.\n\nAuthentication is optional (#277). Anonymous callers and signed-in\nstrangers get ``public`` and nothing else; an accepted friend also gets\n``friends``; the owner gets everything of their own - including private\nshelves, and so never a 404 on their own handle - which is why the\nresponse carries ``viewer.relationship``: a client rendering this page has\nto be able to say *whose* view it is showing. ``viewer.following`` (#276)\nand ``viewer.friend_request_state`` (#357) ride alongside it for the same\nreason - whether to render a Follow, Following, Add friend, or Request\nsent button - and are computed only *after* every access decision above\nhas already been made. Neither affects the ceiling a caller is served;\nthey are facts about the payload once that is settled.\n\n**One ceiling, resolved once.** The caller's relationship is turned into a\nsingle tier ceiling before any shelf is read, and every shelf - ranked\nlist and watchlist alike - is then compared against that one value. The\nalternative, asking \"is this viewer a friend?\" per shelf, is what lets two\nshelves end up evaluated under different assumptions.\n\n**Nothing visible is indistinguishable from nothing there.** An unknown\nhandle, a profile whose tier is above this caller, and a profile with no\nshelf this caller may see all raise the *same* exception object: same\nstatus, same body, same headers. Since visibility is now\nviewer-dependent, so is the 404 - a profile a friend can see 404s for\neverybody else exactly as a handle nobody ever claimed does. A named\n``shelf`` that doesn't exist, or that this ceiling doesn't admit, folds\ninto the same 404 rather than a distinct error - see #279.\n\n**Depth is viewer-controlled, not owner-controlled** (#279): the owner\npicks a tier, the viewer picks how much of an admitted shelf to read.\n``limit`` clamps to ``MAX_PUBLIC_SHELF_LIMIT`` rather than erroring - a\nshared link has to survive a hand-edited or scraped query string - and\nonly applies once a single ``shelf`` is named; the multi-shelf hub view\nalways gets the small preview size for every shelf.",
         "operationId": "public_profile_v1_public__handle__get",
         "security": [
           {
@@ -4457,10 +5140,180 @@
               "type": "string",
               "title": "Handle"
             }
+          },
+          {
+            "name": "shelf",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Shelf"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "ranked",
+                "watchlist"
+              ],
+              "type": "string",
+              "default": "ranked",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Offset"
+            }
           }
         ],
         "responses": {
           "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me/comparison/{handle}": {
+      "get": {
+        "tags": [
+          "Comparison"
+        ],
+        "summary": "Compare With User",
+        "description": "Return the four domain comparisons visible to this viewer.",
+        "operationId": "compare_with_user_v1_users_me_comparison__handle__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Handle"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me/comparison/{handle}/{category}/{item_id}": {
+      "post": {
+        "tags": [
+          "Comparison"
+        ],
+        "summary": "Save Recommendation",
+        "description": "Save a visible ranked recommendation and retain its first source.",
+        "operationId": "save_recommendation_v1_users_me_comparison__handle___category___item_id__post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Handle"
+            }
+          },
+          {
+            "name": "category",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Category"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveRecommendation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -4511,7 +5364,7 @@
           "Friends"
         ],
         "summary": "Send Friend Request",
-        "description": "Send a friend request to an exact handle.\n\nAlways 202 unless the caller is already a party to the relationship (or\nis the target) \u2014 see the module docstring for why the shape of the\nnon-answers matters as much as the answer.",
+        "description": "Send a friend request to an exact handle.\n\nAlways 202 unless the caller is already a party to the relationship (or\nis the target) - see the module docstring for why the shape of the\nnon-answers matters as much as the answer.",
         "operationId": "send_friend_request_v1_users_me_friends_requests_post",
         "requestBody": {
           "content": {
@@ -4725,7 +5578,7 @@
           "Friends"
         ],
         "summary": "Unfriend",
-        "description": "End a friendship. Symmetric: either side may do this, and one row going\naway ends it for both \u2014 there is no second row to leave behind.",
+        "description": "End a friendship. Symmetric: either side may do this, and one row going\naway ends it for both - there is no second row to leave behind.",
         "operationId": "unfriend_v1_users_me_friends__friendship_id__delete",
         "security": [
           {
@@ -4812,7 +5665,7 @@
           "Follows"
         ],
         "summary": "Unfollow User",
-        "description": "Stop following someone.\n\nDeliberately does not require the target to still be public \u2014 a follow\npersists through a followee tightening their profile (that's the whole\npoint of #276's \"grants nothing, persists anyway\" rule), and the follower\nmust still be able to unfollow after that happens.",
+        "description": "Stop following someone.\n\nDeliberately does not require the target to still be public - a follow\npersists through a followee tightening their profile (that's the whole\npoint of #276's \"grants nothing, persists anyway\" rule), and the follower\nmust still be able to unfollow after that happens.",
         "operationId": "unfollow_user_v1_users_me_following__handle__delete",
         "security": [
           {
@@ -4909,6 +5762,76 @@
         ]
       }
     },
+    "/v1/users/me/preferences": {
+      "get": {
+        "tags": [
+          "Preferences"
+        ],
+        "summary": "Get Preferences",
+        "operationId": "get_preferences_v1_users_me_preferences_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutPreferences"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Preferences"
+        ],
+        "summary": "Update Preferences",
+        "operationId": "update_preferences_v1_users_me_preferences_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InPreferencesUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutPreferences"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
     "/v1/users/me/summary": {
       "get": {
         "tags": [
@@ -4962,6 +5885,236 @@
         }
       }
     },
+    "/v1/admin/users": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Search Users",
+        "description": "Search the directory by display name, handle, or email; paginated.",
+        "operationId": "search_users_v1_admin_users_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutAdminUserListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/users/{uuid}": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get User Detail",
+        "description": "Per-user aggregates: tracked counts, visibility tiers, social counts.",
+        "operationId": "get_user_detail_v1_admin_users__uuid__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutAdminUserDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/audit": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "List Audit",
+        "description": "The audit trail itself: every admin action, allowed or denied.",
+        "operationId": "list_audit_v1_admin_audit_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "actor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor"
+            }
+          },
+          {
+            "name": "target",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutAdminAuditResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/": {
       "get": {
         "tags": [
@@ -4987,6 +6140,42 @@
   },
   "components": {
     "schemas": {
+      "ActivityActor": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handle"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "ActivityActor",
+        "description": "The person whose tracker change produced a social-feed event."
+      },
       "ActivityItem": {
         "properties": {
           "category": {
@@ -5128,6 +6317,20 @@
           "file"
         ],
         "title": "Body_import_goodreads_v1_users_me_import_goodreads_post"
+      },
+      "Body_import_movies_v1_users_me_import_movies_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_movies_v1_users_me_import_movies_post"
       },
       "BookCreate": {
         "properties": {
@@ -5593,7 +6796,7 @@
           "title"
         ],
         "title": "BookSummary",
-        "description": "Lightweight book for list responses \u2014 omits the large ``description``."
+        "description": "Lightweight book for list responses - omits the large ``description``."
       },
       "BookUpdate": {
         "properties": {
@@ -6008,6 +7211,73 @@
         "title": "InFriendRequest",
         "description": "Request body for sending a friend request (#275).\n\nA handle and nothing else: there is no endpoint that lists or searches\nusers, so an exact handle someone told you is the only way to reach them."
       },
+      "InPreferencesUpdate": {
+        "properties": {
+          "ranked_list_length": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RankedListLength"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "onboarding_completed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Onboarding Completed"
+          },
+          "time_zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Zone"
+          },
+          "shelf_order": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shelf Order"
+          },
+          "enabled_shelves": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled Shelves"
+          }
+        },
+        "type": "object",
+        "title": "InPreferencesUpdate",
+        "description": "Request body for display preferences (#122). Only sent fields change."
+      },
       "InRefreshToken": {
         "properties": {
           "refresh_token": {
@@ -6059,6 +7329,16 @@
               }
             ],
             "title": "Handle"
+          },
+          "default_privacy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "visibility_profile": {
             "anyOf": [
@@ -6149,11 +7429,22 @@
                 "type": "null"
               }
             ]
+          },
+          "share_activity": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share Activity"
           }
         },
         "type": "object",
         "title": "InVisibilityUpdate",
-        "description": "Request body for visibility settings (#274). Every setting is a tier \u2014\n``private``, ``friends`` or ``public`` \u2014 not a boolean.\n\nOnly sent fields change; a null handle clears it (allowed only while\neverything is private). An unsent field and an explicit null are both\nleft alone, so a client can PUT one radio button without echoing the\nother eight."
+        "description": "Request body for visibility settings (#274) and activity sharing (#280).\nEvery shelf setting is a ``private``, ``friends`` or ``public`` tier;\n``share_activity`` is the independent whole-feed opt-out.\n\nOnly sent fields change; a null handle clears it (allowed only while\neverything is private). A null shelf tier clears its override and resumes\nusing ``default_privacy``; an omitted field is left alone."
       },
       "MovieCreate": {
         "properties": {
@@ -6322,6 +7613,148 @@
           "title"
         ],
         "title": "MovieCreate"
+      },
+      "MovieImportErrorResponse": {
+        "properties": {
+          "row": {
+            "type": "integer",
+            "title": "Row"
+          },
+          "column": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row",
+          "message"
+        ],
+        "title": "MovieImportErrorResponse",
+        "description": "One field-level template validation error."
+      },
+      "MovieImportResponse": {
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "title": "Valid"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/MovieImportSummaryResponse"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/MovieImportRowResponse"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/MovieImportErrorResponse"
+            },
+            "type": "array",
+            "title": "Errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valid"
+        ],
+        "title": "MovieImportResponse",
+        "description": "Validation failure or per-row outcome report for a movie import."
+      },
+      "MovieImportRowResponse": {
+        "properties": {
+          "row": {
+            "type": "integer",
+            "title": "Row"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "imported",
+              "matched",
+              "skipped"
+            ],
+            "title": "Status"
+          },
+          "tmdb_id": {
+            "type": "integer",
+            "title": "Tmdb Id"
+          },
+          "movie_id": {
+            "type": "string",
+            "title": "Movie Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "catalog_created": {
+            "type": "boolean",
+            "title": "Catalog Created"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row",
+          "status",
+          "tmdb_id",
+          "movie_id",
+          "title",
+          "catalog_created",
+          "message"
+        ],
+        "title": "MovieImportRowResponse",
+        "description": "Outcome for one row after a successful atomic import."
+      },
+      "MovieImportSummaryResponse": {
+        "properties": {
+          "imported": {
+            "type": "integer",
+            "title": "Imported",
+            "default": 0
+          },
+          "matched": {
+            "type": "integer",
+            "title": "Matched",
+            "default": 0
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "MovieImportSummaryResponse"
       },
       "MovieResponse": {
         "properties": {
@@ -6540,6 +7973,17 @@
             ],
             "title": "Year"
           },
+          "release_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Date"
+          },
           "poster_url": {
             "anyOf": [
               {
@@ -6742,7 +8186,7 @@
           "title"
         ],
         "title": "MovieSummary",
-        "description": "Lightweight movie for list responses \u2014 omits the large ``plot`` field."
+        "description": "Lightweight movie for list responses - omits the large ``plot`` field."
       },
       "MovieUpdate": {
         "properties": {
@@ -6983,6 +8427,548 @@
         ],
         "title": "NotificationResponse"
       },
+      "OutAdminAuditActor": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handle"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "title": "OutAdminAuditActor",
+        "description": "Who performed one audit-logged action.\n\n``id`` is optional, not just ``handle``/``email``: the actor's account\ncan be deleted (self-delete is permitted), which SETs ``actor_user_pk``\nNULL - the row falls back to whatever of ``actor_user_id``/\n``actor_email`` was denormalized at write time, and either can be\nmissing if the actor could not be resolved at all (an expired-token\ndenial, for instance)."
+      },
+      "OutAdminAuditEvent": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OutAdminAuditActor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OutAdminAuditTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "result": {
+            "type": "string",
+            "title": "Result"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "status_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "created_at",
+          "action",
+          "result"
+        ],
+        "title": "OutAdminAuditEvent",
+        "description": "One row of ``GET /v1/admin/audit``."
+      },
+      "OutAdminAuditResponse": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/OutAdminAuditEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "limit",
+          "offset",
+          "events"
+        ],
+        "title": "OutAdminAuditResponse",
+        "description": "``GET /v1/admin/audit``."
+      },
+      "OutAdminAuditTarget": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handle"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "title": "OutAdminAuditTarget",
+        "description": "Who one audit-logged action was about, if anyone."
+      },
+      "OutAdminDomainCounts": {
+        "properties": {
+          "ranked": {
+            "type": "integer",
+            "title": "Ranked"
+          },
+          "watchlist": {
+            "type": "integer",
+            "title": "Watchlist"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ranked",
+          "watchlist",
+          "total"
+        ],
+        "title": "OutAdminDomainCounts",
+        "description": "Ranked/watchlist/total for one tracked domain."
+      },
+      "OutAdminSocialCounts": {
+        "properties": {
+          "friends": {
+            "type": "integer",
+            "title": "Friends"
+          },
+          "followers": {
+            "type": "integer",
+            "title": "Followers"
+          },
+          "following": {
+            "type": "integer",
+            "title": "Following"
+          }
+        },
+        "type": "object",
+        "required": [
+          "friends",
+          "followers",
+          "following"
+        ],
+        "title": "OutAdminSocialCounts",
+        "description": "Friend-graph size for one user."
+      },
+      "OutAdminUserDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handle"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "user_group": {
+            "type": "string",
+            "title": "User Group"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "last_tracked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Tracked At"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/OutAdminVisibility"
+          },
+          "domains": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/OutAdminDomainCounts"
+            },
+            "type": "object",
+            "title": "Domains"
+          },
+          "social": {
+            "$ref": "#/components/schemas/OutAdminSocialCounts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "display_name",
+          "email",
+          "user_group",
+          "status",
+          "created_at",
+          "visibility",
+          "domains",
+          "social"
+        ],
+        "title": "OutAdminUserDetail",
+        "description": "``GET /v1/admin/users/{uuid}``."
+      },
+      "OutAdminUserListResponse": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/OutAdminUserSummary"
+            },
+            "type": "array",
+            "title": "Users"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "limit",
+          "offset",
+          "users"
+        ],
+        "title": "OutAdminUserListResponse",
+        "description": "``GET /v1/admin/users``."
+      },
+      "OutAdminUserSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handle"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "user_group": {
+            "type": "string",
+            "title": "User Group"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "last_tracked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Tracked At"
+          },
+          "tracked_total": {
+            "type": "integer",
+            "title": "Tracked Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "display_name",
+          "email",
+          "user_group",
+          "status",
+          "created_at",
+          "tracked_total"
+        ],
+        "title": "OutAdminUserSummary",
+        "description": "One row of ``GET /v1/admin/users``."
+      },
+      "OutAdminVisibility": {
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/VisibilityTier"
+          },
+          "default_privacy": {
+            "$ref": "#/components/schemas/VisibilityTier"
+          },
+          "movies": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tv": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "books": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "games": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "watchlist_movies": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "watchlist_tv": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "watchlist_books": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "watchlist_games": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "share_activity": {
+            "type": "boolean",
+            "title": "Share Activity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "profile",
+          "default_privacy",
+          "share_activity"
+        ],
+        "title": "OutAdminVisibility",
+        "description": "The nine visibility settings, plus activity sharing, for one user."
+      },
       "OutApiKey": {
         "properties": {
           "id": {
@@ -7023,7 +9009,7 @@
           "created_at"
         ],
         "title": "OutApiKey",
-        "description": "An API key as shown in listings \u2014 never includes the secret."
+        "description": "An API key as shown in listings - never includes the secret."
       },
       "OutApiKeyCreated": {
         "properties": {
@@ -7168,7 +9154,7 @@
           "message"
         ],
         "title": "OutFriendAck",
-        "description": "Deliberately contentless acknowledgement of a friend-graph write.\n\nSend and decline both answer with this, and send answers with *exactly*\nthis whether or not the handle resolved to anybody \u2014 see\n``router_friends`` for why the response must not vary."
+        "description": "Deliberately contentless acknowledgement of a friend-graph write.\n\nSend and decline both answer with this, and send answers with *exactly*\nthis whether or not the handle resolved to anybody - see\n``router_friends`` for why the response must not vary."
       },
       "OutFriendRequest": {
         "properties": {
@@ -7228,7 +9214,7 @@
           "id"
         ],
         "title": "OutFriendUser",
-        "description": "The other party in a friendship, as much of them as a friend may see.\n\nNo email, no visibility settings \u2014 a friendship is not an introduction to\nsomeone's account."
+        "description": "The other party in a friendship, as much of them as a friend may see.\n\nNo email, no visibility settings - a friendship is not an introduction to\nsomeone's account."
       },
       "OutPendingFriendRequests": {
         "properties": {
@@ -7252,6 +9238,53 @@
         "type": "object",
         "title": "OutPendingFriendRequests",
         "description": "Both directions in one response.\n\nThe inbox badge and the \"pending\" state of an outgoing request are drawn\ntogether, so splitting these across two endpoints would only ever mean\ntwo calls."
+      },
+      "OutPreferences": {
+        "properties": {
+          "ranked_list_length": {
+            "$ref": "#/components/schemas/RankedListLength",
+            "default": "25"
+          },
+          "onboarding_completed": {
+            "type": "boolean",
+            "title": "Onboarding Completed",
+            "default": false
+          },
+          "time_zone": {
+            "type": "string",
+            "title": "Time Zone",
+            "default": "UTC"
+          },
+          "shelf_order": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Shelf Order",
+            "default": [
+              "movies",
+              "tv",
+              "games",
+              "books"
+            ]
+          },
+          "enabled_shelves": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Enabled Shelves",
+            "default": [
+              "movies",
+              "tv",
+              "games",
+              "books"
+            ]
+          }
+        },
+        "type": "object",
+        "title": "OutPreferences",
+        "description": "The caller's display preferences, defaulted where unset."
       },
       "OutResponseBaseModel": {
         "properties": {
@@ -7363,15 +9396,30 @@
           "total_ranked": {
             "type": "integer",
             "title": "Total Ranked"
+          },
+          "total_items": {
+            "type": "integer",
+            "title": "Total Items"
+          },
+          "onboarding_completed": {
+            "type": "boolean",
+            "title": "Onboarding Completed"
+          },
+          "needs_onboarding": {
+            "type": "boolean",
+            "title": "Needs Onboarding"
           }
         },
         "type": "object",
         "required": [
           "shelves",
-          "total_ranked"
+          "total_ranked",
+          "total_items",
+          "onboarding_completed",
+          "needs_onboarding"
         ],
         "title": "OutSummary",
-        "description": "Everything the home page renders, in one bounded response \u2014 see\napp/services/summary.py for why this endpoint exists."
+        "description": "Everything the home page renders, in one bounded response - see\napp/services/summary.py for why this endpoint exists."
       },
       "OutSummaryEntry": {
         "properties": {
@@ -7495,6 +9543,17 @@
           "email": {
             "type": "string",
             "title": "Email"
+          },
+          "time_zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Zone"
           }
         },
         "type": "object",
@@ -7508,7 +9567,7 @@
           "email"
         ],
         "title": "OutToken",
-        "description": "What every sign-in and refresh returns.\n\nBoth lifetimes are reported in seconds so a client can size its cookies\noff the response instead of hardcoding guesses that drift from\n``ACCESS_TOKEN_EXPIRE_MINUTES`` and ``REFRESH_TOKEN_EXPIRE_DAYS`` \u2014 which\nis exactly how the web session cookie ended up outliving its token."
+        "description": "What every sign-in and refresh returns.\n\nBoth lifetimes are reported in seconds so a client can size its cookies\noff the response instead of hardcoding guesses that drift from\n``ACCESS_TOKEN_EXPIRE_MINUTES`` and ``REFRESH_TOKEN_EXPIRE_DAYS`` - which\nis exactly how the web session cookie ended up outliving its token."
       },
       "OutUserDisplay": {
         "properties": {
@@ -7552,6 +9611,80 @@
         "title": "OutUserDisplay",
         "description": "Schema for displaying user data."
       },
+      "OutUserSearchResponse": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "corrected": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corrected"
+          },
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/OutUserSearchResult"
+            },
+            "type": "array",
+            "title": "Users"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query",
+          "users"
+        ],
+        "title": "OutUserSearchResponse",
+        "description": "Response shape for user search, mirroring GlobalSearchResponse."
+      },
+      "OutUserSearchResult": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handle"
+          },
+          "follower_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follower Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "display_name"
+        ],
+        "title": "OutUserSearchResult",
+        "description": "One user returned from search."
+      },
       "OutVisibility": {
         "properties": {
           "handle": {
@@ -7565,46 +9698,103 @@
             ],
             "title": "Handle"
           },
+          "default_privacy": {
+            "$ref": "#/components/schemas/VisibilityTier",
+            "default": "friends"
+          },
           "visibility_profile": {
             "$ref": "#/components/schemas/VisibilityTier",
             "default": "private"
           },
           "visibility_movies": {
-            "$ref": "#/components/schemas/VisibilityTier",
-            "default": "private"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "visibility_tv": {
-            "$ref": "#/components/schemas/VisibilityTier",
-            "default": "private"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "visibility_books": {
-            "$ref": "#/components/schemas/VisibilityTier",
-            "default": "private"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "visibility_games": {
-            "$ref": "#/components/schemas/VisibilityTier",
-            "default": "private"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "visibility_watchlist_movies": {
-            "$ref": "#/components/schemas/VisibilityTier",
-            "default": "private"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "visibility_watchlist_tv": {
-            "$ref": "#/components/schemas/VisibilityTier",
-            "default": "private"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "visibility_watchlist_books": {
-            "$ref": "#/components/schemas/VisibilityTier",
-            "default": "private"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "visibility_watchlist_games": {
-            "$ref": "#/components/schemas/VisibilityTier",
-            "default": "private"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "share_activity": {
+            "type": "boolean",
+            "title": "Share Activity",
+            "default": true
           }
         },
         "type": "object",
         "title": "OutVisibility",
-        "description": "The caller's visibility settings, one tier per setting."
+        "description": "The caller's shelf tiers and activity-sharing setting."
       },
       "RankPlacement": {
         "properties": {
@@ -7620,6 +9810,17 @@
         ],
         "title": "RankPlacement",
         "description": "Target 1-based position at which to place a movie in the ranked list."
+      },
+      "RankedListLength": {
+        "type": "string",
+        "enum": [
+          "25",
+          "50",
+          "100",
+          "all"
+        ],
+        "title": "RankedListLength",
+        "description": "25/50/100/all. 25 is the default, applied whenever the column is NULL."
       },
       "RankingReorder": {
         "properties": {
@@ -7637,6 +9838,24 @@
         ],
         "title": "RankingReorder",
         "description": "Ordered list of movie (catalog) ids defining the new ranking order."
+      },
+      "SaveRecommendation": {
+        "properties": {
+          "destination": {
+            "type": "string",
+            "enum": [
+              "watchlist",
+              "rankings"
+            ],
+            "title": "Destination"
+          }
+        },
+        "type": "object",
+        "required": [
+          "destination"
+        ],
+        "title": "SaveRecommendation",
+        "description": "The destination list; ranking placement happens later in its normal UI."
       },
       "ScheduleEpisodeItem": {
         "properties": {
@@ -7751,6 +9970,107 @@
         ],
         "title": "ScheduleResponse",
         "description": "Mirrors the legacy schedule page: what's airing in the +/- window around\ntoday (``upcoming``), everything overdue and unwatched (``catch_up``),\nand shows the user has paused tracking on (``frozen_shows``)."
+      },
+      "SocialActivityItem": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle"
+          },
+          "entity_id": {
+            "type": "string",
+            "title": "Entity Id"
+          },
+          "poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/ActivityActor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "category",
+          "action",
+          "title",
+          "entity_id",
+          "occurred_at",
+          "actor"
+        ],
+        "title": "SocialActivityItem",
+        "description": "One authorized activity event from a friend or followed user."
+      },
+      "SocialActivityPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SocialActivityItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "SocialActivityPage",
+        "description": "One bounded keyset page of the caller's social activity feed."
       },
       "TVEpisodeCreate": {
         "properties": {
@@ -8495,7 +10815,7 @@
           "title"
         ],
         "title": "TVShowSummary",
-        "description": "Lightweight show for list responses \u2014 omits the large ``summary``."
+        "description": "Lightweight show for list responses - omits the large ``summary``."
       },
       "TVShowUpdate": {
         "properties": {
@@ -8646,6 +10966,130 @@
         },
         "type": "object",
         "title": "TVShowUpdate"
+      },
+      "TrackerListPage_UserBookResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserBookResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "TrackerListPage[UserBookResponse]"
+      },
+      "TrackerListPage_UserMovieResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserMovieResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "TrackerListPage[UserMovieResponse]"
+      },
+      "TrackerListPage_UserTVShowWithStatus_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserTVShowWithStatus"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "TrackerListPage[UserTVShowWithStatus]"
+      },
+      "TrackerListPage_UserVideoGameResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserVideoGameResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "TrackerListPage[UserVideoGameResponse]"
       },
       "UnreadCountResponse": {
         "properties": {
@@ -8820,6 +11264,17 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "source_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Handle"
           }
         },
         "type": "object",
@@ -9065,6 +11520,17 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "source_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Handle"
           }
         },
         "type": "object",
@@ -9409,6 +11875,17 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "source_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Handle"
           }
         },
         "type": "object",
@@ -9602,6 +12079,17 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "source_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Handle"
           },
           "watch_status": {
             "type": "string",
@@ -9811,6 +12299,17 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "source_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Handle"
           }
         },
         "type": "object",
@@ -10341,7 +12840,7 @@
           "title"
         ],
         "title": "VideoGameSummary",
-        "description": "Lightweight game for list responses \u2014 omits the large ``summary``."
+        "description": "Lightweight game for list responses - omits the large ``summary``."
       },
       "VideoGameUpdate": {
         "properties": {
@@ -10491,7 +12990,7 @@
           "public"
         ],
         "title": "VisibilityTier",
-        "description": "How widely one shelf \u2014 or the whole profile \u2014 is shared."
+        "description": "How widely one shelf - or the whole profile - is shared."
       },
       "WatchProvider": {
         "properties": {
@@ -10589,7 +13088,7 @@
           "attribution"
         ],
         "title": "WatchProviders",
-        "description": "Where a title can be watched in one region (web#26).\n\nNever 404s and never errors: a title with no availability \u2014 or one TMDB\ncan't resolve \u2014 comes back with empty buckets, so the detail page renders\nthe same either way. ``attribution`` carries the credit TMDB requires\nwherever this data is displayed."
+        "description": "Where a title can be watched in one region (web#26).\n\nNever 404s and never errors: a title with no availability - or one TMDB\ncan't resolve - comes back with empty buckets, so the detail page renders\nthe same either way. ``attribution`` carries the credit TMDB requires\nwherever this data is displayed."
       }
     },
     "securitySchemes": {
@@ -10647,7 +13146,7 @@
     },
     {
       "name": "Follows",
-      "description": "Asymmetric, unapproved follows \u2014 grants no extra visibility"
+      "description": "Asymmetric, unapproved follows - grants no extra visibility"
     },
     {
       "name": "Search",
@@ -10655,7 +13154,11 @@
     },
     {
       "name": "Summary",
-      "description": "Home summary \u2014 per-shelf Top 5 and counts"
+      "description": "Home summary - per-shelf Top 5 and counts"
+    },
+    {
+      "name": "Admin",
+      "description": "Admin-only user directory and audit trail"
     }
   ]
 }

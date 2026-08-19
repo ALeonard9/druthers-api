@@ -113,9 +113,18 @@ class OutAdminUserDetail(BaseModel):
 
 
 class OutAdminAuditActor(BaseModel):
-    """Who performed one audit-logged action."""
+    """
+    Who performed one audit-logged action.
 
-    id: str
+    ``id`` is optional, not just ``handle``/``email``: the actor's account
+    can be deleted (self-delete is permitted), which SETs ``actor_user_pk``
+    NULL - the row falls back to whatever of ``actor_user_id``/
+    ``actor_email`` was denormalized at write time, and either can be
+    missing if the actor could not be resolved at all (an expired-token
+    denial, for instance).
+    """
+
+    id: Optional[str] = None
     handle: Optional[str] = None
     email: Optional[str] = None
 
