@@ -1,6 +1,6 @@
 # pylint: disable=missing-module-docstring, missing-function-docstring, import-outside-toplevel
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 
@@ -62,7 +62,7 @@ def test_social_context_populated(test_client: TestClient, test_create_user):
             user_high_id=high,
             requested_by_id=user.pk,
             status=FriendshipStatus.ACCEPTED,
-            responded_at=datetime.utcnow(),
+            responded_at=datetime.now(timezone.utc),
         )
     )
     db.add(DbFollow(follower_id=user.pk, followee_id=followee.pk))
