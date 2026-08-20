@@ -48,6 +48,10 @@ ALLOWED_DETAIL_FIELDS = frozenset(
         'ended',
         'via_impersonation',
         'live_count',
+        'report',
+        'from',
+        'to',
+        'bucket',
     }
 )
 

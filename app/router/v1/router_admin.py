@@ -1,4 +1,4 @@
-# pylint: disable=missing-function-docstring
+# pylint: disable=missing-function-docstring, too-many-lines
 """
 Admin user directory (#344): search, per-user aggregates, and the audit
 trail those actions leave.
@@ -14,11 +14,14 @@ request, so it costs no extra query.
 Impersonation and reports are later increments - not built here.
 """
 
-from datetime import datetime, timedelta, timezone
+import csv
+import io
+from collections import Counter, defaultdict
+from datetime import date, datetime, timedelta, timezone
 from functools import reduce
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
@@ -38,6 +41,7 @@ from app.db.models import (
     DbAdminAuditLog,
     DbApiKey,
     DbImpersonationSession,
+    DbProductEvent,
     DbUser,
 )
 from app.schemas.schemas_admin import (
@@ -52,6 +56,7 @@ from app.schemas.schemas_admin import (
     OutAdminUserListResponse,
     OutAdminUserSummary,
     OutAdminVisibility,
+    OutAdminReportResponse,
     OutImpersonationLiveSession,
     OutImpersonationParty,
     OutImpersonationSession,
@@ -69,6 +74,19 @@ router = APIRouter(
 
 MAX_PAGE_SIZE = 200
 DEFAULT_PAGE_SIZE = 50
+
+REPORT_NAMES = (
+    'signups',
+    'active_users',
+    'tracking_volume',
+    'top_titles',
+    'top_users',
+    'engagement_by_tier',
+    'activation',
+    'retention',
+    'conversion',
+)
+FUNNEL_REPORTS = {'activation', 'retention', 'conversion'}
 
 
 def _clamp_page(limit: int, offset: int) -> tuple[int, int]:
@@ -616,6 +634,321 @@ def list_audit(  # pylint: disable=too-many-arguments, too-many-positional-argum
             for row in rows
         ],
     )
+
+
+def _as_date(value: datetime) -> date:
+    return value.date()
+
+
+def _period(value: date, bucket: str) -> date:
+    if bucket == 'week':
+        return value - timedelta(days=value.weekday())
+    if bucket == 'month':
+        return value.replace(day=1)
+    return value
+
+
+def _periods(start: date, end: date, bucket: str) -> list[date]:
+    periods = []
+    current = _period(start, bucket)
+    last = _period(end, bucket)
+    while current <= last:
+        periods.append(current)
+        if bucket == 'day':
+            current += timedelta(days=1)
+        elif bucket == 'week':
+            current += timedelta(days=7)
+        elif current.month == 12:
+            current = current.replace(year=current.year + 1, month=1)
+        else:
+            current = current.replace(month=current.month + 1)
+    return periods
+
+
+def _in_range(value: datetime, start: date, end: date) -> bool:
+    return start <= _as_date(value) <= end
+
+
+def _report_csv(payload: dict) -> str:
+    output = io.StringIO()
+    writer = csv.writer(output)
+    if payload.get('rows') is not None:
+        writer.writerow(['label', 'count', 'domain'])
+        for row in payload['rows']:
+            writer.writerow([row['label'], row['count'], row.get('domain', '')])
+    else:
+        keys = sorted({key for point in payload['series'] for key in point['values']})
+        writer.writerow(['period', *keys])
+        for point in payload['series']:
+            writer.writerow(
+                [point['period'], *[point['values'].get(key, '') for key in keys]]
+            )
+    return output.getvalue()
+
+
+def _event_rows(db: Session) -> list[DbProductEvent]:
+    return db.query(DbProductEvent).order_by(DbProductEvent.occurred_at).all()
+
+
+# pylint: disable=too-many-locals
+def _funnel_report(
+    report: str, events: list[DbProductEvent], start: date, end: date, bucket: str
+) -> dict:
+    events_by_user: dict[int, list[DbProductEvent]] = defaultdict(list)
+    for event in events:
+        events_by_user[event.user_id].append(event)
+    signups = [event for event in events if event.event_type == 'signup_completed']
+    cohorts: dict[date, list[DbProductEvent]] = defaultdict(list)
+    for signup in signups:
+        if _in_range(signup.occurred_at, start, end):
+            cohorts[_period(_as_date(signup.occurred_at), bucket)].append(signup)
+
+    series = []
+    for period in _periods(start, end, bucket):
+        cohort = cohorts[period]
+        cohort_size = len(cohort)
+        values: dict[str, int] = {'cohort_size': cohort_size}
+        if report in ('activation', 'conversion'):
+            activated = 0
+            for signup in cohort:
+                kinds = {
+                    event.event_type
+                    for event in events_by_user[signup.user_id]
+                    if event.occurred_at >= signup.occurred_at
+                }
+                if 'fifth_item_ranked' in kinds and (
+                    'profile_completed' in kinds or 'first_share' in kinds
+                ):
+                    activated += 1
+            if report == 'activation':
+                values['activated'] = activated
+            else:
+                values['signup_to_activation'] = activated
+                shares = [
+                    event
+                    for event in events
+                    if event.event_type == 'first_share'
+                    and _period(_as_date(event.occurred_at), bucket) == period
+                ]
+                share_ids = {
+                    str(event.payload.get('share_id'))
+                    for event in shares
+                    if event.payload.get('share_id') is not None
+                }
+                referred_signups = sum(
+                    1
+                    for signup_event in signups
+                    if str(signup_event.payload.get('share_id')) in share_ids
+                )
+                values['share_cohort_size'] = len(shares)
+                values['share_to_signup'] = referred_signups
+        if report == 'retention':
+            returned_d7 = 0
+            returned_d28 = 0
+            for signup in cohort:
+                returned = {
+                    _as_date(event.occurred_at)
+                    for event in events_by_user[signup.user_id]
+                    if event.event_type == 'returning_session'
+                }
+                signup_date = _as_date(signup.occurred_at)
+                returned_d7 += any(
+                    signup_date + timedelta(days=7)
+                    <= item
+                    <= signup_date + timedelta(days=13)
+                    for item in returned
+                )
+                returned_d28 += any(
+                    signup_date + timedelta(days=28)
+                    <= item
+                    <= signup_date + timedelta(days=34)
+                    for item in returned
+                )
+            values['retained_d7'] = returned_d7
+            values['retained_d28'] = returned_d28
+        series.append({'period': period.isoformat(), 'values': values})
+    totals = {'cohort_size': sum(point['values']['cohort_size'] for point in series)}
+    for key in {key for point in series for key in point['values']} - {'cohort_size'}:
+        totals[key] = sum(point['values'].get(key, 0) for point in series)
+    return {'series': series, 'totals': totals}
+
+
+@router.get('/reports/{report}', response_model=OutAdminReportResponse)
+def get_report(  # pylint: disable=too-many-arguments, too-many-locals, too-many-branches, too-many-positional-arguments, too-many-statements, redefined-builtin
+    report: str,
+    request: Request,
+    from_date: Optional[date] = Query(default=None, alias='from'),
+    to: Optional[date] = None,
+    bucket: Literal['day', 'week', 'month'] = 'day',
+    format: Optional[Literal['csv']] = None,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    """Product-health report data, with one stable chart/table envelope."""
+    if report not in REPORT_NAMES:
+        raise HTTPException(status_code=404, detail='Unknown report')
+    end = to or datetime.now(timezone.utc).date()
+    start = from_date or end - timedelta(days=29)
+    if start > end:
+        raise HTTPException(status_code=422, detail='from must not be after to')
+    periods = _periods(start, end, bucket)
+    payload: dict = {
+        'report': report,
+        'bucket': bucket,
+        'from': start.isoformat(),
+        'to': end.isoformat(),
+        'series': [],
+        'totals': {},
+    }
+
+    if report == 'signups':
+        users = db.query(DbUser).all()
+        cumulative = sum(1 for user in users if _as_date(user.created_at) < start)
+        counts = Counter(
+            _period(_as_date(user.created_at), bucket)
+            for user in users
+            if _in_range(user.created_at, start, end)
+        )
+        for period in periods:
+            count = counts[period]
+            cumulative += count
+            payload['series'].append(
+                {
+                    'period': period.isoformat(),
+                    'values': {'count': count, 'cumulative': cumulative},
+                }
+            )
+        payload['totals'] = {'count': sum(counts.values())}
+    elif report == 'active_users':
+        activity: dict[date, set[int]] = defaultdict(set)
+        all_activity: list[tuple[date, int]] = []
+        for shelf in SHELVES:
+            for user_id, updated_at in db.query(
+                shelf.tracker_model.user_id, shelf.tracker_model.updated_at
+            ):
+                activity[_period(_as_date(updated_at), bucket)].add(user_id)
+                all_activity.append((_as_date(updated_at), user_id))
+        for period in periods:
+            period_end = period + timedelta(
+                days=6 if bucket == 'week' else 30 if bucket == 'month' else 0
+            )
+            dau = len(activity[period])
+            wau = len(
+                {
+                    user_id
+                    for day, user_id in all_activity
+                    if period_end - timedelta(days=6) <= day <= period_end
+                }
+            )
+            payload['series'].append(
+                {'period': period.isoformat(), 'values': {'dau': dau, 'wau': wau}}
+            )
+        payload['totals'] = {
+            'dau': sum(item['values']['dau'] for item in payload['series'])
+        }
+    elif report in ('tracking_volume', 'top_titles', 'top_users'):
+        volume: dict[date, dict[str, Counter]] = defaultdict(
+            lambda: defaultdict(Counter)
+        )
+        title_counts: Counter = Counter()
+        user_counts: Counter = Counter()
+        for shelf in SHELVES:
+            tracker = shelf.tracker_model
+            catalog = shelf.catalog_model
+            rows = (
+                db.query(tracker, catalog.title)
+                .join(catalog, getattr(tracker, shelf.join_col) == catalog.pk)
+                .all()
+            )
+            for row, title in rows:
+                if not _in_range(row.created_at, start, end):
+                    continue
+                period = _period(_as_date(row.created_at), bucket)
+                if row.on_rankings or row.on_watchlist:
+                    volume[period][shelf.category]['tracked'] += 1
+                    title_counts[(shelf.category, title)] += 1
+                    user_counts[row.user_id] += 1
+                if row.on_rankings:
+                    volume[period][shelf.category]['ranked'] += 1
+                if row.on_watchlist:
+                    volume[period][shelf.category]['watchlisted'] += 1
+        if report == 'tracking_volume':
+            for period in periods:
+                values = {}
+                for shelf in SHELVES:
+                    counts = volume[period][shelf.category]
+                    values[f'{shelf.category}_tracked'] = counts['tracked']
+                    values[f'{shelf.category}_ranked'] = counts['ranked']
+                    values[f'{shelf.category}_watchlisted'] = counts['watchlisted']
+                payload['series'].append(
+                    {'period': period.isoformat(), 'values': values}
+                )
+            payload['totals'] = (
+                {
+                    key: sum(point['values'][key] for point in payload['series'])
+                    for key in payload['series'][0]['values']
+                }
+                if payload['series']
+                else {}
+            )
+        elif report == 'top_titles':
+            payload['rows'] = [
+                {'label': title, 'domain': domain, 'count': count}
+                for (domain, title), count in title_counts.most_common(20)
+            ]
+            payload['totals'] = {'count': sum(title_counts.values())}
+        else:
+            users = {
+                user.pk: user
+                for user in db.query(DbUser).filter(DbUser.pk.in_(user_counts)).all()
+            }
+            payload['rows'] = [
+                {
+                    'label': users[user_pk].handle or users[user_pk].display_name,
+                    'count': count,
+                }
+                for user_pk, count in user_counts.most_common(20)
+            ]
+            payload['totals'] = {'count': sum(user_counts.values())}
+    elif report == 'engagement_by_tier':
+        tiers: dict[date, Counter] = defaultdict(Counter)
+        for user in db.query(DbUser).all():
+            if _in_range(user.created_at, start, end):
+                tiers[_period(_as_date(user.created_at), bucket)][
+                    user.default_privacy or 'private'
+                ] += 1
+        for period in periods:
+            values = {
+                tier: tiers[period][tier] for tier in ('private', 'friends', 'public')
+            }
+            payload['series'].append({'period': period.isoformat(), 'values': values})
+        payload['totals'] = {
+            tier: sum(item['values'][tier] for item in payload['series'])
+            for tier in ('private', 'friends', 'public')
+        }
+    else:
+        events = _event_rows(db)
+        instrumented = any(_in_range(event.occurred_at, start, end) for event in events)
+        payload['instrumented'] = instrumented
+        if instrumented:
+            payload.update(_funnel_report(report, events, start, end, bucket))
+
+    admin_audit.record(
+        request,
+        actor=current_user[0],
+        action='admin.reports.view',
+        result=AdminAuditResult.ALLOWED,
+        status_code=200,
+        detail={
+            'report': report,
+            'from': start.isoformat(),
+            'to': end.isoformat(),
+            'bucket': bucket,
+        },
+    )
+    if format == 'csv':
+        return Response(content=_report_csv(payload), media_type='text/csv')
+    return payload
 
 
 @router.get('/impersonation', response_model=OutImpersonationSessionList)

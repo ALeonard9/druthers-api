@@ -8,9 +8,9 @@ response model.
 """
 
 from datetime import datetime, timezone
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 
-from pydantic import BaseModel, ConfigDict, PlainSerializer
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer
 
 from app.services.visibility import VisibilityTier
 
@@ -212,3 +212,33 @@ class OutImpersonationSessionList(BaseModel):
     """``GET /v1/admin/impersonation``."""
 
     sessions: list[OutImpersonationLiveSession]
+
+
+class OutAdminReportPoint(BaseModel):
+    """One dated report bucket, with report-specific values."""
+
+    period: str
+    values: dict[str, Any]
+
+
+class OutAdminReportRow(BaseModel):
+    """One unbucketed ranked report row."""
+
+    label: str
+    count: int
+    domain: Optional[str] = None
+
+
+class OutAdminReportResponse(BaseModel):
+    """Shared envelope for every ``GET /v1/admin/reports/{report}``."""
+
+    report: str
+    bucket: str
+    from_: str = Field(alias='from')
+    to: str
+    series: list[OutAdminReportPoint]
+    totals: dict[str, Any]
+    rows: Optional[list[OutAdminReportRow]] = None
+    instrumented: Optional[bool] = None
+
+    model_config = ConfigDict(populate_by_name=True)
