@@ -21,6 +21,7 @@ from fastapi import HTTPException, status
 
 from app.config import get_settings
 from app.log.logging_config import logger
+from app.services.search_policy import is_bad_query_error, normalized_search_query
 
 TWITCH_OAUTH_URL = 'https://id.twitch.tv/oauth2/token'
 IGDB_URL = 'https://api.igdb.com/v4'
@@ -153,6 +154,15 @@ def _search_games_by_id(igdb_id: int) -> List[dict]:
             'games',
             f'fields {_SEARCH_FIELDS}; where id = {igdb_id};',
         )
+    except requests.HTTPError as exc:
+        if is_bad_query_error(exc):
+            logger.info('IGDB rejected game id query %s: %s', igdb_id, exc)
+            return []
+        logger.error('IGDB id lookup failed for %s: %s', igdb_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail='Upstream game search failed',
+        ) from exc
     except (requests.RequestException, ValueError) as exc:
         logger.error('IGDB id lookup failed for %s: %s', igdb_id, exc)
         raise HTTPException(
@@ -172,15 +182,13 @@ def search_games(query: str) -> List[dict]:
     A bare-numeric query is treated as an IGDB id and resolved directly via
     ``where id = <id>`` instead of a fuzzy title search. Returns a list of
     normalized dicts (``igdb``, ``title``, ``year``, ``platforms``,
-    ``poster_url``). Raises 400 on an empty query, 503 when unconfigured,
-    and 502 when the upstream call fails.
+    ``poster_url``). Queries below IGDB's one-character floor and provider
+    query rejections return ``[]``; unconfigured search raises 503 and upstream
+    failures raise 502.
     """
-    query = (query or '').strip()
-    if not query:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Search query must not be empty',
-        )
+    query = normalized_search_query(query, 'Game')
+    if query is None:
+        return []
 
     if query.isdigit():
         return _search_games_by_id(int(query))
@@ -195,6 +203,15 @@ def search_games(query: str) -> List[dict]:
             'platforms.abbreviation,cover.image_id,total_rating_count; '
             'limit 20;',
         )
+    except requests.HTTPError as exc:
+        if is_bad_query_error(exc):
+            logger.info('IGDB rejected game search query %r: %s', query, exc)
+            return []
+        logger.error('IGDB search failed for %r: %s', query, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail='Upstream game search failed',
+        ) from exc
     except (requests.RequestException, ValueError) as exc:
         # HTTPExceptions from _igdb_query (503 unconfigured / 502 auth)
         # propagate untouched - they aren't caught here.

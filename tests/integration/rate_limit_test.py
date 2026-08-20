@@ -8,6 +8,8 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.db.database import get_db
+from app.run import app
 from app.services import rate_limit
 
 ENABLED = {'env': 'github', 'rate_limits_enabled': True}
@@ -113,14 +115,34 @@ def test_search_is_rate_limited_per_user(
     for _ in range(2):
         assert (
             test_client.get(
-                '/v1/movies/search?q=x', headers=_auth(test_client)
+                '/v1/movies/search?q=matrix', headers=_auth(test_client)
             ).status_code
             == 200
         )
     assert (
-        test_client.get('/v1/movies/search?q=x', headers=_auth(test_client)).status_code
+        test_client.get(
+            '/v1/movies/search?q=matrix', headers=_auth(test_client)
+        ).status_code
         == 429
     )
+    rate_limit.reset()
+
+
+@patch('app.services.rate_limit.get_settings')
+def test_search_limit_rejects_before_requesting_a_db_session(
+    mock_settings, test_client: TestClient
+):
+    """An exhausted search bucket rejects before auth asks Postgres for a row."""
+    rate_limit.reset()
+    mock_settings.return_value = Settings(**ENABLED, rate_limit_search=0)
+
+    def forbidden_db_dependency():
+        raise AssertionError('rate limiter requested a database session')
+
+    app.dependency_overrides[get_db] = forbidden_db_dependency
+    response = test_client.get('/v1/movies/search?q=matrix', headers=_auth(test_client))
+
+    assert response.status_code == 429
     rate_limit.reset()
 
 

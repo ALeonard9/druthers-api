@@ -7,8 +7,10 @@ import json
 import os
 import time
 import uuid
+from contextlib import asynccontextmanager
 
 import uvicorn
+import anyio.to_thread
 from fastapi import FastAPI, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -50,6 +52,22 @@ from .utils.exceptions import (
 )
 
 settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    """Configure per-instance concurrency on the server's event loop."""
+    anyio.to_thread.current_default_thread_limiter().total_tokens = (
+        settings.sync_thread_limit
+    )
+    logger.info(
+        'Instance capacity: %d Cloud Run requests, %d sync workers, '
+        '%d database connections',
+        settings.cloud_run_container_concurrency,
+        settings.sync_thread_limit,
+        settings.db_pool_size + settings.db_max_overflow,
+    )
+    yield
 
 
 def _is_mutable_user_read(method: str, path: str) -> bool:
@@ -119,6 +137,7 @@ app = FastAPI(
         'name': 'GPL-3.0',
         'url': 'https://www.gnu.org/licenses/gpl-3.0.html',
     },
+    lifespan=lifespan,
 )
 
 

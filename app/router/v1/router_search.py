@@ -13,6 +13,7 @@ from typing import Callable, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.auth.oauth2 import get_current_user
 from app.db.database import get_db
@@ -25,6 +26,10 @@ from app.services.book_search import search_books
 from app.services.game_search import search_games
 from app.services.movie_search import search_movies
 from app.services.search_correction import correct_query
+from app.services.search_policy import (
+    MIN_CORRECTION_QUERY_LENGTH,
+    run_search_provider,
+)
 from app.services.search_ranking import rank_and_cap
 from app.services.tracked_status import attach_tracked_status
 from app.services.tv_search import search_tv_shows
@@ -60,16 +65,8 @@ def _fan_out(q: str, only: Optional[List[str]] = None) -> Dict[str, List[dict]]:
         return {name: future.result() for name, future in futures.items()}
 
 
-@router.get(
-    '/search',
-    response_model=GlobalSearchResponse,
-    dependencies=[Depends(search_rate_limit)],
-)
-def global_search(
-    q: str,
-    db: Session = Depends(get_db),
-    current_user: list = Depends(get_current_user),
-):
+def _global_provider_search(q: str):
+    """Run both provider rounds and ranking under one search deadline."""
     results = _fan_out(q)
     corrected = None
     # Track which query actually produced each domain's hits, so ranking
@@ -78,7 +75,7 @@ def global_search(
     # Some providers fuzzy-match and some don't, so retry only the domains
     # that came back empty with a spell-corrected query.
     empty = [name for name, hits in results.items() if not hits]
-    if empty:
+    if empty and len(q.strip()) >= MIN_CORRECTION_QUERY_LENGTH:
         respelled = correct_query(q)
         if respelled:
             retried = _fan_out(respelled, only=empty)
@@ -95,9 +92,24 @@ def global_search(
         domain: rank_and_cap(query_by_domain[domain], hits)
         for domain, hits in results.items()
     }
+    return results, corrected
+
+
+@router.get(
+    '/search',
+    response_model=GlobalSearchResponse,
+    dependencies=[Depends(search_rate_limit)],
+)
+async def global_search(
+    q: str,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
     user_pk = current_user[0].pk
+    db.close()
+    results, corrected = await run_search_provider(_global_provider_search, q)
     for domain, hits in results.items():
-        attach_tracked_status(db, user_pk, hits, domain)
+        await run_in_threadpool(attach_tracked_status, db, user_pk, hits, domain)
     return GlobalSearchResponse(query=q, corrected=corrected, **results)
 
 

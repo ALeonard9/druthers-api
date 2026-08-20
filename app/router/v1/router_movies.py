@@ -8,6 +8,7 @@ from typing import List, Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
+from starlette.concurrency import run_in_threadpool
 
 from app.auth.oauth2 import get_current_user, require_admin
 from app.db.database import get_db
@@ -34,6 +35,7 @@ from app.services.movie_search import (
 from app.services.movie_search import search_movies as tmdb_search_movies
 from app.services.rate_limit import catalog_add_cap, search_rate_limit
 from app.services.search_correction import correct_query
+from app.services.search_policy import run_search_provider, search_with_correction
 from app.services.shelves import SHELVES
 from app.services.social import get_item_social_context
 from app.services.tracked_status import attach_tracked_status
@@ -89,17 +91,19 @@ def get_all_movies(
     response_model=List[MovieSearchResult],
     dependencies=[Depends(search_rate_limit)],
 )
-def search_movies_endpoint(
+async def search_movies_endpoint(
     q: str,
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
 ):
-    results = tmdb_search_movies(q)
-    if not results:
-        corrected = correct_query(q)
-        if corrected:
-            results = tmdb_search_movies(corrected)
-    return attach_tracked_status(db, current_user[0].pk, results, 'movies')
+    user_pk = current_user[0].pk
+    db.close()
+    results = await run_search_provider(
+        search_with_correction, tmdb_search_movies, correct_query, q
+    )
+    return await run_in_threadpool(
+        attach_tracked_status, db, user_pk, results, 'movies'
+    )
 
 
 @router.post(

@@ -26,6 +26,7 @@ import requests
 
 from app.config import get_settings
 from app.log.logging_config import logger
+from app.services.search_policy import is_bad_query_error
 
 TMDB_URL = 'https://api.themoviedb.org/3'
 IMAGE_BASE = 'https://image.tmdb.org/t/p'
@@ -49,6 +50,10 @@ class TmdbUnconfigured(RuntimeError):
 
 class TmdbError(RuntimeError):
     """TMDB was unreachable or returned an unusable response."""
+
+
+class TmdbBadQuery(TmdbError):
+    """TMDB rejected caller input with a non-authentication 4xx response."""
 
 
 def is_configured() -> bool:
@@ -124,6 +129,11 @@ def request(path: str, params: Optional[dict] = None) -> dict:
                 continue
             response.raise_for_status()
             return response.json()
+        except requests.HTTPError as exc:
+            if is_bad_query_error(exc):
+                raise TmdbBadQuery(f'TMDB rejected query for {path}') from exc
+            last_exc = exc
+            break
         except (requests.RequestException, ValueError) as exc:
             # A non-retryable status (404), a decode error, or a transport
             # failure - all terminal, since retryable statuses are handled

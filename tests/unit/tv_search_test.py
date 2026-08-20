@@ -2,6 +2,9 @@
 # pylint: disable=protected-access, missing-class-docstring
 from unittest.mock import MagicMock, patch
 
+import pytest
+from fastapi import HTTPException
+
 from app.services import tv_search
 
 
@@ -243,3 +246,46 @@ def test_search_tv_shows_ordinary_title_query_unaffected(mock_get):
         headers=tv_search.TVMAZE_HEADERS,
     )
     assert results[0]['title'] == 'Severance'
+
+
+@patch('app.services.tv_search.requests.get')
+def test_search_tv_shows_reaches_tvmaze_for_a_two_character_query(mock_get):
+    # TVMaze serves one-character queries (probed 2026-08-20, api#398).
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    resp.json.return_value = []
+    mock_get.return_value = resp
+    assert not tv_search.search_tv_shows('Go')
+    mock_get.assert_called()
+
+
+@patch('app.services.tv_search.requests.get')
+def test_search_tv_shows_empty_query_returns_empty_without_http(mock_get):
+    assert not tv_search.search_tv_shows('   ')
+    mock_get.assert_not_called()
+
+
+@pytest.mark.parametrize('status_code', [422, 404])
+@patch('app.services.tv_search.requests.get')
+def test_search_tv_shows_bad_query_4xx_returns_empty(mock_get, status_code):
+    response = MagicMock(status_code=status_code)
+    response.raise_for_status.side_effect = tv_search.requests.HTTPError(
+        response=response
+    )
+    mock_get.return_value = response
+
+    assert not tv_search.search_tv_shows('Severance')
+
+
+@pytest.mark.parametrize('status_code', [500, 401, 403])
+@patch('app.services.tv_search.requests.get')
+def test_search_tv_shows_operator_http_error_returns_502(mock_get, status_code):
+    response = MagicMock(status_code=status_code)
+    response.raise_for_status.side_effect = tv_search.requests.HTTPError(
+        response=response
+    )
+    mock_get.return_value = response
+
+    with pytest.raises(HTTPException) as exc:
+        tv_search.search_tv_shows('Severance')
+    assert exc.value.status_code == 502

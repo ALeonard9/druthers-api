@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
+from fastapi import HTTPException
 
 from app.services import book_search
 
@@ -661,3 +662,35 @@ def test_google_books_request_carries_no_user_agent(mock_get, mock_settings):
     book_search.get_book_detail_by_googleid('_An-CAAAQBAJ')
 
     assert 'headers' not in mock_get.call_args.kwargs
+
+
+@patch('app.services.book_search.requests.get')
+def test_search_books_short_query_returns_empty_without_http(mock_get):
+    # Books keeps the three-character floor: Open Library answers 422 for
+    # anything shorter (probed 2026-08-20, api#398). This is the one domain
+    # where a two-letter title cannot be searched, and it is the provider's
+    # limit, not ours.
+    assert not book_search.search_books('Go')
+    mock_get.assert_not_called()
+
+
+@pytest.mark.parametrize('status_code', [422, 404])
+@patch('app.services.book_search.requests.get')
+def test_search_books_bad_query_4xx_returns_empty(mock_get, status_code):
+    response = MagicMock(status_code=status_code)
+    response.raise_for_status.side_effect = requests.HTTPError(response=response)
+    mock_get.return_value = response
+
+    assert not book_search.search_books('Warthunder')
+
+
+@pytest.mark.parametrize('status_code', [500, 401, 403])
+@patch('app.services.book_search.requests.get')
+def test_search_books_operator_http_error_returns_502(mock_get, status_code):
+    response = MagicMock(status_code=status_code)
+    response.raise_for_status.side_effect = requests.HTTPError(response=response)
+    mock_get.return_value = response
+
+    with pytest.raises(HTTPException) as exc:
+        book_search.search_books('Warthunder')
+    assert exc.value.status_code == 502
