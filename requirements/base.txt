@@ -1,8 +1,8 @@
 fastapi==0.141.1
-uvicorn==0.52.1
+uvicorn==0.52.3
 h11>=0.16.0 # Pinned to fix HTTP Request Smuggling vulnerability
 starlette>=1.6.0 # not directly required, pinned by Snyk to avoid a vulnerability
-SQLAlchemy==2.0.51
+SQLAlchemy==2.0.52
 alembic==1.19.1
 pydantic==2.13.4
 pydantic-settings==2.15.0
@@ -11,7 +11,7 @@ python-multipart==0.0.32
 email-validator==2.3.0
 idna>=3.18 # not directly required, pinned by Snyk to avoid a vulnerability
 psycopg2-binary==2.9.12
-python-dotenv==1.2.2
+python-dotenv==1.2.3
 python-logging-loki==0.3.1
 tzdata==2026.3
 click>=8.4.2 # not directly required, pinned by Snyk to avoid a vulnerability
