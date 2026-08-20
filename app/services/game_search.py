@@ -182,8 +182,8 @@ def search_games(query: str) -> List[dict]:
     A bare-numeric query is treated as an IGDB id and resolved directly via
     ``where id = <id>`` instead of a fuzzy title search. Returns a list of
     normalized dicts (``igdb``, ``title``, ``year``, ``platforms``,
-    ``poster_url``). Queries shorter than three characters and provider query
-    rejections return ``[]``; unconfigured search raises 503 and upstream
+    ``poster_url``). Queries below IGDB's one-character floor and provider
+    query rejections return ``[]``; unconfigured search raises 503 and upstream
     failures raise 502.
     """
     query = normalized_search_query(query, 'Game')

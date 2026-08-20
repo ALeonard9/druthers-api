@@ -280,9 +280,30 @@ def test_get_time_to_beat_no_community_data_returns_none(mock_post, mock_setting
     _reset_token_cache()
 
 
+@patch('app.services.game_search.get_settings')
 @patch('app.services.game_search.requests.post')
-def test_search_games_short_query_returns_empty_without_http(mock_post):
+def test_search_games_reaches_igdb_for_a_two_character_query(mock_post, mock_settings):
+    # IGDB serves one-character queries (probed 2026-08-20, api#398).
+    _reset_token_cache()
+    mock_settings.return_value = Settings(
+        twitch_client_id='cid', twitch_client_secret='secret', env='github'
+    )
+    token_resp = MagicMock()
+    token_resp.raise_for_status.return_value = None
+    token_resp.json.return_value = {'access_token': 'tok', 'expires_in': 5000000}
+    games_resp = MagicMock()
+    games_resp.raise_for_status.return_value = None
+    games_resp.json.return_value = []
+    mock_post.side_effect = [token_resp, games_resp]
+
     assert not game_search.search_games('Go')
+    assert mock_post.call_count == 2
+    _reset_token_cache()
+
+
+@patch('app.services.game_search.requests.post')
+def test_search_games_empty_query_returns_empty_without_http(mock_post):
+    assert not game_search.search_games('   ')
     mock_post.assert_not_called()
 
 

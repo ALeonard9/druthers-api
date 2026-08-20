@@ -666,6 +666,10 @@ def test_google_books_request_carries_no_user_agent(mock_get, mock_settings):
 
 @patch('app.services.book_search.requests.get')
 def test_search_books_short_query_returns_empty_without_http(mock_get):
+    # Books keeps the three-character floor: Open Library answers 422 for
+    # anything shorter (probed 2026-08-20, api#398). This is the one domain
+    # where a two-letter title cannot be searched, and it is the provider's
+    # limit, not ours.
     assert not book_search.search_books('Go')
     mock_get.assert_not_called()
 

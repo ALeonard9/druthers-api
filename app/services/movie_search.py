@@ -108,7 +108,8 @@ def search_movies(query: str) -> List[dict]:
     Returns a list of normalized dicts (``tmdb``, ``imdb``, ``title``,
     ``year``, ``poster_url``, ``type``, ``popularity``). Raises 503 when the
     API key is not configured and 502 when the upstream call fails. Queries
-    shorter than three characters and provider query rejections return ``[]``.
+    below TMDB's one-character floor and provider query rejections return
+    ``[]``.
     """
     query = normalized_search_query(query, 'Movie')
     if query is None:

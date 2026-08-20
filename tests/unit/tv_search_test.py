@@ -249,8 +249,19 @@ def test_search_tv_shows_ordinary_title_query_unaffected(mock_get):
 
 
 @patch('app.services.tv_search.requests.get')
-def test_search_tv_shows_short_query_returns_empty_without_http(mock_get):
+def test_search_tv_shows_reaches_tvmaze_for_a_two_character_query(mock_get):
+    # TVMaze serves one-character queries (probed 2026-08-20, api#398).
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    resp.json.return_value = []
+    mock_get.return_value = resp
     assert not tv_search.search_tv_shows('Go')
+    mock_get.assert_called()
+
+
+@patch('app.services.tv_search.requests.get')
+def test_search_tv_shows_empty_query_returns_empty_without_http(mock_get):
+    assert not tv_search.search_tv_shows('   ')
     mock_get.assert_not_called()
 
 

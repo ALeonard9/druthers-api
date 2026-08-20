@@ -11,7 +11,9 @@ from fastapi import HTTPException
 
 from app.config import get_settings
 from app.services.search_policy import (
+    MIN_QUERY_LENGTH_BY_DOMAIN,
     is_bad_query_error,
+    min_query_length,
     normalized_search_query,
     run_search_provider,
 )
@@ -21,9 +23,26 @@ def _http_error(status_code: int) -> requests.HTTPError:
     return requests.HTTPError(response=MagicMock(status_code=status_code))
 
 
-def test_query_policy_normalizes_and_rejects_short_prefixes():
+def test_query_policy_normalizes_and_trims():
     assert normalized_search_query('  matrix  ', 'Movie') == 'matrix'
-    assert normalized_search_query('Go', 'Movie') is None
+
+
+def test_query_floor_follows_each_provider_not_the_strictest():
+    # Probed 2026-08-20 (api#398): TMDB, TVMaze and IGDB all serve
+    # one-character queries; Open Library rejects anything under three.
+    # Asserting the domains differ is the point, so a future change that
+    # flattens them back to one shared floor fails here.
+    assert normalized_search_query('Go', 'Movie') == 'Go'
+    assert normalized_search_query('Go', 'TV') == 'Go'
+    assert normalized_search_query('Go', 'Game') == 'Go'
+    assert normalized_search_query('Go', 'Book') is None
+
+    searchable = {d for d in MIN_QUERY_LENGTH_BY_DOMAIN if min_query_length(d) <= 2}
+    assert searchable == {'Movie', 'TV', 'Game'}
+
+
+def test_unknown_domain_fails_closed_to_the_conservative_floor():
+    assert normalized_search_query('Go', 'Podcast') is None
 
 
 def test_bad_query_policy_keeps_auth_rate_and_server_failures_loud():

@@ -386,8 +386,9 @@ def search_books(query: str) -> List[dict]:
     Search Open Library for books matching ``query``.
 
     Returns a list of normalized dicts (``isbn``, ``title``, ``authors``,
-    ``year``, ``poster_url``). Queries shorter than three characters and
-    provider query rejections return ``[]``; upstream failures raise 502.
+    ``year``, ``poster_url``). Queries shorter than three characters, which
+    Open Library rejects with a 422, and provider query rejections return
+    ``[]``; upstream failures raise 502.
 
     When ``query`` looks like an ISBN (10 or 13 digits, optionally
     hyphenated), it's resolved directly via Open Library's ISBN lookup

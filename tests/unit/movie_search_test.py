@@ -227,9 +227,20 @@ def test_search_movies_unconfigured_returns_503(mock_settings):
     assert exc.value.status_code == 503
 
 
+@patch('app.services.tmdb.get_settings')
 @patch('app.services.tmdb.requests.get')
-def test_search_movies_short_query_returns_empty_without_http(mock_get):
+def test_search_movies_reaches_tmdb_for_a_two_character_query(mock_get, mock_settings):
+    # TMDB serves one-character queries (probed 2026-08-20, api#398), so a
+    # two-letter title like Go must actually reach it.
+    mock_settings.return_value = Settings(tmdb_api_key='k', env='github')
+    mock_get.return_value = _response({'results': []})
     assert movie_search.search_movies('Go') == []
+    mock_get.assert_called()
+
+
+@patch('app.services.tmdb.requests.get')
+def test_search_movies_empty_query_returns_empty_without_http(mock_get):
+    assert movie_search.search_movies('   ') == []
     mock_get.assert_not_called()
 
 
