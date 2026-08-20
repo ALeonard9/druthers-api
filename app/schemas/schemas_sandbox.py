@@ -700,3 +700,12 @@ class BoredItem(BaseModel):
 class BoredResponse(BaseModel):
     pick: BoredItem
     pool_size: int
+
+
+class ItemSocialContext(BaseModel):
+    handle: str
+    display_name: str
+    relationship: str
+    rank: Optional[RankPosition] = None
+    on_watchlist: bool
+    notes: Optional[str] = None

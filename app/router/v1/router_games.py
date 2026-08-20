@@ -14,23 +14,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.db.database import get_db
-from app.services.rate_limit import catalog_add_cap, search_rate_limit
-from app.services.tracker_query import (
-    list_tracker_items,
-    list_params,
-    tracker_list_response,
-)
-from app.services.tracker_rules import (
-    default_completed_at,
-    enforce_single_home,
-    utc_now,
-)
-from app.db.models_sandbox import DbVideoGame, DbUserVideoGame
 from app.auth.oauth2 import get_current_user, require_admin
+from app.db.database import get_db
+from app.db.models_sandbox import DbUserVideoGame, DbVideoGame
 from app.schemas.schemas_sandbox import (
     GameRankingReorder,
     GameSearchResult,
+    ItemSocialContext,
     RankPlacement,
     TrackerListPage,
     UserVideoGameCreate,
@@ -41,13 +31,23 @@ from app.schemas.schemas_sandbox import (
     VideoGameSummary,
     VideoGameUpdate,
 )
-from app.services.game_search import (
-    apply_detail_to_game,
-    get_game_detail,
-    search_games as igdb_search_games,
-)
+from app.services.game_search import apply_detail_to_game, get_game_detail
+from app.services.game_search import search_games as igdb_search_games
+from app.services.rate_limit import catalog_add_cap, search_rate_limit
 from app.services.search_correction import correct_query
+from app.services.shelves import SHELVES
+from app.services.social import get_item_social_context
 from app.services.tracked_status import attach_tracked_status
+from app.services.tracker_query import (
+    list_params,
+    list_tracker_items,
+    tracker_list_response,
+)
+from app.services.tracker_rules import (
+    default_completed_at,
+    enforce_single_home,
+    utc_now,
+)
 
 router = APIRouter(prefix='/v1', tags=['Video Games'])
 
@@ -486,3 +486,14 @@ def unmark_game(
     db.delete(tracker)
     db.commit()
     return None
+
+
+@router.get('/games/{game_id}/social', response_model=list[ItemSocialContext])
+def get_game_social(
+    game_id: str,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    """Return social context (friends and followees) for one game."""
+    shelf = next(s for s in SHELVES if s.category == 'games')
+    return get_item_social_context(db, current_user[0], shelf, game_id)

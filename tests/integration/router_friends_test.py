@@ -462,6 +462,10 @@ def test_a_user_without_a_handle_cannot_be_reached(test_client: TestClient):
             'visibility_watchlist_tv': 'private',
             'visibility_watchlist_books': 'private',
             'visibility_watchlist_games': 'private',
+            'visibility_notes_movies': 'private',
+            'visibility_notes_tv': 'private',
+            'visibility_notes_books': 'private',
+            'visibility_notes_games': 'private',
         },
     )
     cleared = test_client.put(

@@ -34,6 +34,8 @@ class Shelf(NamedTuple):
     # Attribute on DbUser holding this shelf's *watchlist* visibility tier
     # (#236) - only takes effect when visibility_tier admits the viewer too.
     watchlist_visibility_tier: str
+    # Attribute on DbUser holding this shelf's *notes* visibility tier.
+    notes_visibility_tier: str
     tracker_model: Type
     catalog_model: Type
     # Tracker column joining to ``catalog_model.pk``.
@@ -46,6 +48,7 @@ SHELVES: Tuple[Shelf, ...] = (
         'Movies',
         'visibility_movies',
         'visibility_watchlist_movies',
+        'visibility_notes_movies',
         DbUserMovie,
         DbMovie,
         'movie_id',
@@ -55,6 +58,7 @@ SHELVES: Tuple[Shelf, ...] = (
         'TV',
         'visibility_tv',
         'visibility_watchlist_tv',
+        'visibility_notes_tv',
         DbUserTVShow,
         DbTVShow,
         'tv_show_id',
@@ -64,6 +68,7 @@ SHELVES: Tuple[Shelf, ...] = (
         'Books',
         'visibility_books',
         'visibility_watchlist_books',
+        'visibility_notes_books',
         DbUserBook,
         DbBook,
         'book_id',
@@ -73,6 +78,7 @@ SHELVES: Tuple[Shelf, ...] = (
         'Video Games',
         'visibility_games',
         'visibility_watchlist_games',
+        'visibility_notes_games',
         DbUserVideoGame,
         DbVideoGame,
         'game_id',
@@ -94,5 +100,6 @@ def shelf_tier_fields() -> Tuple[Tuple[str, str], ...]:
         for pair in (
             (shelf.visibility_tier, shelf.label),
             (shelf.watchlist_visibility_tier, f'{shelf.label} watchlist'),
+            (shelf.notes_visibility_tier, f'{shelf.label} notes'),
         )
     )
