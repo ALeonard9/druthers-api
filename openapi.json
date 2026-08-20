@@ -5891,7 +5891,7 @@
           "Admin"
         ],
         "summary": "Search Users",
-        "description": "Search the directory by display name, handle, or email; paginated.",
+        "description": "Search the directory by display name, handle, or email; paginated.\n\nSorted and filtered in SQL, not on the page already fetched:\n``last_tracked``/``tracked_total`` are corpus-wide aggregates\n(:func:`_last_tracked_sort_expr`/:func:`_tracked_total_sort_expr`), so\nsorting only the returned page would answer \"who joined this week\" or\n\"show me the disabled accounts\" correctly for the visible rows and\nsilently wrong for everyone else.",
         "operationId": "search_users_v1_admin_users_get",
         "security": [
           {
@@ -5913,6 +5913,62 @@
                 }
               ],
               "title": "Q"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "active",
+                    "disabled"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "joined",
+                    "last_tracked",
+                    "tracked_total",
+                    "status"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string",
+              "default": "desc",
+              "title": "Direction"
             }
           },
           {
@@ -6151,8 +6207,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Match by handle, email, or id.",
               "title": "Actor"
-            }
+            },
+            "description": "Match by handle, email, or id."
           },
           {
             "name": "target",
@@ -6167,8 +6225,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Match by handle, email, or id.",
               "title": "Target"
-            }
+            },
+            "description": "Match by handle, email, or id."
           },
           {
             "name": "action",
@@ -6212,6 +6272,31 @@
       }
     },
     "/v1/admin/impersonation": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "List Impersonation Sessions",
+        "description": "Every live (unended, unexpired) view-as session, across every admin -\nnot scoped to the caller.\n\nScoped admin-wide rather than to \"my own sessions\", the same choice\n``GET /v1/admin/audit`` already made: that endpoint shows the whole\ntrail, not just the caller's own rows, on the theory that an admin\naction is everyone's business on this surface, not just the acting\nadmin's. A forgotten or abandoned session is exactly the case this\nendpoint exists to catch, and it has to be visible - and endable, see\n:func:`stop_impersonation_session` below - to an admin other than the\none who started it.\n\nNever returns the bearer token itself: this is a status/oversight view,\nnot a way to acquire someone else's live credential.",
+        "operationId": "list_impersonation_sessions_v1_admin_impersonation_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutImpersonationSessionList"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      },
       "post": {
         "tags": [
           "Admin"
@@ -6279,6 +6364,52 @@
             "OAuth2PasswordBearer": []
           }
         ]
+      }
+    },
+    "/v1/admin/impersonation/{session_id}": {
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Stop Impersonation Session",
+        "description": "End one specific live view-as session by id, whichever admin started\nit - the console-oversight counterpart to :func:`list_impersonation_\nsessions` above: a listing nobody could act on would not be much of a\nrevoke capability. ``DELETE /v1/admin/impersonation`` (no id) still\nends every session the CALLER owns, for the web's existing \"back to\nadmin\" flow; this is for ending someone else's, or one of several of\nyour own, without taking down the rest.\n\nIdempotent: an unknown, already-ended, or already-expired session id is\na 200 with ``{\"ended\": 0}``, not an error - the caller asked for that\nsession to be gone, and it is, one way or another.",
+        "operationId": "stop_impersonation_session_v1_admin_impersonation__session_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/": {
@@ -9418,6 +9549,38 @@
         "title": "OutFriendUser",
         "description": "The other party in a friendship, as much of them as a friend may see.\n\nNo email, no visibility settings - a friendship is not an introduction to\nsomeone's account."
       },
+      "OutImpersonationLiveSession": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "acting_admin": {
+            "$ref": "#/components/schemas/OutImpersonationParty"
+          },
+          "target": {
+            "$ref": "#/components/schemas/OutImpersonationParty"
+          },
+          "started_at": {
+            "type": "string",
+            "title": "Started At"
+          },
+          "expires_at": {
+            "type": "string",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "acting_admin",
+          "target",
+          "started_at",
+          "expires_at"
+        ],
+        "title": "OutImpersonationLiveSession",
+        "description": "One row of ``GET /v1/admin/impersonation``. Never carries the token."
+      },
       "OutImpersonationParty": {
         "properties": {
           "id": {
@@ -9496,6 +9659,23 @@
         ],
         "title": "OutImpersonationSession",
         "description": "``POST /v1/admin/impersonation``."
+      },
+      "OutImpersonationSessionList": {
+        "properties": {
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/OutImpersonationLiveSession"
+            },
+            "type": "array",
+            "title": "Sessions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sessions"
+        ],
+        "title": "OutImpersonationSessionList",
+        "description": "``GET /v1/admin/impersonation``."
       },
       "OutPendingFriendRequests": {
         "properties": {

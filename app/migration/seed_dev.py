@@ -36,7 +36,10 @@ Usage::
 Every run also seeds the **fixed dev cast** (#313): six accounts covering the
 relationship/visibility positions the social features (compare, sharing,
 friends' activity) need, anchored to the *target* user -- the ``--email``
-user, default the seed admin -- who becomes "you". They all share the dev
+user, default the seed admin -- who becomes "you". A seventh, unrelated
+account (``admin-two``) is a second admin, so admin-console rules that
+require two admins (#341's "an admin cannot impersonate/disable another
+admin") are demonstrable, not just unit-tested. They all share the dev
 password ``change-me``, so a demo can be driven from any seat.
 
 ``docs/dev-cast.md`` is the reference for who they are: handles, credentials,
@@ -110,8 +113,10 @@ _LEGACY_FAKE_ID_BASE = 900_000
 
 # --- Fixed dev cast (#313) ---------------------------------------------------
 # Six accounts covering the relationship/visibility positions the social
-# features need, anchored to the seed target ("you"). All share one password
-# so any position can be signed into. Documented in the module docstring and
+# features need, anchored to the seed target ("you"), plus a seventh
+# (admin-two, #341) that is not: a second admin so admin-on-admin refusals
+# are demonstrable. All share one password so any position can be signed
+# into. Documented in the module docstring and
 # the README; ``_seed_cast`` is what brings them to life.
 
 _CAST_PASSWORD = 'change-me'
@@ -222,6 +227,25 @@ _CAST_USERS = (
         # hold without turning into another ``ready``.
         'extra_movies': 4,
         'time_zone': 'UTC',
+    },
+    {
+        # Not a relationship-position seat like the six above - the local
+        # dev DB otherwise has exactly one admin (the seed admin from
+        # ADMIN_EMAIL), which makes "an admin cannot impersonate/disable
+        # another admin" (#341) provable only by unit test and never
+        # demonstrable in the console (api#341/#344 review, 2026-08-19).
+        # ``gmail.com``, not ``@example.com`` like the rest of the cast:
+        # this account only ever needs to authenticate through the normal
+        # app paths (sign-in, admin actions), and those validate the email
+        # (MX lookup) unlike this script's direct DB inserts, which don't.
+        'email': 'admin-two@gmail.com',
+        'display_name': 'Admin Two',
+        'handle': 'admin-two',
+        'position': 'admin',
+        'tiers': _cast_tiers('private'),
+        'canon_movies': 0,
+        'time_zone': 'America/Chicago',
+        'admin': True,
     },
 )
 
@@ -749,7 +773,8 @@ def _get_or_create_cast_user(session: Session, spec: dict) -> DbUser:
     The cast account for ``spec``, created on first sight and reused after.
 
     Idempotent by email. The fixed handle is claimed only when the account
-    has none, and the nine tiers and the time zone are re-applied every run.
+    has none, and the nine tiers, the time zone, and (when ``spec['admin']``
+    is set) the admin group are re-applied every run.
     """
     user = session.query(DbUser).filter_by(email=spec['email']).one_or_none()
     if user is None:
@@ -766,6 +791,8 @@ def _get_or_create_cast_user(session: Session, spec: dict) -> DbUser:
     for field, tier in spec['tiers'].items():
         setattr(user, field, tier)
     user.time_zone = spec['time_zone']
+    if spec.get('admin'):
+        user.user_group = 'admin'
     return user
 
 

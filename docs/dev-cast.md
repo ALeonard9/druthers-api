@@ -1,8 +1,12 @@
 # The dev cast
 
-Seven local accounts that cover every relationship, visibility and time-zone
-position the social features have. They exist so a demo can *show* a rule
-instead of describing it: sign into the seat the rule applies to and look.
+Eight local accounts. Seven cover every relationship, visibility and
+time-zone position the social features have; the eighth (`admin-two`) is
+unrelated to that matrix - it exists so admin-console rules that need a
+*second* admin (#341: an admin cannot impersonate or disable another admin)
+are demonstrable, not just unit-tested. They exist so a demo can *show* a
+rule instead of describing it: sign into the seat the rule applies to and
+look.
 
 Created by `task seed:dev` (`app/migration/seed_dev.py`). The seeder refuses
 to run against anything but the local dev Postgres, so **these credentials
@@ -22,9 +26,12 @@ is the seed admin from `env/dev.env` and keeps its own `ADMIN_PASSWORD`.
 | `public-user` | `public@example.com` | `change-me` | public | 3 | Australia/Sydney |
 | `private-user` | `private@example.com` | `change-me` | private | 6 | America/New_York |
 | `stranger` | `stranger@example.com` | `change-me` | public | 4 | UTC |
+| `admin-two` | `admin-two@gmail.com` | `change-me` | private | 0 | America/Chicago |
 
 Read `$ADMIN_EMAIL` / `$ADMIN_PASSWORD` out of `env/dev.env` - they are
-per-clone, so never hardcode them into a script or a report.
+per-clone, so never hardcode them into a script or a report. `admin-two`'s
+own credentials are the literal ones above, no env var - it is a fixed cast
+account like the rest, just an admin one.
 
 ### What each seat is for
 
@@ -36,6 +43,7 @@ per-clone, so never hardcode them into a script or a report.
 | `public-user` | none | a stranger whose shelves are readable anyway |
 | `private-user` | none, private profile | a profile that 404s - with a stocked shelf behind it, so the 404 is the tier and not emptiness |
 | `stranger` | none | `not_enough_overlap`: a real shelf, still under the five shared titles alignment needs |
+| `admin-two` | none - both are `user_group='admin'` | the only seat that can demo an admin acting *on* another admin: sign in as `you` (or `admin-two`), try to disable or impersonate the other, and get refused. With one admin in the seed this rule was provable only by unit test. |
 
 **The movie counts are load-bearing.** Every title a cast member ranks is
 also ranked by `you` (the target is seeded with the whole fixture), so shelf
@@ -91,6 +99,10 @@ rest of the run looks like a broken endpoint.
 - **Time zone, greeting, schedule** - see below.
 - **Anything list-shaped (pagination, ranking, filters)** - `you` is the
   only seat with enough rows; the cast shelves are single-page on purpose.
+- **Admin console rules involving a second admin** (disable, impersonate) -
+  the only pair that can demo this is `you` and `admin-two`; every other
+  seat is `user_group='user'` and gets the ordinary non-admin 403 instead
+  of the admin-on-admin refusal.
 
 ### Demoing per-user time zones
 

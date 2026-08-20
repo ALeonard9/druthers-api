@@ -196,3 +196,19 @@ class OutImpersonationSession(BaseModel):
     expires_at: UtcDatetime
     target: OutImpersonationParty
     acting_admin: OutImpersonationParty
+
+
+class OutImpersonationLiveSession(BaseModel):
+    """One row of ``GET /v1/admin/impersonation``. Never carries the token."""
+
+    session_id: str
+    acting_admin: OutImpersonationParty
+    target: OutImpersonationParty
+    started_at: UtcDatetime
+    expires_at: UtcDatetime
+
+
+class OutImpersonationSessionList(BaseModel):
+    """``GET /v1/admin/impersonation``."""
+
+    sessions: list[OutImpersonationLiveSession]

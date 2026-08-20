@@ -47,6 +47,7 @@ ALLOWED_DETAIL_FIELDS = frozenset(
         'session_id',
         'ended',
         'via_impersonation',
+        'live_count',
     }
 )
 

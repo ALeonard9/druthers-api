@@ -1,4 +1,6 @@
 # pylint: disable=missing-module-docstring, missing-function-docstring
+from datetime import datetime, timezone
+
 from fastapi.testclient import TestClient
 
 from app.db.models import DbAdminAuditLog, DbFollow, DbFriendship, DbUser
@@ -159,6 +161,113 @@ def test_admin_search_pagination_and_total(test_client: TestClient, test_create_
     assert [u['id'] for u in second_page.json()['users']] == expected_ids[2:4]
 
 
+def test_admin_search_status_filter(test_client: TestClient, test_create_user):
+    disabled_user = test_create_user(test_client, user_count=1)[0]
+    db = test_client.test_db_session
+    disabled_user.disabled_at = datetime.now(timezone.utc)
+    db.commit()
+
+    active_resp = test_client.get(
+        '/v1/admin/users', headers=_admin(test_client), params={'status': 'active'}
+    )
+    assert active_resp.status_code == 200
+    active_ids = [u['id'] for u in active_resp.json()['users']]
+    assert disabled_user.id not in active_ids
+    assert test_client.first_user.id in active_ids
+
+    disabled_resp = test_client.get(
+        '/v1/admin/users', headers=_admin(test_client), params={'status': 'disabled'}
+    )
+    assert disabled_resp.status_code == 200
+    disabled_body = disabled_resp.json()
+    assert disabled_body['total'] == 1
+    assert [u['id'] for u in disabled_body['users']] == [disabled_user.id]
+    assert disabled_body['users'][0]['status'] == 'disabled'
+
+
+def test_admin_search_sort_by_joined(test_client: TestClient, test_create_user):
+    """
+    Sorting has to be corpus-wide, in SQL, not client-side on the loaded
+    page - a page of 2 sorted client-side would answer "oldest accounts
+    first" correctly for those 2 and silently wrong for everyone else.
+    Proven here by sorting ascending with a limit smaller than the corpus
+    and checking the returned page is still the true oldest-first prefix.
+    """
+    test_create_user(test_client, user_count=5)
+    db = test_client.test_db_session
+    expected_ids = [
+        user.id
+        for user in db.query(DbUser)
+        .order_by(DbUser.created_at.asc(), DbUser.pk.desc())
+        .all()
+    ]
+
+    resp = test_client.get(
+        '/v1/admin/users',
+        headers=_admin(test_client),
+        params={'sort': 'joined', 'direction': 'asc', 'limit': 3},
+    )
+    assert resp.status_code == 200
+    assert [u['id'] for u in resp.json()['users']] == expected_ids[:3]
+
+
+def test_admin_search_sort_by_status(test_client: TestClient, test_create_user):
+    disabled_user = test_create_user(test_client, user_count=1)[0]
+    db = test_client.test_db_session
+    disabled_user.disabled_at = datetime.now(timezone.utc)
+    db.commit()
+
+    resp = test_client.get(
+        '/v1/admin/users',
+        headers=_admin(test_client),
+        params={'sort': 'status', 'direction': 'desc'},
+    )
+    assert resp.status_code == 200
+    users = resp.json()['users']
+    # Disabled (1) sorts before active (0) under direction=desc.
+    assert users[0]['id'] == disabled_user.id
+    assert users[0]['status'] == 'disabled'
+
+
+def test_admin_search_sort_by_tracked_total(test_client: TestClient, test_create_user):
+    heavy_user, light_user = test_create_user(test_client, user_count=2)
+    _track(test_client, heavy_user.pk, 'movies', on_rankings=True, rank=1)
+    _track(test_client, heavy_user.pk, 'books', on_watchlist=True)
+    _track(test_client, light_user.pk, 'movies', on_watchlist=True)
+
+    resp = test_client.get(
+        '/v1/admin/users',
+        headers=_admin(test_client),
+        params={'sort': 'tracked_total', 'direction': 'desc', 'limit': 2},
+    )
+    assert resp.status_code == 200
+    users = resp.json()['users']
+    assert users[0]['id'] == heavy_user.id
+    assert users[0]['tracked_total'] == 2
+    assert users[1]['id'] == light_user.id
+    assert users[1]['tracked_total'] == 1
+
+
+def test_admin_search_sort_by_last_tracked(test_client: TestClient, test_create_user):
+    older_user, newer_user = test_create_user(test_client, user_count=2)
+    older_row = _track(test_client, older_user.pk, 'movies', on_watchlist=True)
+    newer_row = _track(test_client, newer_user.pk, 'movies', on_watchlist=True)
+    db = test_client.test_db_session
+    older_row.updated_at = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    newer_row.updated_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    db.commit()
+
+    resp = test_client.get(
+        '/v1/admin/users',
+        headers=_admin(test_client),
+        params={'sort': 'last_tracked', 'direction': 'desc', 'limit': 2},
+    )
+    assert resp.status_code == 200
+    users = resp.json()['users']
+    assert users[0]['id'] == newer_user.id
+    assert users[1]['id'] == older_user.id
+
+
 def test_admin_user_detail_aggregates(test_client: TestClient, test_create_user):
     friend, follower = test_create_user(test_client, user_count=2)
     target = test_client.first_user
@@ -299,6 +408,56 @@ def test_admin_audit_trail_lists_and_filters(test_client: TestClient):
     # a table row) - it stays database-only.
     assert event['source_ip'] == '203.0.113.42'
     assert 'user_agent' not in event
+
+
+def test_admin_audit_target_filter_accepts_a_handle(test_client: TestClient):
+    """
+    The console's audit table renders the TARGET column as a handle, so
+    the natural motion is to read one there and paste it into the filter.
+    Before this, that produced a confident "no events match" for a target
+    with 30 real rows (api#341 review) - only email/id resolved.
+    """
+    target = test_client.second_user
+    target.handle = 'audit-target-handle'
+    test_client.test_db_session.commit()
+    test_client.get(f'/v1/admin/users/{target.id}', headers=_admin(test_client))
+
+    resp = test_client.get(
+        '/v1/admin/audit',
+        headers=_admin(test_client),
+        params={'action': 'admin.user.view', 'target': 'audit-target-handle'},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body['total'] >= 1
+    assert body['events'][0]['target']['id'] == target.id
+
+
+def test_admin_audit_actor_and_target_filters_combine(test_client: TestClient):
+    """
+    Both filters join DbUser - via distinct aliases, since joining the same
+    unaliased table twice for one query is invalid SQL. Exercising both
+    together is what would have caught a regression to a bare (unaliased)
+    second join.
+    """
+    target = test_client.second_user
+    test_client.get(f'/v1/admin/users/{target.id}', headers=_admin(test_client))
+
+    resp = test_client.get(
+        '/v1/admin/audit',
+        headers=_admin(test_client),
+        params={
+            'actor': test_client.admin_user.handle,
+            'target': target.email,
+            'action': 'admin.user.view',
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body['total'] >= 1
+    event = body['events'][0]
+    assert event['actor']['id'] == test_client.admin_user.id
+    assert event['target']['id'] == target.id
 
 
 def test_admin_audit_trail_excludes_its_own_reads_by_default(test_client: TestClient):

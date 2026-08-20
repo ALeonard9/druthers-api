@@ -15,11 +15,12 @@ Impersonation and reports are later increments - not built here.
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from functools import reduce
+from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import case, func, or_
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy.orm import Session, aliased
 
 from app.auth import refresh_tokens
 from app.auth.oauth2 import (
@@ -51,8 +52,10 @@ from app.schemas.schemas_admin import (
     OutAdminUserListResponse,
     OutAdminUserSummary,
     OutAdminVisibility,
+    OutImpersonationLiveSession,
     OutImpersonationParty,
     OutImpersonationSession,
+    OutImpersonationSessionList,
 )
 from app.services import admin_audit
 from app.services.admin_audit import AdminAuditResult
@@ -159,16 +162,108 @@ def _user_summaries(db: Session, users: list[DbUser]) -> list[OutAdminUserSummar
     ]
 
 
+def _greatest_ignoring_nulls(*expressions):
+    """
+    The greatest of several nullable scalar SQL expressions, NULL only when
+    every one of them is.
+
+    Built from plain CASE/comparison rather than a vendor function on
+    purpose: Postgres has no scalar multi-argument ``MAX()`` (it needs
+    ``GREATEST()``), SQLite's multi-argument ``max()`` is not the same
+    function as its single-argument aggregate ``max()``, and the two
+    dialects do not even agree on where a NULL sorts. This only has to
+    behave identically on the Postgres this ships to and the SQLite the
+    test suite runs on, so it is cheaper to avoid the vendor functions
+    than to reconcile them.
+    """
+
+    def _pick(left, right):
+        return case(
+            (and_(left.isnot(None), or_(right.is_(None), left >= right)), left),
+            else_=right,
+        )
+
+    return reduce(_pick, expressions)
+
+
+def _last_tracked_sort_expr():
+    """
+    Correlated scalar subquery: ``max(updated_at)`` across the four tracker
+    tables, for ``ORDER BY``.
+
+    The SQL-level counterpart to :func:`_last_tracked_bulk`, which only
+    runs on the page already fetched and therefore cannot sort the whole
+    corpus - sorting only the loaded page would silently misrepresent
+    every user not on it.
+    """
+    subqueries = [
+        select(func.max(shelf.tracker_model.updated_at))
+        .where(shelf.tracker_model.user_id == DbUser.pk)
+        .correlate(DbUser)
+        .scalar_subquery()
+        for shelf in SHELVES
+    ]
+    return _greatest_ignoring_nulls(*subqueries)
+
+
+def _tracked_total_sort_expr():
+    """
+    Correlated scalar subquery: ranked-or-watchlisted row count summed
+    across the four tracker tables, for ``ORDER BY``. The SQL-level
+    counterpart to :func:`_domain_counts_bulk`, for the same reason as
+    :func:`_last_tracked_sort_expr` above.
+    """
+    subqueries = [
+        select(func.count())  # pylint: disable=not-callable
+        .select_from(shelf.tracker_model)
+        .where(
+            shelf.tracker_model.user_id == DbUser.pk,
+            or_(
+                shelf.tracker_model.on_rankings.is_(True),
+                shelf.tracker_model.on_watchlist.is_(True),
+            ),
+        )
+        .correlate(DbUser)
+        .scalar_subquery()
+        for shelf in SHELVES
+    ]
+    return reduce(lambda left, right: left + right, subqueries)
+
+
+# One entry per value GET /v1/admin/users?sort= accepts. ``joined`` is a
+# bare column; the other two are correlated subqueries, so all three are
+# wrapped as no-arg callables - building the subquery versions eagerly
+# would attach them to a query before one exists.
+_SORT_EXPRESSIONS = {
+    'joined': lambda: DbUser.created_at,
+    'last_tracked': _last_tracked_sort_expr,
+    'tracked_total': _tracked_total_sort_expr,
+    'status': lambda: case((DbUser.disabled_at.is_(None), 0), else_=1),
+}
+
+
 @router.get('/users', response_model=OutAdminUserListResponse)
 def search_users(  # pylint: disable=too-many-arguments, too-many-positional-arguments
     request: Request,
     q: Optional[str] = None,
+    status: Optional[Literal['active', 'disabled']] = None,
+    sort: Optional[Literal['joined', 'last_tracked', 'tracked_total', 'status']] = None,
+    direction: Literal['asc', 'desc'] = 'desc',
     limit: int = DEFAULT_PAGE_SIZE,
     offset: int = 0,
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
 ):
-    """Search the directory by display name, handle, or email; paginated."""
+    """
+    Search the directory by display name, handle, or email; paginated.
+
+    Sorted and filtered in SQL, not on the page already fetched:
+    ``last_tracked``/``tracked_total`` are corpus-wide aggregates
+    (:func:`_last_tracked_sort_expr`/:func:`_tracked_total_sort_expr`), so
+    sorting only the returned page would answer "who joined this week" or
+    "show me the disabled accounts" correctly for the visible rows and
+    silently wrong for everyone else.
+    """
     limit, offset = _clamp_page(limit, offset)
     query = db.query(DbUser)
     if q:
@@ -180,15 +275,19 @@ def search_users(  # pylint: disable=too-many-arguments, too-many-positional-arg
                 DbUser.email.ilike(like),
             )
         )
+    if status == 'active':
+        query = query.filter(DbUser.disabled_at.is_(None))
+    elif status == 'disabled':
+        query = query.filter(DbUser.disabled_at.isnot(None))
     total = query.count()
-    # created_at alone is not unique - a secondary sort on pk keeps paging
-    # stable instead of occasionally skipping or repeating a row that ties.
-    rows = (
-        query.order_by(DbUser.created_at.desc(), DbUser.pk.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+
+    sort_expr = _SORT_EXPRESSIONS[sort]() if sort else DbUser.created_at
+    primary = sort_expr.asc() if direction == 'asc' else sort_expr.desc()
+    # The sort column alone is not unique - a secondary sort on pk keeps
+    # paging stable instead of occasionally skipping or repeating a row
+    # that ties (every sort here can tie: two accounts created in the same
+    # second, two with no tracked rows, two active accounts, ...).
+    rows = query.order_by(primary, DbUser.pk.desc()).offset(offset).limit(limit).all()
 
     admin_audit.record(
         request,
@@ -409,8 +508,12 @@ def list_audit(  # pylint: disable=too-many-arguments, too-many-positional-argum
     request: Request,
     limit: int = DEFAULT_PAGE_SIZE,
     offset: int = 0,
-    actor: Optional[str] = None,
-    target: Optional[str] = None,
+    actor: Optional[str] = Query(
+        default=None, description='Match by handle, email, or id.'
+    ),
+    target: Optional[str] = Query(
+        default=None, description='Match by handle, email, or id.'
+    ),
     action: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: list = Depends(get_current_user),
@@ -419,22 +522,40 @@ def list_audit(  # pylint: disable=too-many-arguments, too-many-positional-argum
     limit, offset = _clamp_page(limit, offset)
     query = db.query(DbAdminAuditLog)
     if actor:
-        # outerjoin, not join: an actor whose account is gone (SET NULL on
-        # delete) still has to be findable by the denormalized fields below.
+        # outerjoin against an alias, not the bare mapped class: target
+        # below joins DbUser too, and joining the same unaliased table
+        # twice in one query is invalid SQL once both filters are used
+        # together. outerjoin (not join) because an actor whose account is
+        # gone (SET NULL on delete) still has to be findable by the
+        # denormalized fields below.
+        actor_user = aliased(DbUser)
         query = query.outerjoin(
-            DbUser, DbAdminAuditLog.actor_user_pk == DbUser.pk
+            actor_user, DbAdminAuditLog.actor_user_pk == actor_user.pk
         ).filter(
             or_(
-                DbUser.handle == actor,
-                DbUser.email == actor,
-                DbUser.id == actor,
+                actor_user.handle == actor,
+                actor_user.email == actor,
+                actor_user.id == actor,
                 DbAdminAuditLog.actor_user_id == actor,
                 DbAdminAuditLog.actor_email == actor,
             )
         )
     if target:
-        query = query.filter(
+        # Same shape as actor above - the console's audit table renders the
+        # TARGET column as a handle, so a filter that could not match one
+        # would confidently return "no events" while matching rows exist
+        # (api#341 review). The denormalized id/email columns remain the
+        # source of truth for a row whose target user was later deleted;
+        # the join only adds the handle (and, for symmetry, a live id/email
+        # match) for a target that still exists.
+        target_user = aliased(DbUser)
+        query = query.outerjoin(
+            target_user, DbAdminAuditLog.target_user_pk == target_user.pk
+        ).filter(
             or_(
+                target_user.handle == target,
+                target_user.email == target,
+                target_user.id == target,
                 DbAdminAuditLog.target_user_id == target,
                 DbAdminAuditLog.target_email == target,
             )
@@ -495,6 +616,109 @@ def list_audit(  # pylint: disable=too-many-arguments, too-many-positional-argum
             for row in rows
         ],
     )
+
+
+@router.get('/impersonation', response_model=OutImpersonationSessionList)
+def list_impersonation_sessions(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    """
+    Every live (unended, unexpired) view-as session, across every admin -
+    not scoped to the caller.
+
+    Scoped admin-wide rather than to "my own sessions", the same choice
+    ``GET /v1/admin/audit`` already made: that endpoint shows the whole
+    trail, not just the caller's own rows, on the theory that an admin
+    action is everyone's business on this surface, not just the acting
+    admin's. A forgotten or abandoned session is exactly the case this
+    endpoint exists to catch, and it has to be visible - and endable, see
+    :func:`stop_impersonation_session` below - to an admin other than the
+    one who started it.
+
+    Never returns the bearer token itself: this is a status/oversight view,
+    not a way to acquire someone else's live credential.
+    """
+    now = datetime.now(timezone.utc)
+    rows = (
+        db.query(DbImpersonationSession)
+        .filter(
+            DbImpersonationSession.ended_at.is_(None),
+            DbImpersonationSession.expires_at > now,
+        )
+        .order_by(DbImpersonationSession.created_at.desc())
+        .all()
+    )
+    # A session whose admin or target row is gone (deleted after the fact)
+    # is already meaningless to show - it cannot be resumed and nobody
+    # would recognize either party without the very fields that are
+    # missing. Silently excluded rather than surfaced half-populated.
+    live = [row for row in rows if row.admin is not None and row.target is not None]
+
+    admin_audit.record(
+        request,
+        actor=current_user[0],
+        action='admin.impersonation.list',
+        result=AdminAuditResult.ALLOWED,
+        status_code=200,
+        detail={'live_count': len(live)},
+    )
+    return OutImpersonationSessionList(
+        sessions=[
+            OutImpersonationLiveSession(
+                session_id=row.id,
+                acting_admin=OutImpersonationParty.model_validate(row.admin),
+                target=OutImpersonationParty.model_validate(row.target),
+                started_at=row.created_at,
+                expires_at=row.expires_at,
+            )
+            for row in live
+        ]
+    )
+
+
+@router.delete('/impersonation/{session_id}')
+def stop_impersonation_session(
+    request: Request,
+    session_id: str,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    """
+    End one specific live view-as session by id, whichever admin started
+    it - the console-oversight counterpart to :func:`list_impersonation_
+    sessions` above: a listing nobody could act on would not be much of a
+    revoke capability. ``DELETE /v1/admin/impersonation`` (no id) still
+    ends every session the CALLER owns, for the web's existing "back to
+    admin" flow; this is for ending someone else's, or one of several of
+    your own, without taking down the rest.
+
+    Idempotent: an unknown, already-ended, or already-expired session id is
+    a 200 with ``{"ended": 0}``, not an error - the caller asked for that
+    session to be gone, and it is, one way or another.
+    """
+    actor = current_user[0]
+    row = (
+        db.query(DbImpersonationSession)
+        .filter(DbImpersonationSession.id == session_id)
+        .first()
+    )
+    ended = row is not None and row.ended_at is None
+    if ended:
+        row.ended_at = datetime.now(timezone.utc)
+        db.commit()
+
+    admin_audit.record(
+        request,
+        actor=actor,
+        target=row.target if ended else None,
+        action='admin.impersonation.stop',
+        result=AdminAuditResult.ALLOWED,
+        status_code=200,
+        detail={'session_id': session_id, 'ended': 1 if ended else 0},
+    )
+    return {'ended': 1 if ended else 0}
 
 
 @router.post('/impersonation', response_model=OutImpersonationSession)

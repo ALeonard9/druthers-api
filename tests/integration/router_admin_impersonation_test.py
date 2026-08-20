@@ -469,3 +469,187 @@ def test_a_forged_impersonation_claim_on_an_ordinary_token_is_refused(
         headers={'Authorization': f'Bearer {forged}'},
     )
     assert resp.status_code == 403
+
+
+def _token_for(test_client, user, test_authenticate_user):
+    return test_authenticate_user(test_client, user.email, user.plain_password)
+
+
+def test_list_impersonation_sessions_is_admin_wide(
+    test_client: TestClient, test_create_admin_user, test_authenticate_user
+):
+    """
+    Scoped to every admin, not just the caller - listed here by an admin
+    who did NOT start the session, matching GET /v1/admin/audit's own
+    whole-trail (not self-scoped) precedent.
+    """
+    other_admin = test_create_admin_user(test_client)[0]
+    other_admin_headers = {
+        'Authorization': f'Bearer {_token_for(test_client, other_admin, test_authenticate_user)}'
+    }
+
+    target = test_client.first_user
+    start_resp = _start(test_client, target)
+    assert start_resp.status_code == 200
+    session_id = start_resp.json()['session_id']
+
+    listing = test_client.get('/v1/admin/impersonation', headers=other_admin_headers)
+    assert listing.status_code == 200
+    sessions = listing.json()['sessions']
+    matching = next(s for s in sessions if s['session_id'] == session_id)
+    assert matching['acting_admin']['id'] == test_client.admin_user.id
+    assert matching['target']['id'] == target.id
+    assert matching['started_at'].endswith('Z')
+    assert matching['expires_at'].endswith('Z')
+    assert 'token' not in matching
+
+
+def test_list_impersonation_sessions_excludes_ended(test_client: TestClient):
+    target = test_client.first_user
+    start_resp = _start(test_client, target)
+    session_id = start_resp.json()['session_id']
+    test_client.delete(
+        f'/v1/admin/impersonation/{session_id}', headers=_admin(test_client)
+    )
+
+    listing = test_client.get('/v1/admin/impersonation', headers=_admin(test_client))
+    assert not any(s['session_id'] == session_id for s in listing.json()['sessions'])
+
+
+def test_list_impersonation_sessions_excludes_expired(test_client: TestClient):
+    target = test_client.first_user
+    start_resp = _start(test_client, target)
+    session_id = start_resp.json()['session_id']
+    db = test_client.test_db_session
+    row = (
+        db.query(DbImpersonationSession)
+        .filter(DbImpersonationSession.id == session_id)
+        .first()
+    )
+    row.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+    db.commit()
+
+    listing = test_client.get('/v1/admin/impersonation', headers=_admin(test_client))
+    assert not any(s['session_id'] == session_id for s in listing.json()['sessions'])
+
+
+def test_stop_specific_session_ends_only_that_one(test_client: TestClient):
+    first_target = test_client.first_user
+    second_target = test_client.second_user
+    first_headers = _impersonating(test_client, first_target)
+    second_start = _start(test_client, second_target)
+    session_id_two = second_start.json()['session_id']
+    second_headers = {'Authorization': f"Bearer {second_start.json()['token']}"}
+
+    probe_first = f'/v1/users/{first_target.id}'
+    probe_second = f'/v1/users/{second_target.id}'
+    assert test_client.get(probe_first, headers=first_headers).status_code == 200
+    assert test_client.get(probe_second, headers=second_headers).status_code == 200
+
+    stop = test_client.delete(
+        f'/v1/admin/impersonation/{session_id_two}', headers=_admin(test_client)
+    )
+    assert stop.status_code == 200
+    assert stop.json() == {'ended': 1}
+
+    assert test_client.get(probe_first, headers=first_headers).status_code == 200
+    assert test_client.get(probe_second, headers=second_headers).status_code == 403
+
+
+def test_stop_specific_session_is_idempotent(test_client: TestClient):
+    unknown = test_client.delete(
+        '/v1/admin/impersonation/no-such-session', headers=_admin(test_client)
+    )
+    assert unknown.status_code == 200
+    assert unknown.json() == {'ended': 0}
+
+    target = test_client.first_user
+    start_resp = _start(test_client, target)
+    session_id = start_resp.json()['session_id']
+    first_stop = test_client.delete(
+        f'/v1/admin/impersonation/{session_id}', headers=_admin(test_client)
+    )
+    assert first_stop.json() == {'ended': 1}
+    second_stop = test_client.delete(
+        f'/v1/admin/impersonation/{session_id}', headers=_admin(test_client)
+    )
+    assert second_stop.json() == {'ended': 0}
+
+
+def test_stop_specific_session_is_admin_wide(
+    test_client: TestClient, test_create_admin_user, test_authenticate_user
+):
+    """
+    Console oversight, not just self-cleanup: another admin can revoke a
+    session they did not start - the whole point of a listing anyone can
+    act on rather than a "my sessions only" view.
+    """
+    other_admin = test_create_admin_user(test_client)[0]
+    other_admin_headers = {
+        'Authorization': f'Bearer {_token_for(test_client, other_admin, test_authenticate_user)}'
+    }
+
+    target = test_client.first_user
+    start_resp = _start(test_client, target)
+    session_id = start_resp.json()['session_id']
+    imp_headers = {'Authorization': f"Bearer {start_resp.json()['token']}"}
+    probe = f'/v1/users/{target.id}'
+    assert test_client.get(probe, headers=imp_headers).status_code == 200
+
+    stop = test_client.delete(
+        f'/v1/admin/impersonation/{session_id}', headers=other_admin_headers
+    )
+    assert stop.status_code == 200
+    assert stop.json() == {'ended': 1}
+    assert test_client.get(probe, headers=imp_headers).status_code == 403
+
+
+def test_list_and_stop_by_id_are_audited(test_client: TestClient):
+    db = test_client.test_db_session
+    target = test_client.first_user
+    start_resp = _start(test_client, target)
+    session_id = start_resp.json()['session_id']
+
+    test_client.get('/v1/admin/impersonation', headers=_admin(test_client))
+    test_client.delete(
+        f'/v1/admin/impersonation/{session_id}', headers=_admin(test_client)
+    )
+
+    db.expire_all()
+    list_row = (
+        db.query(DbAdminAuditLog)
+        .filter(DbAdminAuditLog.action == 'admin.impersonation.list')
+        .order_by(DbAdminAuditLog.pk.desc())
+        .first()
+    )
+    assert list_row is not None
+    assert list_row.result == 'allowed'
+    assert list_row.detail['live_count'] >= 1
+
+    stop_row = (
+        db.query(DbAdminAuditLog)
+        .filter(DbAdminAuditLog.action == 'admin.impersonation.stop')
+        .order_by(DbAdminAuditLog.pk.desc())
+        .first()
+    )
+    assert stop_row is not None
+    assert stop_row.result == 'allowed'
+    assert stop_row.target_user_pk == target.pk
+    assert stop_row.detail == {'session_id': session_id, 'ended': 1}
+
+
+def test_a_non_admin_cannot_list_or_stop_a_specific_session(test_client: TestClient):
+    target = test_client.first_user
+    start_resp = _start(test_client, target)
+    session_id = start_resp.json()['session_id']
+    headers = _as(test_client.second_user)
+
+    assert (
+        test_client.get('/v1/admin/impersonation', headers=headers).status_code == 403
+    )
+    assert (
+        test_client.delete(
+            f'/v1/admin/impersonation/{session_id}', headers=headers
+        ).status_code
+        == 403
+    )
