@@ -157,6 +157,10 @@ class InVisibilityUpdate(BaseModel):
     visibility_watchlist_tv: Optional[VisibilityTier] = None
     visibility_watchlist_books: Optional[VisibilityTier] = None
     visibility_watchlist_games: Optional[VisibilityTier] = None
+    visibility_notes_movies: Optional[VisibilityTier] = None
+    visibility_notes_tv: Optional[VisibilityTier] = None
+    visibility_notes_books: Optional[VisibilityTier] = None
+    visibility_notes_games: Optional[VisibilityTier] = None
     share_activity: Optional[bool] = None
 
 
@@ -176,6 +180,10 @@ class OutVisibility(BaseModel):
     visibility_watchlist_tv: Optional[VisibilityTier] = None
     visibility_watchlist_books: Optional[VisibilityTier] = None
     visibility_watchlist_games: Optional[VisibilityTier] = None
+    visibility_notes_movies: Optional[VisibilityTier] = None
+    visibility_notes_tv: Optional[VisibilityTier] = None
+    visibility_notes_books: Optional[VisibilityTier] = None
+    visibility_notes_games: Optional[VisibilityTier] = None
     share_activity: bool = True
 
     model_config = ConfigDict(from_attributes=True)

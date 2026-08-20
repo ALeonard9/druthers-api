@@ -495,6 +495,10 @@ def test_the_owner_of_a_private_profile_still_sees_it(test_client: TestClient):
         visibility_watchlist_tv='private',
         visibility_watchlist_books='private',
         visibility_watchlist_games='private',
+        visibility_notes_movies='private',
+        visibility_notes_tv='private',
+        visibility_notes_books='private',
+        visibility_notes_games='private',
     )
 
     anonymous = test_client.get(f'/v1/public/{HANDLE}')

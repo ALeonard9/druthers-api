@@ -13,6 +13,10 @@ TIER_FIELDS = (
     'visibility_watchlist_tv',
     'visibility_watchlist_books',
     'visibility_watchlist_games',
+    'visibility_notes_movies',
+    'visibility_notes_tv',
+    'visibility_notes_books',
+    'visibility_notes_games',
 )
 
 
@@ -183,15 +187,16 @@ def test_clearing_a_handle_only_allowed_while_fully_private(test_client: TestCli
     # Every tier now defaults to 'friends' (web#156), so "fully private" must
     # be reached explicitly rather than relying on the untouched fields'
     # default - this PUT sets all nine, not just the two touched above.
-    test_client.put(
+    privatized = test_client.put(
         '/v1/users/me/visibility',
         headers=_auth(token),
         json={field: 'private' for field in TIER_FIELDS},
     )
+    assert privatized.status_code == 200, privatized.text
     cleared = test_client.put(
         '/v1/users/me/visibility', headers=_auth(token), json={'handle': None}
     )
-    assert cleared.status_code == 200
+    assert cleared.status_code == 200, cleared.text
     assert cleared.json()['handle'] is None
 
 
@@ -231,6 +236,10 @@ def test_the_offending_shelf_is_named_for_watchlists_too(test_client: TestClient
             'visibility_watchlist_tv': 'private',
             'visibility_watchlist_books': 'private',
             'visibility_watchlist_games': 'friends',
+            'visibility_notes_movies': 'private',
+            'visibility_notes_tv': 'private',
+            'visibility_notes_books': 'private',
+            'visibility_notes_games': 'private',
         },
     )
     assert response.status_code == 422

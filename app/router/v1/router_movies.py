@@ -9,22 +9,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.db.database import get_db
-from app.services.rate_limit import catalog_add_cap, search_rate_limit
-from app.services.tracker_rules import (
-    default_completed_at,
-    enforce_single_home,
-    utc_now,
-)
-from app.db.models_sandbox import DbMovie, DbUserMovie
 from app.auth.oauth2 import get_current_user, require_admin
+from app.db.database import get_db
+from app.db.models_sandbox import DbMovie, DbUserMovie
 from app.schemas.schemas_sandbox import (
+    ItemSocialContext,
     MovieCreate,
     MovieResponse,
     MovieSearchResult,
     MovieUpdate,
-    RankPlacement,
     RankingReorder,
+    RankPlacement,
     TrackerListPage,
     UserMovieCreate,
     UserMovieResponse,
@@ -35,16 +30,24 @@ from app.services.movie_search import (
     apply_detail_to_movie,
     get_movie_detail,
     resolve_tmdb_id,
-    search_movies as tmdb_search_movies,
 )
-from app.services.watch_providers import DEFAULT_REGION, get_movie_providers
+from app.services.movie_search import search_movies as tmdb_search_movies
+from app.services.rate_limit import catalog_add_cap, search_rate_limit
 from app.services.search_correction import correct_query
+from app.services.shelves import SHELVES
+from app.services.social import get_item_social_context
 from app.services.tracked_status import attach_tracked_status
 from app.services.tracker_query import (
-    list_tracker_items,
     list_params,
+    list_tracker_items,
     tracker_list_response,
 )
+from app.services.tracker_rules import (
+    default_completed_at,
+    enforce_single_home,
+    utc_now,
+)
+from app.services.watch_providers import DEFAULT_REGION, get_movie_providers
 
 router = APIRouter(prefix='/v1', tags=['Movies'])
 
@@ -514,3 +517,14 @@ def unmark_movie(
     db.delete(tracker)
     db.commit()
     return None
+
+
+@router.get('/movies/{movie_id}/social', response_model=list[ItemSocialContext])
+def get_movie_social(
+    movie_id: str,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    """Return social context (friends and followees) for one movie."""
+    shelf = next(s for s in SHELVES if s.category == 'movies')
+    return get_item_social_context(db, current_user[0], shelf, movie_id)

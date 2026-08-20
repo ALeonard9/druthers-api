@@ -13,20 +13,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.db.database import get_db
-from app.services.rate_limit import catalog_add_cap, search_rate_limit
-from app.services.tracker_query import (
-    list_tracker_items,
-    list_params,
-    tracker_list_response,
-)
-from app.services.tracker_rules import (
-    default_completed_at,
-    enforce_single_home,
-    utc_now,
-)
-from app.db.models_sandbox import DbBook, DbUserBook
 from app.auth.oauth2 import get_current_user, require_admin
+from app.db.database import get_db
+from app.db.models_sandbox import DbBook, DbUserBook
 from app.schemas.schemas_sandbox import (
     BookCreate,
     BookRankingReorder,
@@ -34,19 +23,30 @@ from app.schemas.schemas_sandbox import (
     BookSearchResult,
     BookSummary,
     BookUpdate,
+    ItemSocialContext,
     RankPlacement,
     TrackerListPage,
     UserBookCreate,
     UserBookResponse,
     UserBookUpdate,
 )
-from app.services.book_search import (
-    apply_detail_to_book,
-    get_book_detail,
-    search_books as openlibrary_search_books,
-)
+from app.services.book_search import apply_detail_to_book, get_book_detail
+from app.services.book_search import search_books as openlibrary_search_books
+from app.services.rate_limit import catalog_add_cap, search_rate_limit
 from app.services.search_correction import correct_query
+from app.services.shelves import SHELVES
+from app.services.social import get_item_social_context
 from app.services.tracked_status import attach_tracked_status
+from app.services.tracker_query import (
+    list_params,
+    list_tracker_items,
+    tracker_list_response,
+)
+from app.services.tracker_rules import (
+    default_completed_at,
+    enforce_single_home,
+    utc_now,
+)
 
 router = APIRouter(prefix='/v1', tags=['Books'])
 
@@ -476,3 +476,14 @@ def unmark_book(
     db.delete(tracker)
     db.commit()
     return None
+
+
+@router.get('/books/{book_id}/social', response_model=list[ItemSocialContext])
+def get_book_social(
+    book_id: str,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    """Return social context (friends and followees) for one book."""
+    shelf = next(s for s in SHELVES if s.category == 'books')
+    return get_item_social_context(db, current_user[0], shelf, book_id)

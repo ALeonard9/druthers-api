@@ -125,6 +125,11 @@ class DbUser(DBBaseModel):
     visibility_watchlist_books = tier_override_column('visibility_watchlist_books')
     visibility_watchlist_games = tier_override_column('visibility_watchlist_games')
 
+    visibility_notes_movies = tier_override_column('visibility_notes_movies')
+    visibility_notes_tv = tier_override_column('visibility_notes_tv')
+    visibility_notes_books = tier_override_column('visibility_notes_books')
+    visibility_notes_games = tier_override_column('visibility_notes_games')
+
     # Sharing control for the friends/follows activity feed (#280). This is
     # independent of shelf tiers: those still authorize every event at read
     # time, while this switch lets the owner withdraw all contributions at

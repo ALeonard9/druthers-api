@@ -289,6 +289,10 @@ def test_cannot_follow_a_private_profile(test_client: TestClient):
         visibility_watchlist_tv='private',
         visibility_watchlist_books='private',
         visibility_watchlist_games='private',
+        visibility_notes_movies='private',
+        visibility_notes_tv='private',
+        visibility_notes_books='private',
+        visibility_notes_games='private',
     )
     response = test_client.put(
         '/v1/users/me/following/blake', headers=_auth(test_client.first_user.token)
@@ -495,6 +499,10 @@ def test_a_follow_survives_the_followee_going_private(test_client: TestClient):
         visibility_watchlist_tv='private',
         visibility_watchlist_books='private',
         visibility_watchlist_games='private',
+        visibility_notes_movies='private',
+        visibility_notes_tv='private',
+        visibility_notes_books='private',
+        visibility_notes_games='private',
     )
 
     # The row is untouched...

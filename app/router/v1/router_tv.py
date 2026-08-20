@@ -14,26 +14,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.db.database import get_db
-from app.services import preferences
-from app.services.rate_limit import catalog_add_cap, search_rate_limit
-from app.services.tracker_query import (
-    list_tracker_items,
-    list_params,
-    tracker_list_response,
-)
-from app.services.tracker_rules import (
-    default_completed_at,
-    enforce_single_home,
-    utc_now,
-)
-from app.db.models_sandbox import DbTVShow, DbUserTVShow, DbTVEpisode, DbUserTVEpisode
 from app.auth.oauth2 import get_current_user, require_admin
+from app.db.database import get_db
+from app.db.models_sandbox import DbTVEpisode, DbTVShow, DbUserTVEpisode, DbUserTVShow
 from app.schemas.schemas_sandbox import (
+    ItemSocialContext,
     RankPlacement,
     ScheduleEpisodeItem,
     ScheduleFrozenShow,
     ScheduleResponse,
+    TrackerListPage,
     TVEpisodeCreate,
     TVEpisodeResponse,
     TVEpisodeUpdate,
@@ -43,7 +33,6 @@ from app.schemas.schemas_sandbox import (
     TVShowSearchResult,
     TVShowSummary,
     TVShowUpdate,
-    TrackerListPage,
     UserTVEpisodeResponse,
     UserTVShowCreate,
     UserTVShowResponse,
@@ -51,15 +40,26 @@ from app.schemas.schemas_sandbox import (
     UserTVShowWithStatus,
     WatchProviders,
 )
-from app.services.watch_providers import DEFAULT_REGION, get_tv_providers
-from app.services.tv_search import (
-    apply_detail_to_show,
-    get_tv_show_detail,
-    search_tv_shows as tvmaze_search_shows,
-    sync_episodes,
-)
+from app.services import preferences
+from app.services.rate_limit import catalog_add_cap, search_rate_limit
 from app.services.search_correction import correct_query
+from app.services.shelves import SHELVES
+from app.services.social import get_item_social_context
 from app.services.tracked_status import attach_tracked_status
+from app.services.tracker_query import (
+    list_params,
+    list_tracker_items,
+    tracker_list_response,
+)
+from app.services.tracker_rules import (
+    default_completed_at,
+    enforce_single_home,
+    utc_now,
+)
+from app.services.tv_search import apply_detail_to_show, get_tv_show_detail
+from app.services.tv_search import search_tv_shows as tvmaze_search_shows
+from app.services.tv_search import sync_episodes
+from app.services.watch_providers import DEFAULT_REGION, get_tv_providers
 
 router = APIRouter(prefix='/v1', tags=['TV'])
 
@@ -1024,3 +1024,14 @@ def unmark_episode_favorited(
         db.delete(tracker)
         db.commit()
     return None
+
+
+@router.get('/tv/{tv_show_id}/social', response_model=list[ItemSocialContext])
+def get_tv_social(
+    tv_show_id: str,
+    db: Session = Depends(get_db),
+    current_user: list = Depends(get_current_user),
+):
+    """Return social context (friends and followees) for one TV show."""
+    shelf = next(s for s in SHELVES if s.category == 'tv')
+    return get_item_social_context(db, current_user[0], shelf, tv_show_id)
