@@ -6,9 +6,10 @@ import asyncio
 import json
 import os
 import time
+import uuid
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -23,6 +24,7 @@ from .log.logging_config import logger
 from .router.v1 import (
     user,
     router_activity,
+    router_admin,
     router_api_keys,
     router_export,
     router_follows,
@@ -40,6 +42,7 @@ from .router.v1 import (
     router_tv,
 )
 from .schemas.model_schemas import OutResponseBaseModel
+from .services import admin_audit
 from .utils.exceptions import (
     generic_exception_handler,
     http_exception_handler,
@@ -102,6 +105,10 @@ app = FastAPI(
             'name': 'Summary',
             'description': 'Home summary - per-shelf Top 5 and counts',
         },
+        {
+            'name': 'Admin',
+            'description': 'Admin-only user directory and audit trail',
+        },
     ],
     openapi_url='/openapi.json',
     servers=[
@@ -150,6 +157,107 @@ async def log_request_latency(request, call_next):
     return response
 
 
+@app.middleware('http')
+async def request_id_middleware(request, call_next):
+    """
+    Stamp every request with an id an application log line and, for the
+    admin router, an audit row can both carry - the only way to join the two
+    later.
+
+    Starlette actually wraps ``@app.middleware`` handlers in *reverse*
+    registration order - the last one added is outermost, so
+    ``admin_audit_denial_middleware`` below (registered after this one) runs
+    its own "before ``call_next``" code first, ahead of this middleware's.
+    That does not matter here: ``admin_audit_denial_middleware`` only reads
+    ``request.state.request_id`` *after* its own ``call_next`` returns, and
+    that call is what invokes this middleware (and everything inside it) in
+    the first place - by the time control comes back, the id has already
+    been set. ``scope['state']`` (which ``request.state`` reads and writes)
+    is shared across the whole chain, not copied per middleware, so this
+    holds regardless of nesting order. Confirmed on a live 403.
+    """
+    request.state.request_id = uuid.uuid4().hex
+    response = await call_next(request)
+    response.headers['X-Request-Id'] = request.state.request_id
+    return response
+
+
+@app.middleware('http')
+async def admin_audit_denial_middleware(request, call_next):
+    """
+    Log a denied (or unauthenticated) admin-router request that never
+    reached a route handler.
+
+    ``require_admin`` is a router-level dependency (see
+    ``router_admin.router``), so it raises before any endpoint body - and
+    therefore before that endpoint's own ``admin_audit.record`` call - runs.
+    This is the one place such a denial can still be recorded. Covers both
+    403 (authenticated, not an admin) and 401 (missing/invalid/expired
+    token) - a prober who never authenticates at all is exactly the case an
+    audit trail of an admin surface should not go blind on.
+
+    Skipped when ``request.state.admin_audit_recorded`` is set: a handler
+    that reached its own body and denied the action for a business reason
+    (``disable_user`` refusing a self- or another-admin target) already
+    wrote its own, more specific row via ``admin_audit.record`` - logging
+    again here would duplicate it as a generic, less informative
+    ``admin.access`` entry for the exact same request.
+
+    The whole block is guarded: a DB failure here must come back as the
+    denial response the caller already has, not an unhandled exception. An
+    exception escaping a ``@app.middleware`` handler surfaces at
+    ``ServerErrorMiddleware``, which sits *outside* ``CORSMiddleware`` - so
+    an unguarded failure here would turn a clean, CORS-headered 403 into an
+    opaque CORS error in the browser instead of either the denial or the
+    underlying error.
+    """
+    response = await call_next(request)
+    is_admin_denial = (
+        request.url.path.startswith('/v1/admin')
+        and response.status_code
+        in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
+        and not getattr(request.state, 'admin_audit_recorded', False)
+    )
+    if is_admin_denial:
+        try:
+            # Middleware sits outside FastAPI's dependency graph, so a bare
+            # SessionLocal() would bind to the real engine even under a test
+            # client that has overridden ``get_db`` (dependency_overrides
+            # only intercepts Depends() resolution). Going through the same
+            # override lookup FastAPI itself uses keeps this on the test's
+            # session too.
+            db_dependency = app.dependency_overrides.get(get_db, get_db)
+            db_generator = db_dependency()
+            db = next(db_generator)
+            try:
+                actor, via_impersonation = admin_audit.resolve_actor_best_effort(
+                    request, db
+                )
+                admin_audit.record(
+                    request,
+                    actor=actor,
+                    action='admin.access',
+                    result=admin_audit.AdminAuditResult.DENIED,
+                    status_code=response.status_code,
+                    # Marks a denial made from a live impersonation session
+                    # so the trail is explicit that this was the acting
+                    # admin probing the admin surface from behind another
+                    # user's identity, not that user themself doing it.
+                    detail=({'via_impersonation': True} if via_impersonation else None),
+                )
+            finally:
+                next(db_generator, None)
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Never let a logging failure replace the real response - see
+            # docstring. Full traceback so it's still investigable.
+            logger.exception(
+                'Failed to record admin denial audit row for %s %s',
+                request.method,
+                request.url.path,
+            )
+    return response
+
+
 app.include_router(authentication.router, prefix='/v1/auth')
 app.include_router(user.router, prefix='/v1/users')
 app.include_router(router_movies.router)
@@ -168,6 +276,7 @@ app.include_router(router_friends.router)
 app.include_router(router_follows.router)
 app.include_router(router_preferences.router)
 app.include_router(router_summary.router)
+app.include_router(router_admin.router)
 
 # Serve static files
 app.mount('/static', StaticFiles(directory='app/static'), name='static')

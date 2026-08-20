@@ -206,7 +206,13 @@ def _social_shelf_rows(  # pylint: disable=too-many-arguments, too-many-position
             catalog_model,
             getattr(tracker_model, shelf.join_col) == catalog_model.pk,
         )
-        .filter(DbUser.share_activity.is_(True), event_visible)
+        .filter(
+            DbUser.share_activity.is_(True),
+            # A disabled account is invisible everywhere a deleted one
+            # would be (#344 D2) - no activity-feed contributions.
+            DbUser.disabled_at.is_(None),
+            event_visible,
+        )
     )
     if cursor is not None:
         query = query.filter(

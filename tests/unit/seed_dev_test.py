@@ -262,9 +262,9 @@ def test_seed_cast_creates_fixed_users_and_relationships(test_client):
     result = seed_dev._seed_cast(session, target)
     session.commit()
 
-    assert result['cast_users'] == 6
+    assert result['cast_users'] == 7
     # target 8 canon + friend 8 + follower 2 + followee 1 + public 3
-    # + private 6 + stranger 4 non-canon.
+    # + private 6 + stranger 4 non-canon + admin-two 0.
     assert result['ranked_rows'] == 32
 
     friend = _cast_user(session, 'friend@example.com')
@@ -301,6 +301,34 @@ def test_seed_cast_creates_fixed_users_and_relationships(test_client):
     assert public_user.visibility_profile == 'public'
     assert private_user.visibility_profile == 'private'
     assert stranger.visibility_profile == 'public'
+
+
+def test_seed_cast_admin_two_is_a_second_admin(test_client):
+    """
+    Dev otherwise seeds exactly one admin (the seed admin from
+    ADMIN_EMAIL), which made #341's "an admin cannot impersonate or
+    disable another admin" provable only by unit test - never
+    demonstrable in the console. admin-two exists to fix that; it has no
+    friend/follow relationship to the target and ranks nothing, unlike the
+    other six cast members.
+    """
+    session = test_client.test_db_session
+    target = test_client.first_user
+
+    seed_dev._seed_cast(session, target)
+    session.commit()
+
+    admin_two = _cast_user(session, 'admin-two@gmail.com')
+    assert admin_two.user_group == 'admin'
+    assert admin_two.handle == 'admin-two'
+    assert Hash.verify(admin_two.password, seed_dev._CAST_PASSWORD)
+    assert db_friendship.friendship_between(session, target.pk, admin_two.pk) is None
+    assert db_follow.find(session, admin_two.pk, target.pk) is None
+    assert db_follow.find(session, target.pk, admin_two.pk) is None
+    assert (
+        session.query(DbUserMovie).filter(DbUserMovie.user_id == admin_two.pk).count()
+        == 0
+    )
 
 
 def test_seed_cast_ranks_the_canon_movies(test_client):
@@ -406,12 +434,12 @@ def test_seed_cast_is_idempotent(test_client):
     second = seed_dev._seed_cast(session, target)
     session.commit()
 
-    assert second == {'cast_users': 6, 'ranked_rows': 0}
+    assert second == {'cast_users': 7, 'ranked_rows': 0}
     assert (
         session.query(DbUser)
         .filter(DbUser.email.in_([s['email'] for s in seed_dev._CAST_USERS]))
         .count()
-        == 6
+        == 7
     )
     assert session.query(DbFriendship).count() == 1
     assert session.query(DbFollow).count() == 2

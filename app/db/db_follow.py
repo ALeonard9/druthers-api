@@ -56,22 +56,32 @@ def count_followers(db: Session, followee_pk: int) -> int:
 
 
 def list_following(db: Session, user_pk: int) -> List[Tuple[DbFollow, DbUser]]:
-    """Everyone this user follows, each paired with the followee's row."""
+    """
+    Everyone this user follows, each paired with the followee's row.
+
+    Excludes a disabled followee (#344 D2) - they do not appear in this
+    list, the same as if the follow had been deleted outright.
+    """
     return (
         db.query(DbFollow, DbUser)
         .join(DbUser, DbUser.pk == DbFollow.followee_id)
-        .filter(DbFollow.follower_id == user_pk)
+        .filter(DbFollow.follower_id == user_pk, DbUser.disabled_at.is_(None))
         .order_by(DbFollow.followed_at.desc())
         .all()
     )
 
 
 def list_followers(db: Session, user_pk: int) -> List[Tuple[DbFollow, DbUser]]:
-    """Everyone following this user, each paired with the follower's row."""
+    """
+    Everyone following this user, each paired with the follower's row.
+
+    Excludes a disabled follower (#344 D2), same reasoning as
+    :func:`list_following`.
+    """
     return (
         db.query(DbFollow, DbUser)
         .join(DbUser, DbUser.pk == DbFollow.follower_id)
-        .filter(DbFollow.followee_id == user_pk)
+        .filter(DbFollow.followee_id == user_pk, DbUser.disabled_at.is_(None))
         .order_by(DbFollow.followed_at.desc())
         .all()
     )

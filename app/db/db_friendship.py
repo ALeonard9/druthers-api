@@ -111,11 +111,19 @@ def list_with_other_party(
     friends does not fan out into a lookup per row. ``requested_by_me``
     narrows pending rows to one direction: True for requests this user sent,
     False for ones they received, None for both.
+
+    Excludes a disabled other party (#344 D2) - a disabled account does not
+    appear in another user's friends list or pending requests, the same as
+    if the relationship had been deleted outright.
     """
     query = (
         db.query(DbFriendship, DbUser)
         .join(DbUser, DbUser.pk == _other_user_id(user_pk))
-        .filter(_involving(user_pk), DbFriendship.status == status)
+        .filter(
+            _involving(user_pk),
+            DbFriendship.status == status,
+            DbUser.disabled_at.is_(None),
+        )
     )
     if requested_by_me is True:
         query = query.filter(DbFriendship.requested_by_id == user_pk)

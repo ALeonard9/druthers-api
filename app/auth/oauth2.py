@@ -2,13 +2,24 @@
 This module creates access tokens and verifys tokens.
 """
 
+# pylint: disable=cyclic-import
+# _audit_impersonation_write_blocked below does a deferred import of
+# app.services.admin_audit, which imports app.services.rate_limit, which
+# imports this module at top level. The edge is real but harmless: it is
+# deferred to call time, well after every module involved has finished
+# importing, so it never executes during import resolution. pylint's
+# cyclic-import check still counts deferred edges when building its graph
+# and has no per-import way to say "this one is fine" (its report also
+# lands on an unrelated third file, not the line with the import), so the
+# only precise place to silence it is here, module-wide.
+
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -59,6 +70,15 @@ ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
 # how we tell them apart (and lets secret scanners recognize leaked keys).
 API_KEY_PREFIX = 'drk_'
 
+# Impersonation access tokens carry this in ``typ`` so an ordinary session
+# token can never be mistaken for one, and vice versa (#341).
+IMPERSONATION_TOKEN_TYPE = 'impersonation'
+# Absolute, and deliberately short. There is no refresh path: expiry is the
+# escape hatch for a session somebody walked away from.
+IMPERSONATION_TOKEN_MINUTES = 15
+# Everything else is refused while impersonating.
+_SAFE_METHODS = frozenset({'GET', 'HEAD', 'OPTIONS'})
+
 
 def generate_api_key() -> str:
     """Mint a new API key secret (returned to the user exactly once)."""
@@ -68,6 +88,31 @@ def generate_api_key() -> str:
 def hash_api_key(key: str) -> str:
     """SHA-256 of the full key - the only form ever stored."""
     return hashlib.sha256(key.encode()).hexdigest()
+
+
+def _disabled_exception() -> HTTPException:
+    """
+    Raised by both credential resolvers below for a disabled account.
+
+    Distinct from ``credentials_exception`` (401) on purpose: a 401 tells a
+    web BFF the token expired and sends it into a refresh, which also fails
+    for a disabled user and leaves the client looping. 403 says plainly that
+    the credential itself was fine and the account is the reason - the only
+    answer that lets a client stop retrying and show the right message.
+
+    This is the enforcement point, not ``/auth/token``/``/auth/google``/
+    ``/auth/refresh`` alone: access JWTs are stateless with no ``jti``, so a
+    live one keeps resolving successfully for its full TTL unless the
+    resolver itself checks on every use. Refresh tokens and API keys are
+    also revoked/deleted outright when an account is disabled (see
+    ``app.router.v1.router_admin.disable_user``), so this check is a second,
+    belt-and-suspenders layer for anything minted in the window before that
+    ran, not the only thing stopping a disabled account.
+    """
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail='Account disabled',
+    )
 
 
 def _user_from_api_key(token: str, db: Session, credentials_exception):
@@ -84,12 +129,137 @@ def _user_from_api_key(token: str, db: Session, credentials_exception):
     row = db.query(DbApiKey).filter(DbApiKey.key_hash == hash_api_key(token)).first()
     if row is None:
         raise credentials_exception
+    if row.user.disabled_at is not None:
+        raise _disabled_exception()
     row.last_used_at = datetime.now(timezone.utc)
     db.commit()
     return [row.user]
 
 
-def _user_from_access_token(token: str, db: Session, credentials_exception):
+def _impersonation_exception(detail: str) -> HTTPException:
+    """Raised when an impersonation credential is presented but not honoured."""
+    return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+
+def _session_expires_at_utc(row) -> datetime:
+    """
+    Read ``DbImpersonationSession.expires_at`` back as UTC-aware.
+
+    The column is a naive ``DateTime`` holding a UTC value, which is the
+    normal case here (SQLite and Postgres both hand back naive values, and
+    everything that writes this column stamps UTC). ``.replace(tzinfo=...)``
+    overwrites rather than converts, though: fed an already-aware,
+    non-UTC value it would silently misread as UTC and shift the session's
+    effective expiry by the offset. ``.astimezone`` converts correctly when
+    tzinfo is already present, so use it instead of assuming the naive case.
+    """
+    return (
+        row.expires_at.astimezone(timezone.utc)
+        if row.expires_at.tzinfo
+        else row.expires_at.replace(tzinfo=timezone.utc)
+    )
+
+
+def _audit_impersonation_write_blocked(request, admin, target) -> None:
+    """
+    Record a refused write attempted from a live impersonation session.
+
+    A denied *start* is already audited by the caller in
+    ``router_admin.start_impersonation``; without this, a denied *write*
+    while a session is already live left no trace at all - the riskier of
+    the two attempts was the one going unrecorded. Local import: this module
+    is imported by ``app.services.rate_limit``, which ``app.services.
+    admin_audit`` also imports, so importing it at module scope here would
+    be circular.
+    """
+    # admin_audit imports app.services.rate_limit, which imports this
+    # module at top level - a module-level import here would be a genuine
+    # circular import, not just a pylint false positive. Deferring it to
+    # call time (this function only runs mid-request, well after both
+    # modules have finished importing) is what makes it safe.
+    from app.services import admin_audit  # pylint: disable=import-outside-toplevel
+
+    admin_audit.record(
+        request,
+        actor=admin,
+        target=target,
+        action='admin.impersonation.write_blocked',
+        result=admin_audit.AdminAuditResult.DENIED,
+        status_code=status.HTTP_403_FORBIDDEN,
+    )
+
+
+def _resolve_impersonation(payload: dict, db: Session, request, credentials_exception):
+    """
+    Swap the resolved identity to the impersonation target, or raise.
+
+    Called from :func:`_user_from_access_token` rather than from
+    :func:`get_current_user`, and that placement is the whole security story.
+    ``get_current_session_user`` is a second, independent decode path into
+    this same function; swapping one level up would leave it resolving an
+    impersonation token's ``sub`` to the target with no impersonation context
+    attached, which reaches the self-delete branch of
+    ``DELETE /v1/users/{uuid}``. A session documented as read-only would
+    delete the account. Swapping here covers both callers, and sitting below
+    the ``drk_`` branch in :func:`get_current_user` means no API key can ever
+    reach impersonation.
+    """
+    # Local import keeps the auth module's import surface narrow, matching
+    # the pattern used for DbApiKey above.
+    from app.db.models import (  # pylint: disable=import-outside-toplevel
+        DbImpersonationSession,
+    )
+
+    session_id = payload.get('sid')
+    admin_id = payload.get('act')
+    if not session_id or not admin_id:
+        raise credentials_exception
+
+    row = (
+        db.query(DbImpersonationSession)
+        .filter(DbImpersonationSession.id == session_id)
+        .first()
+    )
+    now = datetime.now(timezone.utc)
+    if row is None or row.ended_at is not None:
+        raise _impersonation_exception('Impersonation session has ended')
+    if row.expires_at is not None and _session_expires_at_utc(row) <= now:
+        raise _impersonation_exception('Impersonation session has expired')
+
+    # Re-check the acting admin on every request, not just at mint: they can
+    # be demoted, disabled or deleted mid-session, and the session must die
+    # with their privilege rather than outliving it.
+    admin = row.admin
+    if admin is None or admin.user_group != 'admin' or admin.disabled_at is not None:
+        raise _impersonation_exception('Acting admin is no longer an administrator')
+
+    target = row.target
+    if target is None:
+        raise credentials_exception
+    # Also re-checked per request: a target promoted to admin mid-session must
+    # stop being impersonable immediately.
+    if target.user_group == 'admin':
+        raise _impersonation_exception('An admin cannot be impersonated')
+
+    # Read-only, with no override path by design (#341 was amended on
+    # 2026-08-18 to cut "act on their behalf"). Enforced here, at the one
+    # point every authenticated route funnels through, so a route cannot opt
+    # out by forgetting a dependency. Deliberately not middleware: middleware
+    # runs before dependency resolution and would have to decode the token
+    # itself, creating exactly the second decode path this function exists to
+    # avoid.
+    if request is not None and request.method not in _SAFE_METHODS:
+        _audit_impersonation_write_blocked(request, admin, target)
+        raise _impersonation_exception(
+            'This view-as session is read-only. End it to act as yourself.'
+        )
+
+    return [target]
+
+
+def _user_from_access_token(
+    token: str, db: Session, credentials_exception, request=None
+):
     """Resolve a signed, expiring access JWT to its user."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -100,9 +270,13 @@ def _user_from_access_token(token: str, db: Session, credentials_exception):
         raise credentials_exception from exc
     except jwt.InvalidTokenError as exc:
         raise credentials_exception from exc
+    if payload.get('typ') == IMPERSONATION_TOKEN_TYPE:
+        return _resolve_impersonation(payload, db, request, credentials_exception)
     user = db_user.get_user(db, uuid)
     if user is None:
         raise credentials_exception
+    if user[0].disabled_at is not None:
+        raise _disabled_exception()
     return user
 
 
@@ -122,11 +296,83 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
+def create_impersonation_token(
+    target_id: str, admin_id: str, session_id: str, expires_at: datetime
+):
+    """
+    Mint the credential for one view-as session, and only that.
+
+    Deliberately not built on the sign-in helpers in
+    :mod:`app.auth.authentication`: both of those mint a refresh token, and an
+    impersonation session must never be refreshable. Expiry has to be a hard
+    stop, or a diagnostic tool becomes a permanent alternate login.
+
+    ``expires_at`` is passed in rather than computed here: the caller also
+    stamps this same instant onto the ``DbImpersonationSession`` row, and
+    two separate ``datetime.now()`` calls would let the row's ``expires_at``
+    and the token's own ``exp`` drift apart by however long the two calls
+    were apart - small, but pointless when one value serves both.
+    """
+    payload = {
+        'sub': target_id,
+        'act': admin_id,
+        'typ': IMPERSONATION_TOKEN_TYPE,
+        'sid': session_id,
+        'exp': expires_at,
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM), expires_at
+
+
+def decode_token_payload_best_effort(token: str) -> Optional[dict]:
+    """
+    Decode a JWT's payload without raising, or ``None`` for anything that
+    is not a validly-signed token of ours (an API key, garbage, expired,
+    forged).
+
+    For callers that only want to inspect claims - never to authenticate
+    with them - and must not let a raw JWT error escape to their own
+    caller: :func:`is_impersonation_token`'s nesting check, and
+    :func:`app.services.admin_audit.resolve_actor_best_effort`'s need to
+    attribute a denied admin-route request to the acting admin rather than
+    an impersonation token's swapped-in target.
+    """
+    if not token or token.startswith(API_KEY_PREFIX):
+        return None
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.InvalidTokenError:
+        return None
+
+
+def is_impersonation_token(token: str) -> bool:
+    """
+    Whether a bearer token is an impersonation credential.
+
+    Used to refuse nesting: an impersonated caller must not be able to mint a
+    further session. ``require_admin`` already refuses them (the swapped
+    identity is not an admin), so this is defence in depth for the case where
+    an admin target somehow slipped through.
+    """
+    payload = decode_token_payload_best_effort(token)
+    return payload is not None and payload.get('typ') == IMPERSONATION_TOKEN_TYPE
+
+
 def get_current_user(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    request: Request,
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
 ):
     """
     This function verifies the current user
+
+    ``request`` is injected so the impersonation read-only rule can see the
+    method at the single point every authenticated route already funnels
+    through. Required, not defaulted to ``None``: FastAPI injects a real
+    ``Request`` for every HTTP route today, so a default would only ever
+    mask the one case that matters - a future non-HTTP route (a WebSocket,
+    say) wiring this dependency without one, which would silently skip the
+    write-block instead of failing to start. :func:`get_optional_current_user`
+    takes its own ``request`` via DI and forwards it here explicitly.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -134,12 +380,17 @@ def get_current_user(
         headers={'WWW-Authenticate': 'Bearer'},
     )
     if token.startswith(API_KEY_PREFIX):
+        # API keys share this header with JWTs, so an API key must never be
+        # able to carry impersonation claims. It cannot: this branch never
+        # reads the token's payload at all.
         return _user_from_api_key(token, db, credentials_exception)
-    return _user_from_access_token(token, db, credentials_exception)
+    return _user_from_access_token(token, db, credentials_exception, request)
 
 
 def get_current_session_user(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    request: Request,
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
 ):
     """
     Authenticate only an expiring interactive-session access token.
@@ -148,16 +399,22 @@ def get_current_session_user(
     deletion uses this dependency so a long-lived MCP or script credential
     cannot delete its owner, while the rest of the API can continue accepting
     both supported bearer credential types through :func:`get_current_user`.
+
+    ``request`` is required for the same reason it is on
+    :func:`get_current_user` - this is the *other* independent decode path
+    into :func:`_user_from_access_token`, and the one the impersonation
+    write-block bug lived in before the swap moved below both of them.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail='Could not validate credentials',
         headers={'WWW-Authenticate': 'Bearer'},
     )
-    return _user_from_access_token(token, db, credentials_exception)
+    return _user_from_access_token(token, db, credentials_exception, request)
 
 
 def get_optional_current_user(
+    request: Request,
     token: Optional[str] = Depends(optional_oauth2_scheme),
     db: Session = Depends(get_db),
 ):
@@ -181,6 +438,10 @@ def get_optional_current_user(
     *Every credential failure answers the same way.* The 404 lookup inside
     :func:`get_current_user` becomes the same 401 as everything else, so an
     expired token and a token for a deleted account are indistinguishable.
+    A disabled account is the one deliberate exception: it stays a 403
+    (see :func:`_disabled_exception`) rather than folding into the generic
+    401, for the same reason it does everywhere else - a 401 here would send
+    a disabled user's client into a refresh loop instead of telling it why.
 
     Unlike :func:`get_current_user`, this returns the ``DbUser`` itself (or
     ``None``) rather than a one-element list - there is nothing to unwrap.
@@ -188,13 +449,33 @@ def get_optional_current_user(
     if not token:
         return None
     try:
-        return get_current_user(token, db)[0]
+        # Keyword arguments, not positional: ``get_current_user`` takes a
+        # leading ``request`` parameter for the impersonation read-only rule,
+        # and this is the only direct (non-DI) call to it in the codebase.
+        # ``request`` is forwarded, not omitted - this dependency mostly
+        # serves reads today, but a future write route wiring it must still
+        # get the write-block rather than silently skipping it.
+        return get_current_user(request=request, token=token, db=db)[0]
     except HTTPException as exc:
+        if exc.status_code == status.HTTP_403_FORBIDDEN:
+            raise
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Could not validate credentials',
             headers={'WWW-Authenticate': 'Bearer'},
         ) from exc
+
+
+def is_admin(current_user: list) -> bool:
+    """
+    Whether the resolved caller belongs to the admin group.
+
+    The one predicate :func:`require_admin` and any mixed admin-or-self
+    route (``app.router.v1.user``) both test against, so "is this user an
+    admin" has a single definition rather than the same string comparison
+    copied at each call site.
+    """
+    return bool(current_user) and current_user[0].user_group == 'admin'
 
 
 def require_admin(current_user: list = Depends(get_current_user)) -> list:
@@ -204,7 +485,7 @@ def require_admin(current_user: list = Depends(get_current_user)) -> list:
     ``get_current_user`` returns a one-element list (``[DbUser]``); reuse it so
     the same object is available to the route.
     """
-    if not current_user or current_user[0].user_group != 'admin':
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='Admin privileges required',

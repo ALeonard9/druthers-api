@@ -101,6 +101,37 @@ def revoke_family(db: Session, family_id: str) -> None:
     ).update({'revoked_at': _now()}, synchronize_session=False)
 
 
+def revoke_all_for_user(db: Session, user_pk: int) -> None:
+    """
+    Revoke every unrevoked refresh token belonging to this user, across
+    every rotation family - not just one. Mirrors :func:`revoke_family`, but
+    for admin-initiated account disable (#344), where every session this
+    user has ever started has to die at once, not just the one that happens
+    to be presented next. Does not commit; the caller (disabling an account)
+    folds this into its own transaction.
+    """
+    db.query(DbRefreshToken).filter(
+        DbRefreshToken.user_id == user_pk,
+        DbRefreshToken.revoked_at.is_(None),
+    ).update({'revoked_at': _now()}, synchronize_session=False)
+
+
+def owner_pk_for_token(db: Session, token: str):
+    """
+    The ``users.pk`` behind a refresh token, or ``None`` if unrecognised.
+
+    Sign-out needs the owner before revoking, so it can also end any view-as
+    session that admin is running (#341). Read-only on purpose: handed a
+    junk token it must change nothing and say so.
+    """
+    row = (
+        db.query(DbRefreshToken)
+        .filter(DbRefreshToken.token_hash == hash_refresh_token(token))
+        .first()
+    )
+    return row.user_id if row is not None else None
+
+
 def revoke_refresh_token(db: Session, token: str) -> bool:
     """
     Revoke a token and the rest of its family - this is what sign-out calls.

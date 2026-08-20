@@ -120,7 +120,14 @@ def send_friend_request(
 
     # No format validation on purpose: a malformed handle simply matches
     # nobody and takes the same generic path a valid-but-unused one does.
-    target = db.query(DbUser).filter(DbUser.handle == handle).first()
+    # A disabled account is excluded the same way (#344 D2) - a request
+    # aimed at one gets the identical "sent" non-answer an unused handle
+    # does, not a distinct signal that the handle belongs to someone.
+    target = (
+        db.query(DbUser)
+        .filter(DbUser.handle == handle, DbUser.disabled_at.is_(None))
+        .first()
+    )
     if target is None:
         return OutFriendAck(message=SENT_MESSAGE)
 

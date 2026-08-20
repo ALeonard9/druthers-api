@@ -435,7 +435,14 @@ def public_profile(  # pylint: disable=too-many-arguments, too-many-positional-a
     only applies once a single ``shelf`` is named; the multi-shelf hub view
     always gets the small preview size for every shelf.
     """
-    user = db.query(DbUser).filter(DbUser.handle == handle.lower()).first()
+    # A disabled account is invisible everywhere a deleted one would be
+    # (#344 D2) - folded into the same lookup as an unclaimed handle, not a
+    # separate branch, so it gets the same 404 for the same reason below.
+    user = (
+        db.query(DbUser)
+        .filter(DbUser.handle == handle.lower(), DbUser.disabled_at.is_(None))
+        .first()
+    )
     # One object for every "you get nothing" outcome, so they cannot drift
     # apart. Vary rides on it as well: whether this handle 404s is itself
     # viewer-dependent, so a shared cache must not answer one viewer from

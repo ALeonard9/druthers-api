@@ -3,6 +3,7 @@ This module creates tokens for users.
 """
 
 import secrets
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.param_functions import Depends
@@ -83,6 +84,14 @@ def get_token(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail='Invalid credentials'
         )
+    if user.disabled_at is not None:
+        # Correct credentials, but this account is not allowed to sign in.
+        # The resolver in oauth2.py would reject the token on its very next
+        # use anyway; rejecting here too means the client never sees a
+        # "successful" sign-in that dies on the following request.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail='Account disabled'
+        )
 
     return _sign_in_response(user, db)
 
@@ -153,6 +162,10 @@ def google_login(request: GoogleAuthRequest, db: Session = Depends(get_db)):
         db.add(user)
         db.commit()
         db.refresh(user)
+    elif user.disabled_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail='Account disabled'
+        )
 
     return _sign_in_response(user, db)
 
@@ -195,5 +208,17 @@ def logout(request: InRefreshToken, db: Session = Depends(get_db)):
     Deliberately 204 whether or not the token was recognised - sign-out must
     not depend on the client still holding a valid credential, and the status
     shouldn't reveal whether a guessed token existed.
+
+    Signing out also ends any view-as session the owner of that refresh token
+    is running (#341). Otherwise an admin could sign out believing they had
+    closed everything down while a live impersonation token kept working
+    until its own expiry.
     """
+    owner_pk = refresh_tokens.owner_pk_for_token(db, request.refresh_token)
     refresh_tokens.revoke_refresh_token(db, request.refresh_token)
+    if owner_pk is not None:
+        db.query(models.DbImpersonationSession).filter(
+            models.DbImpersonationSession.admin_user_pk == owner_pk,
+            models.DbImpersonationSession.ended_at.is_(None),
+        ).update({'ended_at': datetime.now(timezone.utc)}, synchronize_session=False)
+        db.commit()

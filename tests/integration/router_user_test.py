@@ -209,9 +209,10 @@ def test_api_user_cant_get_all_users(
     assert list_response.status_code == 403
     response_data = list_response.json()
     assert response_data['success'] is False
-    assert (
-        response_data['message'] == 'User does not have permission to view all users.'
-    )
+    # Routed through the shared require_admin dependency (#344) rather than
+    # its own bespoke message, so every admin-only route in the API answers
+    # a non-admin the same way.
+    assert response_data['message'] == 'Admin privileges required'
 
 
 def test_api_admin_update_user(

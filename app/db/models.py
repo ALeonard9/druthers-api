@@ -173,6 +173,51 @@ class DbUser(DBBaseModel):
         server_default=text('false'),
     )
 
+    # Admin disable/enable toggle (#344). NULL means active. Adding the
+    # column and reading it (``status`` on the admin endpoints) lands in this
+    # increment; the toggle itself and enforcing it on the auth path are a
+    # later increment - this is only here so the web directory has a real
+    # status column from the start instead of a placeholder computed field.
+    disabled_at = Column(DateTime, nullable=True)
+
+
+class DbImpersonationSession(DBBaseModel):
+    """
+    One admin "view as user" session (#341).
+
+    The impersonation JWT is the capability, but a pure-stateless token cannot
+    satisfy two of the issue's requirements: that an admin can end a session
+    "at any time", and that a session dies when the acting admin is demoted or
+    disabled. Both need server-side state, so every impersonated request loads
+    this row by the token's session id and re-checks it. That is two extra
+    lookups on impersonated requests only; ordinary traffic never touches this
+    table.
+
+    ``ended_at`` is set by the stop endpoint and by sign-out. ``expires_at``
+    mirrors the token's own expiry so a session cannot outlive its credential
+    even if the row is never explicitly ended.
+    """
+
+    __tablename__ = 'impersonation_sessions'
+    admin_user_pk = Column(
+        Integer,
+        ForeignKey('users.pk', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    target_user_pk = Column(
+        Integer,
+        ForeignKey('users.pk', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    reason = Column(String, nullable=True)
+    expires_at = Column(DateTime, nullable=False)
+    ended_at = Column(DateTime, nullable=True)
+
+    admin = relationship('DbUser', foreign_keys=[admin_user_pk])
+    target = relationship('DbUser', foreign_keys=[target_user_pk])
+
 
 class DbApiKey(DBBaseModel):
     """
@@ -373,6 +418,62 @@ class DbFollow(DBBaseModel):
     followed_at = Column(
         DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
     )
+
+
+class DbAdminAuditLog(DBBaseModel):
+    """
+    Append-only trail of every admin-console action (#344).
+
+    Deliberately has no update or delete path anywhere in the codebase - a
+    row records what happened, and a row that could be edited afterwards
+    would not be a trail. Both ``actor_user_pk`` and ``target_user_pk`` are
+    ``SET NULL`` rather than cascading so deleting either party does not
+    take the record of what they did (or had done to them) with it - an
+    admin can misuse the console and then delete their own account, and the
+    trail of that misuse must survive them. ``actor_user_id``/``actor_email``
+    and ``target_user_id``/``target_email`` are stored again as plain text
+    for the same reason, so a row still reads sensibly after the user row is
+    gone. ``detail`` is a JSON blob of changed fields only, built by an
+    allowlist in :mod:`app.services.admin_audit` - never a password, hash,
+    bearer token, API key, refresh token, or raw request body.
+    """
+
+    __tablename__ = 'admin_audit_log'
+
+    # Overrides DBBaseModel's un-indexed created_at: the audit endpoint's
+    # default sort and ``created_at``-adjacent filters both need it.
+    created_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), index=True
+    )
+
+    actor_user_pk = Column(
+        Integer,
+        ForeignKey('users.pk', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    actor_user_id = Column(String, nullable=True)
+    actor_email = Column(String, nullable=True)
+    target_user_pk = Column(
+        Integer,
+        ForeignKey('users.pk', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    target_user_id = Column(String, nullable=True)
+    target_email = Column(String, nullable=True)
+    action = Column(String, nullable=False, index=True)
+    result = Column(String(length=16), nullable=False)
+    detail = Column(JSON, nullable=True)
+    request_id = Column(String, nullable=True)
+    method = Column(String(length=10), nullable=True)
+    path = Column(String, nullable=True)
+    status_code = Column(Integer, nullable=True)
+    source_ip = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
+
+    actor = relationship('DbUser', foreign_keys=[actor_user_pk])
+    target = relationship('DbUser', foreign_keys=[target_user_pk])
 
 
 # Import sandbox models to ensure they are registered with the Base metadata
