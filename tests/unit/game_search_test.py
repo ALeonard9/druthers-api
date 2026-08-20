@@ -278,3 +278,91 @@ def test_get_time_to_beat_no_community_data_returns_none(mock_post, mock_setting
 
     assert game_search.get_time_to_beat(1234) is None
     _reset_token_cache()
+
+
+@patch('app.services.game_search.requests.post')
+def test_search_games_short_query_returns_empty_without_http(mock_post):
+    assert not game_search.search_games('Go')
+    mock_post.assert_not_called()
+
+
+@pytest.mark.parametrize('status_code', [422, 404])
+@patch('app.services.game_search.get_settings')
+@patch('app.services.game_search.requests.post')
+def test_search_games_bad_query_4xx_returns_empty(
+    mock_post, mock_settings, status_code
+):
+    _reset_token_cache()
+    mock_settings.return_value = Settings(
+        twitch_client_id='cid', twitch_client_secret='secret', env='github'
+    )
+    token_response = MagicMock()
+    token_response.raise_for_status.return_value = None
+    token_response.json.return_value = {'access_token': 'tok', 'expires_in': 5000000}
+    query_response = MagicMock(status_code=status_code)
+    query_response.raise_for_status.side_effect = game_search.requests.HTTPError(
+        response=query_response
+    )
+    mock_post.side_effect = [token_response, query_response]
+
+    assert not game_search.search_games('Zelda')
+    _reset_token_cache()
+
+
+@pytest.mark.parametrize('status_code', [500, 403])
+@patch('app.services.game_search.get_settings')
+@patch('app.services.game_search.requests.post')
+def test_search_games_operator_http_error_returns_502(
+    mock_post, mock_settings, status_code
+):
+    _reset_token_cache()
+    mock_settings.return_value = Settings(
+        twitch_client_id='cid', twitch_client_secret='secret', env='github'
+    )
+    token_response = MagicMock()
+    token_response.raise_for_status.return_value = None
+    token_response.json.return_value = {'access_token': 'tok', 'expires_in': 5000000}
+    query_response = MagicMock(status_code=status_code)
+    query_response.raise_for_status.side_effect = game_search.requests.HTTPError(
+        response=query_response
+    )
+    mock_post.side_effect = [token_response, query_response]
+
+    with pytest.raises(HTTPException) as exc:
+        game_search.search_games('Zelda')
+    assert exc.value.status_code == 502
+    _reset_token_cache()
+
+
+@patch('app.services.game_search.get_settings')
+@patch('app.services.game_search.requests.post')
+def test_search_games_repeated_401_returns_502(mock_post, mock_settings):
+    _reset_token_cache()
+    mock_settings.return_value = Settings(
+        twitch_client_id='cid', twitch_client_secret='secret', env='github'
+    )
+
+    def token_response(value):
+        response = MagicMock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {'access_token': value, 'expires_in': 5000000}
+        return response
+
+    def unauthorized_response():
+        response = MagicMock(status_code=401)
+        response.raise_for_status.side_effect = game_search.requests.HTTPError(
+            response=response
+        )
+        return response
+
+    mock_post.side_effect = [
+        token_response('first'),
+        unauthorized_response(),
+        token_response('second'),
+        unauthorized_response(),
+    ]
+
+    with pytest.raises(HTTPException) as exc:
+        game_search.search_games('Zelda')
+    assert exc.value.status_code == 502
+    _reset_token_cache()

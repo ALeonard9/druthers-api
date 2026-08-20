@@ -9,13 +9,19 @@ meter a distributed fleet. Enforcement is on in deployed environments
 defaults are generous enough that a human never notices them.
 """
 
+import hashlib
 import threading
 import time
 from collections import defaultdict, deque
 
 from fastapi import Depends, HTTPException, Request, status
 
-from app.auth.oauth2 import get_current_user
+from app.auth.oauth2 import (
+    API_KEY_PREFIX,
+    decode_token_payload_best_effort,
+    get_current_user,
+    oauth2_scheme,
+)
 from app.config import get_settings
 
 _lock = threading.Lock()
@@ -133,12 +139,22 @@ def refresh_rate_limit(user) -> None:
         _reject('token refreshes', AUTH_WINDOW_SECONDS)
 
 
-def search_rate_limit(current_user: list = Depends(get_current_user)) -> None:
-    """Per-user cap on external search-proxy calls (they burn API quotas)."""
+def _search_credential_key(token: str) -> str:
+    """Stable limiter key derived without checking out a DB connection."""
+    if not token.startswith(API_KEY_PREFIX):
+        payload = decode_token_payload_best_effort(token)
+        if payload and payload.get('sub'):
+            return str(payload['sub'])
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def search_rate_limit(token: str = Depends(oauth2_scheme)) -> None:
+    """Per-credential search cap that runs before database authentication."""
     if not _enforced():
         return
     limit = get_settings().rate_limit_search
-    if not _allow(f'search:{current_user[0].pk}', limit, SEARCH_WINDOW_SECONDS):
+    key = _search_credential_key(token)
+    if not _allow(f'search:{key}', limit, SEARCH_WINDOW_SECONDS):
         _reject('searches', SEARCH_WINDOW_SECONDS)
 
 

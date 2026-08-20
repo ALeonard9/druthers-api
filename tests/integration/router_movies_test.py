@@ -1,9 +1,19 @@
 # pylint: disable=missing-module-docstring, missing-function-docstring
+import asyncio
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import QueuePool
 
 from app.config import Settings
+from app.router.v1 import router_movies
+from app.run import settings as app_settings
 from app.services import watch_providers
 
 
@@ -503,3 +513,90 @@ def test_movie_watch_providers_requires_auth(test_client: TestClient):
 
     response = test_client.get(f"/v1/movies/{movie_id}/watch-providers")
     assert response.status_code == 401
+
+
+@patch('app.router.v1.router_movies.attach_tracked_status')
+@patch('app.router.v1.router_movies.tmdb_search_movies')
+def test_search_releases_db_connection_before_provider(mock_search, mock_attach):
+    db = MagicMock()
+    user = SimpleNamespace(pk=7)
+
+    def provider(_query):
+        db.close.assert_called_once_with()
+        return [{'tmdb': 1, 'title': 'Matrix'}]
+
+    expected = [{'tmdb': 1, 'title': 'Matrix'}]
+    mock_search.side_effect = provider
+    mock_attach.side_effect = lambda _db, _pk, results, _domain: results
+
+    results = asyncio.run(router_movies.search_movies_endpoint('matrix', db, [user]))
+
+    assert results[0]['title'] == 'Matrix'
+    mock_attach.assert_called_once_with(db, 7, expected, 'movies')
+
+
+@patch('app.router.v1.router_movies.correct_query', return_value=None)
+def test_concurrent_searches_above_pool_capacity_do_not_time_out(
+    _correct_query,
+):
+    pool_capacity = app_settings.db_pool_size + app_settings.db_max_overflow
+    request_count = pool_capacity + 4
+    engine = create_engine(
+        'sqlite://',
+        connect_args={'check_same_thread': False},
+        poolclass=QueuePool,
+        pool_size=app_settings.db_pool_size,
+        max_overflow=app_settings.db_max_overflow,
+        pool_timeout=0.2,
+    )
+    sessions = sessionmaker(bind=engine)
+    provider_barrier = threading.Barrier(request_count)
+    provider_release = threading.Barrier(request_count)
+
+    def provider(_query):
+        provider_barrier.wait(timeout=5)
+        assert engine.pool.checkedout() == 0
+        provider_release.wait(timeout=5)
+        return [{'tmdb': 1, 'title': 'Matrix'}]
+
+    def attach_status(db, _user_pk, results, _domain):
+        db.execute(text('SELECT 1'))
+        return results
+
+    def search_request():
+        db = sessions()
+        try:
+            db.execute(text('SELECT 1'))
+            return asyncio.run(
+                router_movies.search_movies_endpoint(
+                    'matrix', db, [SimpleNamespace(pk=7)]
+                )
+            )
+        finally:
+            db.close()
+
+    with (
+        patch.object(router_movies, 'tmdb_search_movies', side_effect=provider),
+        patch.object(router_movies, 'attach_tracked_status', side_effect=attach_status),
+        ThreadPoolExecutor(max_workers=request_count) as pool,
+    ):
+        futures = [pool.submit(search_request) for _ in range(request_count)]
+        results = [future.result(timeout=10) for future in futures]
+
+    assert all(result[0]['title'] == 'Matrix' for result in results)
+    engine.dispose()
+
+
+@patch('app.router.v1.router_movies.tmdb_search_movies')
+def test_search_handler_timeout_returns_clear_504(mock_search, test_client):
+    mock_search.side_effect = lambda _query: time.sleep(0.5) or []
+    headers = {'Authorization': f'Bearer {test_client.first_user.token}'}
+
+    started = time.monotonic()
+    with patch.object(app_settings, 'search_handler_timeout_seconds', 0.05):
+        response = test_client.get('/v1/movies/search?q=matrix', headers=headers)
+    elapsed = time.monotonic() - started
+
+    assert response.status_code == 504
+    assert response.json()['message'] == 'Search timed out, please try again'
+    assert elapsed < 0.25

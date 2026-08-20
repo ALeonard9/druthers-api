@@ -23,6 +23,7 @@ from fastapi import HTTPException, status
 
 from app.config import get_settings
 from app.log.logging_config import logger
+from app.services.search_policy import is_bad_query_error, normalized_search_query
 
 OPENLIBRARY_URL = 'https://openlibrary.org'
 COVERS_URL = 'https://covers.openlibrary.org'
@@ -329,6 +330,15 @@ def _search_by_isbn(isbn: str) -> List[dict]:
         )
         response.raise_for_status()
         payload = response.json()
+    except requests.HTTPError as exc:
+        if is_bad_query_error(exc):
+            logger.info('Open Library rejected ISBN search %r: %s', isbn, exc)
+            return []
+        logger.error('Open Library ISBN lookup failed for %r: %s', isbn, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail='Upstream book search failed',
+        ) from exc
     except (requests.RequestException, ValueError) as exc:
         logger.error('Open Library ISBN lookup failed for %r: %s', isbn, exc)
         raise HTTPException(
@@ -376,19 +386,16 @@ def search_books(query: str) -> List[dict]:
     Search Open Library for books matching ``query``.
 
     Returns a list of normalized dicts (``isbn``, ``title``, ``authors``,
-    ``year``, ``poster_url``). Raises 400 on an empty query and 502 when the
-    upstream call fails.
+    ``year``, ``poster_url``). Queries shorter than three characters and
+    provider query rejections return ``[]``; upstream failures raise 502.
 
     When ``query`` looks like an ISBN (10 or 13 digits, optionally
     hyphenated), it's resolved directly via Open Library's ISBN lookup
     instead of a title search.
     """
-    query = (query or '').strip()
-    if not query:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Search query must not be empty',
-        )
+    query = normalized_search_query(query, 'Book')
+    if query is None:
+        return []
 
     normalized_isbn = re.sub(r'[-\s]', '', query)
     if _ISBN_RE.match(normalized_isbn):
@@ -411,6 +418,15 @@ def search_books(query: str) -> List[dict]:
         )
         response.raise_for_status()
         payload = response.json()
+    except requests.HTTPError as exc:
+        if is_bad_query_error(exc):
+            logger.info('Open Library rejected book search query %r: %s', query, exc)
+            return []
+        logger.error('Open Library search failed for %r: %s', query, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail='Upstream book search failed',
+        ) from exc
     except (requests.RequestException, ValueError) as exc:
         logger.error('Open Library search failed for %r: %s', query, exc)
         raise HTTPException(

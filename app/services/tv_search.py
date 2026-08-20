@@ -17,6 +17,7 @@ import requests
 from fastapi import HTTPException, status
 
 from app.log.logging_config import logger
+from app.services.search_policy import is_bad_query_error, normalized_search_query
 
 TVMAZE_URL = 'https://api.tvmaze.com'
 REQUEST_TIMEOUT = 10
@@ -95,6 +96,15 @@ def _lookup_show(params: dict) -> List[dict]:
             return []
         response.raise_for_status()
         payload = response.json()
+    except requests.HTTPError as exc:
+        if is_bad_query_error(exc):
+            logger.info('TVMaze rejected TV id query %r: %s', params, exc)
+            return []
+        logger.error('TVMaze lookup failed for %r: %s', params, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail='Upstream TV search failed',
+        ) from exc
     except (requests.RequestException, ValueError) as exc:
         logger.error('TVMaze lookup failed for %r: %s', params, exc)
         raise HTTPException(
@@ -118,15 +128,13 @@ def search_tv_shows(query: str) -> List[dict]:
     queries are unaffected.
 
     Returns a list of normalized dicts (``tvmaze``, ``imdb``, ``title``,
-    ``year``, ``status``, ``network``, ``poster_url``). Raises 400 on an
-    empty query and 502 when the upstream call fails.
+    ``year``, ``status``, ``network``, ``poster_url``). Queries shorter than
+    three characters and provider query rejections return ``[]``; upstream
+    failures raise 502.
     """
-    query = (query or '').strip()
-    if not query:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Search query must not be empty',
-        )
+    query = normalized_search_query(query, 'TV')
+    if query is None:
+        return []
 
     if _IMDB_ID_RE.fullmatch(query):
         return _lookup_show({'imdb': query.lower()})
@@ -143,6 +151,15 @@ def search_tv_shows(query: str) -> List[dict]:
         )
         response.raise_for_status()
         payload = response.json()
+    except requests.HTTPError as exc:
+        if is_bad_query_error(exc):
+            logger.info('TVMaze rejected TV search query %r: %s', query, exc)
+            return []
+        logger.error('TVMaze search failed for %r: %s', query, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail='Upstream TV search failed',
+        ) from exc
     except (requests.RequestException, ValueError) as exc:
         logger.error('TVMaze search failed for %r: %s', query, exc)
         raise HTTPException(

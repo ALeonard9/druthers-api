@@ -227,12 +227,40 @@ def test_search_movies_unconfigured_returns_503(mock_settings):
     assert exc.value.status_code == 503
 
 
+@patch('app.services.tmdb.requests.get')
+def test_search_movies_short_query_returns_empty_without_http(mock_get):
+    assert movie_search.search_movies('Go') == []
+    mock_get.assert_not_called()
+
+
+@pytest.mark.parametrize('status_code', [422, 404])
 @patch('app.services.tmdb.get_settings')
-def test_search_movies_empty_query_returns_400(mock_settings):
+@patch('app.services.tmdb.requests.get')
+def test_search_movies_bad_query_4xx_returns_empty(
+    mock_get, mock_settings, status_code
+):
     mock_settings.return_value = Settings(tmdb_api_key='k', env='github')
+    response = _response({}, status_code=status_code)
+    response.raise_for_status.side_effect = tmdb.requests.HTTPError(response=response)
+    mock_get.return_value = response
+
+    assert movie_search.search_movies('Titanic') == []
+
+
+@pytest.mark.parametrize('status_code', [500, 401, 403])
+@patch('app.services.tmdb.get_settings')
+@patch('app.services.tmdb.requests.get')
+def test_search_movies_operator_http_error_returns_502(
+    mock_get, mock_settings, status_code
+):
+    mock_settings.return_value = Settings(tmdb_api_key='k', env='github')
+    response = _response({}, status_code=status_code)
+    response.raise_for_status.side_effect = tmdb.requests.HTTPError(response=response)
+    mock_get.return_value = response
+
     with pytest.raises(HTTPException) as exc:
-        movie_search.search_movies('   ')
-    assert exc.value.status_code == 400
+        movie_search.search_movies('Titanic')
+    assert exc.value.status_code == 502
 
 
 @patch('app.services.tmdb.time.sleep')

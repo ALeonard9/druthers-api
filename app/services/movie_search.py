@@ -28,6 +28,7 @@ from fastapi import HTTPException, status
 
 from app.log.logging_config import logger
 from app.services import tmdb
+from app.services.search_policy import normalized_search_query
 
 _IMDB_ID_RE = re.compile(r'^tt\d+$', re.IGNORECASE)
 
@@ -77,12 +78,16 @@ def _search_by_imdb_id(imdb_id: str) -> List[dict]:
     result into the same search-hit shape title matches produce. Returns ``[]``
     when the id doesn't resolve, mirroring title search's "not found".
     """
-    payload = tmdb.try_request(f'/find/{imdb_id}', {'external_source': 'imdb_id'})
-    if payload is None:
+    try:
+        payload = tmdb.request(f'/find/{imdb_id}', {'external_source': 'imdb_id'})
+    except tmdb.TmdbBadQuery as exc:
+        logger.info('TMDB rejected movie id query %r: %s', imdb_id, exc)
+        return []
+    except (tmdb.TmdbUnconfigured, tmdb.TmdbError) as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail='Upstream movie search failed',
-        )
+        ) from exc
     results = payload.get('movie_results') or []
     if not results:
         return []
@@ -102,14 +107,12 @@ def search_movies(query: str) -> List[dict]:
 
     Returns a list of normalized dicts (``tmdb``, ``imdb``, ``title``,
     ``year``, ``poster_url``, ``type``, ``popularity``). Raises 503 when the
-    API key is not configured and 502 when the upstream call fails.
+    API key is not configured and 502 when the upstream call fails. Queries
+    shorter than three characters and provider query rejections return ``[]``.
     """
-    query = (query or '').strip()
-    if not query:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Search query must not be empty',
-        )
+    query = normalized_search_query(query, 'Movie')
+    if query is None:
+        return []
 
     if not tmdb.is_configured():
         raise HTTPException(
@@ -129,6 +132,9 @@ def search_movies(query: str) -> List[dict]:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail='Movie search is not configured (TMDB_API_KEY missing)',
         ) from exc
+    except tmdb.TmdbBadQuery as exc:
+        logger.info('TMDB rejected movie search query %r: %s', query, exc)
+        return []
     except tmdb.TmdbError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

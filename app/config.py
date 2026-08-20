@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     lz: Optional[str] = None
     log_level: str = 'INFO'
     time_zone: str = 'America/New_York'
+    # Cloud Run admits 80 requests per instance. AnyIO runs at most 40 sync
+    # callables concurrently, while the 20-connection DB pool is reserved for
+    # short auth and result-decoration phases, never provider waits.
+    cloud_run_container_concurrency: int = 80
+    sync_thread_limit: int = 40
+    search_handler_timeout_seconds: float = 20.0
     # Baked in at image build time (see Dockerfile ARG/ENV GIT_SHA). Lets a
     # running container be checked against the working tree instead of
     # silently serving a stale build (api#232).
@@ -40,9 +46,9 @@ class Settings(BaseSettings):
     postgres_host: Optional[str] = None
     postgres_connection_port: str = '5432'
     postgres_db: str = 'druthers'
-    # SQLAlchemy's default pool is 5 + 10 overflow. One page render fans out
-    # several concurrent API calls, so the default silently serialises the
-    # tail of a render behind the pool. Sized here instead of implied.
+    # Twenty total connections support the brief DB phases of up to 40 active
+    # sync callables. Search closes its session during provider I/O, so the
+    # pool is not expected to match Cloud Run's 80 admitted requests.
     db_pool_size: int = 10
     db_max_overflow: int = 10
     db_pool_timeout: int = 10
