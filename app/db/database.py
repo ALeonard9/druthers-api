@@ -28,6 +28,7 @@ else:
         max_overflow=settings.db_max_overflow,
         # Fail fast rather than hanging a request behind an exhausted pool.
         pool_timeout=settings.db_pool_timeout,
+        connect_args={'connect_timeout': settings.db_connect_timeout},
     )
 SessionLocal = sessionmaker(
     autocommit=False, autoflush=False, bind=engine

@@ -5,6 +5,7 @@ This module contains the main application setup and routing.
 import asyncio
 import json
 import os
+import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -372,14 +373,17 @@ async def start_server():
     else:
         logger.info('Skipping create_all; schema managed by Alembic migrations')
 
-    try:
-        db = next(get_db())
-        db_user.create_admin_user(db)
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        # Startup seeding is best-effort: a misconfigured admin seed or an
-        # unreachable database must never stop the server from listening
-        # (Cloud Run kills revisions that don't bind their port).
-        logger.error('Startup seeding skipped: %s', e)
+    def seed_admin():
+        try:
+            db = next(get_db())
+            db_user.create_admin_user(db)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            # Startup seeding is best-effort: a misconfigured admin seed or an
+            # unreachable database must never stop the server from listening
+            # (Cloud Run kills revisions that don't bind their port).
+            logger.error('Startup seeding skipped: %s', e)
+
+    threading.Thread(target=seed_admin, daemon=True).start()
 
     if settings.is_local:
         await generate_openapi_json()

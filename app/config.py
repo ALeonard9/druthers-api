@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     db_pool_size: int = 10
     db_max_overflow: int = 10
     db_pool_timeout: int = 10
+    db_connect_timeout: int = 5
 
     # --- Auth ---
     jwt_secret_key: Optional[str] = None
