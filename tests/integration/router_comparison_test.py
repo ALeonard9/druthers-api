@@ -145,6 +145,12 @@ def test_comparison_reports_a_viewers_outgoing_pending_request(test_client: Test
     )
     assert sent.status_code == 202, sent.text
 
+    requests = test_client.get(
+        '/v1/users/me/friends/requests',
+        headers=_auth(test_client.second_user.token),
+    )
+    req_id = requests.json()['outgoing'][0]['id']
+
     response = test_client.get(
         '/v1/users/me/comparison/brandon',
         headers=_auth(test_client.second_user.token),
@@ -152,6 +158,7 @@ def test_comparison_reports_a_viewers_outgoing_pending_request(test_client: Test
     assert response.status_code == 200, response.text
     assert response.json()['relationship'] == 'none'
     assert response.json()['friend_request_state'] == 'pending'
+    assert response.json()['outgoing_request_id'] == req_id
 
 
 def test_private_profile_and_unknown_handle_are_the_same_404(test_client: TestClient):

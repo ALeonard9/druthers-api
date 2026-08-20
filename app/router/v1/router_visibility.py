@@ -503,7 +503,9 @@ def public_profile(  # pylint: disable=too-many-arguments, too-many-positional-a
         relationship is ViewerRelationship.NONE
         or relationship is ViewerRelationship.FRIEND
     ) and is_following(db, viewer.pk, user.pk)
-    friend_request_state = outgoing_friend_request_state(db, user, viewer, relationship)
+    friend_request_state, outgoing_request_id = outgoing_friend_request_state(
+        db, user, viewer, relationship
+    )
 
     payload = {
         'handle': user.handle,
@@ -512,6 +514,7 @@ def public_profile(  # pylint: disable=too-many-arguments, too-many-positional-a
             'relationship': relationship.value,
             'following': following,
             'friend_request_state': friend_request_state,
+            'outgoing_request_id': outgoing_request_id,
         },
         'shelves': shelves,
         'total_ranked': sum(s['ranked_count'] for s in shelves),

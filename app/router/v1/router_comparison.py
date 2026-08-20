@@ -74,7 +74,7 @@ def compare_with_user(
     """Return the four domain comparisons visible to this viewer."""
     viewer = current_user[0]
     target, relationship, ceiling = _target_access(db, viewer, handle)
-    friend_request_state = outgoing_friend_request_state(
+    friend_request_state, outgoing_request_id = outgoing_friend_request_state(
         db, target, viewer, relationship
     )
     return {
@@ -82,6 +82,7 @@ def compare_with_user(
         'display_name': target.display_name,
         'relationship': relationship.value,
         'friend_request_state': friend_request_state,
+        'outgoing_request_id': outgoing_request_id,
         'domains': [
             compare_shelf(db, viewer, target, shelf, ceiling) for shelf in SHELVES
         ],

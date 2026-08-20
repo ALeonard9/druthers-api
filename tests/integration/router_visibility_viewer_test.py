@@ -172,6 +172,7 @@ def test_anonymous_sees_only_public_shelves(profile: TestClient):
         'relationship': 'anonymous',
         'following': False,
         'friend_request_state': 'none',
+        'outgoing_request_id': None,
     }
 
 
@@ -185,6 +186,7 @@ def test_a_friend_additionally_sees_friends_shelves(profile: TestClient):
         'relationship': 'friend',
         'following': False,
         'friend_request_state': 'friends',
+        'outgoing_request_id': None,
     }
 
 
@@ -198,6 +200,7 @@ def test_a_non_friend_gets_the_anonymous_response(profile: TestClient, stranger_
         'relationship': 'none',
         'following': False,
         'friend_request_state': 'none',
+        'outgoing_request_id': None,
     }
     assert {k: v for k, v in stranger.items() if k != 'viewer'} == {
         k: v for k, v in anonymous.items() if k != 'viewer'
@@ -214,6 +217,7 @@ def test_the_owner_sees_every_shelf_including_private(profile: TestClient):
         'relationship': 'self',
         'following': False,
         'friend_request_state': 'none',
+        'outgoing_request_id': None,
     }
 
 
@@ -379,6 +383,7 @@ def test_nothing_visible_returns_200_when_profile_tier_admits_you(
         'relationship': 'friend',
         'following': False,
         'friend_request_state': 'friends',
+        'outgoing_request_id': None,
     }
 
     # Querying a specific unadmitted shelf still returns 404.
@@ -428,12 +433,19 @@ def test_profile_reports_a_viewers_outgoing_pending_request(test_client: TestCli
     )
     assert sent.status_code == 202, sent.text
 
+    requests = test_client.get(
+        '/v1/users/me/friends/requests',
+        headers=_auth(viewer_token),
+    )
+    req_id = requests.json()['outgoing'][0]['id']
+
     response = test_client.get(f'/v1/public/{HANDLE}', headers=_auth(viewer_token))
     assert response.status_code == 200, response.text
     assert response.json()['viewer'] == {
         'relationship': 'none',
         'following': False,
         'friend_request_state': 'pending',
+        'outgoing_request_id': req_id,
     }
 
 
@@ -493,6 +505,7 @@ def test_the_owner_of_a_private_profile_still_sees_it(test_client: TestClient):
         'relationship': 'self',
         'following': False,
         'friend_request_state': 'none',
+        'outgoing_request_id': None,
     }
 
 
@@ -515,6 +528,7 @@ def test_bad_credentials_are_rejected_rather_than_ignored(profile: TestClient, t
             'relationship': 'anonymous',
             'following': False,
             'friend_request_state': 'none',
+            'outgoing_request_id': None,
         }
     else:
         assert response.status_code == 401
