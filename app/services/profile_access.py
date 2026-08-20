@@ -1,6 +1,6 @@
 """Relationship resolution shared by viewer-aware profile surfaces."""
 
-from typing import Optional
+from typing import Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -28,17 +28,20 @@ def outgoing_friend_request_state(
     owner: DbUser,
     viewer: Optional[DbUser],
     relationship: ViewerRelationship,
-) -> str:
-    """The request state the viewer's friend button should render."""
+) -> Tuple[str, Optional[str]]:
+    """
+    The request state the viewer's friend button should render,
+    and the id of the viewer's pending outgoing request if there is one.
+    """
     if relationship is ViewerRelationship.FRIEND:
-        return 'friends'
+        return 'friends', None
     if viewer is None or relationship is not ViewerRelationship.NONE:
-        return 'none'
+        return 'none', None
     friendship = friendship_between(db, viewer.pk, owner.pk)
     if (
         friendship is not None
         and friendship.status is FriendshipStatus.PENDING
         and friendship.requested_by_id == viewer.pk
     ):
-        return 'pending'
-    return 'none'
+        return 'pending', friendship.id
+    return 'none', None

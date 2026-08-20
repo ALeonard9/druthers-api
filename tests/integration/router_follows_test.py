@@ -416,16 +416,19 @@ def test_a_follower_sees_exactly_what_a_stranger_sees(
         'relationship': 'none',
         'following': True,
         'friend_request_state': 'none',
+        'outgoing_request_id': None,
     }
     assert stranger_view.json()['viewer'] == {
         'relationship': 'none',
         'following': False,
         'friend_request_state': 'none',
+        'outgoing_request_id': None,
     }
     assert anonymous_view.json()['viewer'] == {
         'relationship': 'anonymous',
         'following': False,
         'friend_request_state': 'none',
+        'outgoing_request_id': None,
     }
 
     # The friends-only shelf and its content never reach any of the three.
