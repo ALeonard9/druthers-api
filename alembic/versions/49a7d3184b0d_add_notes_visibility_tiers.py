@@ -20,30 +20,30 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    visibility_tier_enum = sa.Enum(
-        'public', 'friends', 'private', name='visibilitytier'
-    )
-
-    op.add_column(
-        'users',
-        sa.Column('visibility_notes_movies', visibility_tier_enum, nullable=True),
-    )
-    op.add_column(
-        'users', sa.Column('visibility_notes_tv', visibility_tier_enum, nullable=True)
-    )
-    op.add_column(
-        'users',
-        sa.Column('visibility_notes_books', visibility_tier_enum, nullable=True),
-    )
-    op.add_column(
-        'users',
-        sa.Column('visibility_notes_games', visibility_tier_enum, nullable=True),
-    )
+    with op.batch_alter_table('users', schema=None) as batch_op:
+        for domain in ('movies', 'tv', 'books', 'games'):
+            column = f'visibility_notes_{domain}'
+            batch_op.add_column(
+                sa.Column(
+                    column,
+                    sa.Enum(
+                        'private',
+                        'friends',
+                        'public',
+                        name=f'ck_users_{column}',
+                        native_enum=False,
+                        create_constraint=True,
+                        length=16,
+                    ),
+                    nullable=True,
+                )
+            )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_column('users', 'visibility_notes_games')
-    op.drop_column('users', 'visibility_notes_books')
-    op.drop_column('users', 'visibility_notes_tv')
-    op.drop_column('users', 'visibility_notes_movies')
+    with op.batch_alter_table('users', schema=None) as batch_op:
+        for domain in ('games', 'books', 'tv', 'movies'):
+            column = f'visibility_notes_{domain}'
+            batch_op.drop_constraint(f'ck_users_{column}', type_='check')
+            batch_op.drop_column(column)
