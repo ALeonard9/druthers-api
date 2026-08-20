@@ -3,6 +3,7 @@
 from pathlib import Path
 
 DOCKERFILE = Path(__file__).parents[2] / 'Dockerfile'
+DOCKERIGNORE = Path(__file__).parents[2] / '.dockerignore'
 
 
 def test_runtime_stage_uses_builder_wheels_without_build_toolchains():
@@ -31,3 +32,16 @@ def test_runtime_healthcheck_targets_health_endpoint():
 
     assert "'/health'" in dockerfile
     assert 'HEALTHCHECK' in dockerfile
+
+
+# Paths that exist in a working checkout but must not appear in the image.
+# graphify-out/ is ~50 MB of AI tooling output; env/ holds dev/qa/prod env
+# files whose names are not caught by the *.env glob (no cross-slash match).
+IGNORED_DIRS = ['graphify-out/', 'env/']
+
+
+def test_dockerignore_excludes_large_and_sensitive_dirs():
+    """Directories that only matter locally must not leak into the image."""
+    ignore = DOCKERIGNORE.read_text()
+    for dirname in IGNORED_DIRS:
+        assert dirname in ignore, f'{dirname} missing from .dockerignore'
