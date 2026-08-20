@@ -246,6 +246,31 @@ class DbApiKey(DBBaseModel):
     )
 
 
+class DbProductEvent(DBBaseModel):
+    """Privacy-minimal product instrumentation used by admin reports (#342)."""
+
+    __tablename__ = 'product_events'
+
+    user_id = Column(
+        Integer,
+        ForeignKey('users.pk', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    event_type = Column(String(length=64), nullable=False, index=True)
+    payload = Column(JSON, nullable=False, default=dict)
+    occurred_at = Column(
+        DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
+
+    user = relationship(
+        'DbUser', backref=backref('product_events', cascade='all, delete-orphan')
+    )
+
+
 class DbRefreshToken(DBBaseModel):
     """
     Long-lived, revocable browser-session credential (#246).
