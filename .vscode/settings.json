@@ -6,6 +6,5 @@
   "workbench.colorCustomizations": {
     "titleBar.activeBackground": "#8033e4"
   },
-  "black-formatter.args": ["--skip-string-normalization"],
-  "snyk.advanced.additionalParameters": "--file=requirements/base.txt --package-manager=pip --command=./.venv/bin/python"
+  "black-formatter.args": ["--skip-string-normalization"]
 }

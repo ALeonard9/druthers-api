@@ -86,7 +86,23 @@ def generate_api_key() -> str:
 
 
 def hash_api_key(key: str) -> str:
-    """SHA-256 of the full key - the only form ever stored."""
+    """
+    SHA-256 of the full key - the only form ever stored.
+
+    Deliberately a bare fast hash and not a password KDF (bcrypt/argon2),
+    which CodeQL's ``py/weak-sensitive-data-hashing`` rule flags on sight.
+    The rule assumes a human-chosen secret; this is not one. Keys are minted
+    by ``generate_api_key`` as 24 bytes from ``secrets.token_hex``, so there
+    is no dictionary to run and no rainbow table that covers 192 bits of
+    CSPRNG output - a salt and a work factor would buy nothing against the
+    only attack available, which is brute force over that space. What they
+    would cost is real: every authenticated request resolves a key by
+    hashing the bearer token and looking the digest up directly, and a
+    per-row KDF turns that O(1) lookup into a table scan of work factors.
+
+    If keys ever become user-supplied or lower-entropy, this reasoning
+    stops holding and the storage format has to change with it.
+    """
     return hashlib.sha256(key.encode()).hexdigest()
 
 

@@ -1,2 +1,0 @@
-# Tells Snyk not to scan the test directory
-tests/*
