@@ -57,9 +57,13 @@ def _access_token() -> str:
 
     client_id, client_secret = _credentials()
     try:
+        # The credentials go in the form body, never the query string.
+        # requests puts the full URL (query string included) into the message
+        # of any RequestException, so a client_secret passed as a param leaks
+        # into the log line below on every upstream error.
         response = requests.post(
             TWITCH_OAUTH_URL,
-            params={
+            data={
                 'client_id': client_id,
                 'client_secret': client_secret,
                 'grant_type': 'client_credentials',
@@ -70,8 +74,8 @@ def _access_token() -> str:
         payload = response.json()
     except (requests.RequestException, ValueError) as exc:
         # nosemgrep: python-logger-credential-disclosure
-        # exc is the request exception (status/URL), not the client secret or
-        # the issued token; neither is ever formatted into a log line.
+        # exc carries the status and URL only; the credentials travel in the
+        # form body (above) and the issued token is never logged.
         logger.error('Twitch OAuth token request failed: %s', exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

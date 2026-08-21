@@ -387,3 +387,51 @@ def test_search_games_repeated_401_returns_502(mock_post, mock_settings):
         game_search.search_games('Zelda')
     assert exc.value.status_code == 502
     _reset_token_cache()
+
+
+@patch('app.services.game_search.get_settings')
+@patch('app.services.game_search.requests.post')
+def test_token_request_keeps_the_secret_out_of_the_query_string(
+    mock_post, mock_settings
+):
+    """The client secret belongs in the form body, never in the URL.
+
+    requests folds the full URL, query string included, into the message of
+    any RequestException. A secret passed as a param would therefore be
+    written verbatim to the error log on every upstream failure.
+    """
+    _reset_token_cache()
+    mock_settings.return_value = Settings(
+        twitch_client_id='cid', twitch_client_secret='secret', env='github'
+    )
+    token_resp = MagicMock()
+    token_resp.raise_for_status.return_value = None
+    token_resp.json.return_value = {'access_token': 'tok', 'expires_in': 5000000}
+    mock_post.return_value = token_resp
+
+    assert game_search._access_token() == 'tok'
+
+    _, kwargs = mock_post.call_args
+    assert kwargs['data']['client_secret'] == 'secret'
+    assert 'client_secret' not in (kwargs.get('params') or {})
+    _reset_token_cache()
+
+
+@patch('app.services.game_search.get_settings')
+@patch('app.services.game_search.requests.post')
+def test_token_failure_log_does_not_carry_the_secret(mock_post, mock_settings, caplog):
+    """A failed token request must not log the client secret."""
+    _reset_token_cache()
+    mock_settings.return_value = Settings(
+        twitch_client_id='cid', twitch_client_secret='sup3rs3cret', env='github'
+    )
+    mock_post.side_effect = game_search.requests.RequestException(
+        'Unauthorized for url: https://id.twitch.tv/oauth2/token'
+    )
+
+    with caplog.at_level('ERROR'):
+        with pytest.raises(HTTPException) as exc:
+            game_search._access_token()
+    assert exc.value.status_code == 502
+    assert 'sup3rs3cret' not in caplog.text
+    _reset_token_cache()
