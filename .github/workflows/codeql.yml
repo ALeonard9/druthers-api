@@ -1,0 +1,87 @@
+name: CodeQL
+
+# Advanced setup: CodeQL as a committed workflow rather than GitHub's default
+# setup, which is a repository *setting* with no representation in git. Default
+# setup does not appear in any workflow file, does not survive a repo being
+# recreated, and if it is switched off nothing anywhere goes red.
+#
+# The two cannot both be on: while default setup is enabled it rejects SARIF
+# uploaded by a workflow. Disable it before merging this.
+#
+#   gh api -X PATCH repos/ALeonard9/druthers-api/code-scanning/default-setup \
+#     -f state=not-configured
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  # CodeQL queries are updated by GitHub, so re-run even when nothing changed.
+  schedule:
+    - cron: "0 8 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, python]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@c16c0f3f2812ec4bb3750a5ed64873fe2ce0fbef  # codeql-bundle-v2.26.3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@c16c0f3f2812ec4bb3750a5ed64873fe2ce0fbef  # codeql-bundle-v2.26.3
+        with:
+          category: "/language:${{ matrix.language }}"
+          # Keep a local copy of the SARIF so the gate below can read what was
+          # actually found, rather than querying the API and racing ingestion.
+          output: sarif-results
+          upload: always
+
+      # The CodeQL action has no severity gate: it uploads whatever it finds
+      # and exits 0 either way. Read the SARIF it just wrote and fail the PR on
+      # high or critical. security-severity is CVSS-style, so >= 7.0 is high
+      # and >= 9.0 critical.
+      #
+      # Resolving the severity is fiddlier than it looks, and getting it wrong
+      # fails open. CodeQL puts its rules in tool.extensions[].rules, not
+      # tool.driver.rules, and references them via .rule.index rather than
+      # .ruleIndex. Indexing driver.rules by .ruleIndex therefore matches
+      # nothing and counts zero on every run, which looks exactly like a clean
+      # scan. Matching on ruleId across both components avoids depending on
+      # that layout at all.
+      - name: Gate - high/critical
+        if: github.event_name == 'pull_request'
+        run: |
+          total=0
+          shopt -s nullglob
+          for f in sarif-results/*.sarif; do
+            n=$(jq '[ .runs[] as $run
+                      | (($run.tool.extensions // []) + [$run.tool.driver]) as $comps
+                      | $run.results[]?
+                      | .ruleId as $rid
+                      | ( [ $comps[]?.rules[]?
+                            | select(.id == $rid)
+                            | .properties["security-severity"]? // empty ][0] // "0" )
+                      | tonumber
+                      | select(. >= 7.0) ] | length' "$f")
+            echo "$(basename "$f"): $n high/critical"
+            total=$((total + n))
+          done
+          echo "CodeQL high/critical findings: $total"
+          if [ "$total" -gt 0 ]; then
+            echo "::error::$total high/critical CodeQL finding(s). See the Security tab."
+            exit 1
+          fi
