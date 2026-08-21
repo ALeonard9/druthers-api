@@ -177,6 +177,9 @@ def _migrate_catalog(
     (natural_filter, values). Returns legacy_id -> target pk.
     """
     mapping: Dict[int, int] = {}
+    # nosemgrep: avoid-sqlalchemy-text
+    # table/columns are always literal strings from the call sites in this
+    # module (see run_import), never request or user-supplied input.
     rows = src.execute(
         text(f'SELECT {columns} FROM {table}')  # nosec: fixed column/table names
     ).mappings()
@@ -195,6 +198,9 @@ def _migrate_tracker(
     src, session, report, table, model, columns, transform, valid: Callable
 ):
     """Generic gerund/tracker migration keyed on (user_id, item_id)."""
+    # nosemgrep: avoid-sqlalchemy-text
+    # table/columns are always literal strings from the call sites in this
+    # module (see run_import), never request or user-supplied input.
     rows = src.execute(
         text(f'SELECT {columns} FROM {table}')  # nosec: fixed column/table names
     ).mappings()
