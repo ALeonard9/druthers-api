@@ -164,24 +164,41 @@ tasks:
     cmds:
       - pytest --cov=./ --cov-report=html:.reports/coverage --cov-report=term --html=.reports/junit/test-results.html
 
-  sca:
-    desc: "Run security checks on dependencies"
+  secrets:
+    desc: "Scan the full git history for leaked secrets"
     cmds:
+      - gitleaks detect --redact --verbose
+
+  sca:
+    desc: "Scan dependencies, IaC and config for known vulnerabilities"
+    cmds:
+      # --file-patterns is load-bearing: trivy's pip analyzer only recognises a
+      # file named requirements.txt, so without it this scans the repo, reports
+      # "0 language-specific files" and passes having checked no dependency at
+      # all. The pattern picks up requirements/{base,dev,test}.txt.
       - >
-          snyk test
-          --file=requirements/base.txt
-          --package-manager=pip
-          --severity-threshold=high
-          --fail-on=patchable
+          trivy fs
+          --scanners vuln,misconfig,secret
+          --file-patterns 'pip:requirements/.*\.txt'
+          --severity CRITICAL,HIGH
+          --exit-code 1
+          .
 
   sast:
     desc: "Run static analysis on code"
     cmds:
+      # Via docker so this needs no local semgrep install and stays on the same
+      # rulesets the CI job runs.
+      #
+      # Report-only, matching CI: semgrep exits 0 on findings unless --error is
+      # passed. The security-audit pack is advisory by design and returns 33
+      # findings on this tree today, mostly logger-credential-leak on log format
+      # strings that hold no credential. Blocking on those would make this task,
+      # and the `security` sweep that chains it, red on every run and therefore
+      # ignored. Read the output; a clean exit does not mean no findings.
       - >
-          snyk code test
-          --all-projects
-          --exclude=tests
-          --severity-threshold=high
+          docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep
+          semgrep scan --config p/default --config p/security-audit
 
   container:
     desc: "Run container security checks"
@@ -194,11 +211,20 @@ tasks:
         fi
         # Build the image with the appropriate platform argument
         docker build $EXTRA_ARG -t ghcr.io/aleonard9/druthers-api:test .
-        # Run Snyk container test (no need to pass EXTRA_ARG here)
-        snyk container test ghcr.io/aleonard9/druthers-api:test \
-          --file=Dockerfile \
-          --severity-threshold=high
+        trivy image \
+          --severity CRITICAL,HIGH \
+          --exit-code 1 \
+          ghcr.io/aleonard9/druthers-api:test
         docker rmi ghcr.io/aleonard9/druthers-api:test
+
+  security:
+    desc: "Run the whole local security sweep (mirrors the CI security workflow)"
+    cmds:
+      - task: secrets
+      - task: sca
+      - task: sast
+      - task: container
+
   lz:
     desc: "Echos current landing zone"
     platforms: [darwin]

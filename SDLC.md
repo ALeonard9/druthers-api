@@ -19,13 +19,13 @@ Other repos link here instead of duplicating it.
 
 - Fill in the PR template: what changed, why, how it was verified.
 - At least one approving review (self-review acceptable for solo work, but CI must pass).
-- Security-sensitive changes: add the `scan` label to trigger the Snyk workflow.
+- Security scans run on every PR to `main`; no label needed.
 
 ## CI gates (must pass to merge)
 
 | Repo | Gates |
 |------|-------|
-| api | Black, Pylint, Pytest (+ OpenAPI validation), Snyk on `scan`/main |
+| api | Black, Pylint, Pytest (+ OpenAPI validation), CodeQL, security scan |
 | web | ESLint, `tsc --noEmit`, Vitest, `next build`, Playwright smoke |
 | mcp | Black, Pylint, Pytest |
 
