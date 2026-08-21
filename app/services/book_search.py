@@ -695,8 +695,8 @@ def _google_books_detail(googleid: str) -> Optional[dict]:
     if not api_key:
         # Once per book would be a wall of noise on a bulk run; enrich_books
         # reports the disabled fallback once, up front.
-        # nosemgrep: python-logger-credential-disclosure
         # only the volume id is logged; the key's value never appears here.
+        # nosemgrep: python-logger-credential-disclosure
         logger.debug('GOOGLE_BOOKS_API_KEY unset; skipping %s', googleid)
         return None
     try:
