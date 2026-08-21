@@ -65,6 +65,9 @@ def downgrade() -> None:
     """Restore concrete friends-tier shelf values before dropping the default."""
     with op.batch_alter_table('users', schema=None) as batch_op:
         for column in SHELF_TIER_COLUMNS:
+            # nosemgrep: avoid-sqlalchemy-text
+            # column is always one of the literal SHELF_TIER_COLUMNS names
+            # above, never user input; this is a one-time migration downgrade.
             batch_op.execute(
                 sa.text(
                     f'UPDATE users SET {column} = default_privacy WHERE {column} IS NULL'

@@ -239,6 +239,9 @@ def rotate_refresh_token(db: Session, token: str) -> Tuple[DbUser, str]:
         # Outside the window this is a genuine replay of a spent token, or a
         # token revoked at sign-out. Either way the chain is no longer
         # trustworthy and everything in it dies.
+        # nosemgrep: python-logger-credential-disclosure
+        # only user_id and family_id (opaque identifiers) are logged; the
+        # token value itself is never formatted into this message.
         logger.warning(
             'Refresh token replay detected for user_id=%s family=%s; '
             'revoking the family',

@@ -9,6 +9,8 @@ updates:
     directory: "/requirements/" # Location of package manifests
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     groups: # Rather than get 5 PRs for each new version, do 1 PR
       all-dependencies:
         patterns:
@@ -17,7 +19,11 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7

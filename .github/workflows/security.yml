@@ -14,7 +14,9 @@ jobs:
       builds_image: true
       block: true            # enforced - findings resolved
       severity: "CRITICAL,HIGH"
-    secrets: inherit
+    # security-reusable.yml declares no `secrets:` in its workflow_call and
+    # never references `secrets.*` (it uses the auto-provided github.token),
+    # so there is nothing to pass through here.
     permissions:
       contents: read
       security-events: write

@@ -57,6 +57,9 @@ def upgrade() -> None:
     """Repair any non-1-based ranks, then enforce the invariant."""
     for table in TRACKER_TABLES:
         # An unplaced tracker holds no position (see module docstring).
+        # nosemgrep: sqlalchemy-execute-raw-query,formatted-sql-query
+        # table is always one of the literal TRACKER_TABLES names above, never
+        # user input; this is a one-time migration repair, not a request path.
         op.execute(f"""
             UPDATE {table}
                SET rank = NULL
@@ -65,6 +68,9 @@ def upgrade() -> None:
             """)
         # Dense 1..N per user, preserving the order the ranks already express.
         # pk breaks ties so duplicate ranks resolve deterministically.
+        # nosemgrep: sqlalchemy-execute-raw-query,formatted-sql-query
+        # table is always one of the literal TRACKER_TABLES names above, never
+        # user input; this is a one-time migration repair, not a request path.
         op.execute(f"""
             WITH renumbered AS (
                 SELECT pk,

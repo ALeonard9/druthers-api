@@ -41,26 +41,36 @@ jobs:
 
       - name: Resolve source digest
         id: src
+        env:
+          SOURCE_TAG: ${{ inputs.source_tag }}
+          TARGET: ${{ inputs.target }}
         run: |
           set -euo pipefail
-          ref="${REGISTRY}/${IMAGE_NAME}:${{ inputs.source_tag }}"
+          ref="${REGISTRY}/${IMAGE_NAME}:${SOURCE_TAG}"
           digest=$(docker buildx imagetools inspect "$ref" --format '{{.Manifest.Digest}}')
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
-          echo "Promoting ${IMAGE_NAME}@${digest} → :${{ inputs.target }}"
+          echo "Promoting ${IMAGE_NAME}@${digest} → :${TARGET}"
 
       - name: Re-tag the exact digest to the target (no rebuild)
+        env:
+          TARGET: ${{ inputs.target }}
+          SOURCE_DIGEST: ${{ steps.src.outputs.digest }}
         run: |
           set -euo pipefail
           docker buildx imagetools create \
-            --tag "${REGISTRY}/${IMAGE_NAME}:${{ inputs.target }}" \
-            --tag "${REGISTRY}/${IMAGE_NAME}:${{ inputs.target }}-${{ github.run_number }}" \
-            "${REGISTRY}/${IMAGE_NAME}@${{ steps.src.outputs.digest }}"
+            --tag "${REGISTRY}/${IMAGE_NAME}:${TARGET}" \
+            --tag "${REGISTRY}/${IMAGE_NAME}:${TARGET}-${{ github.run_number }}" \
+            "${REGISTRY}/${IMAGE_NAME}@${SOURCE_DIGEST}"
 
       - name: Record promotion
+        env:
+          SOURCE_TAG: ${{ inputs.source_tag }}
+          TARGET: ${{ inputs.target }}
+          SOURCE_DIGEST: ${{ steps.src.outputs.digest }}
         run: |
           {
-            echo "### Promoted \`${{ inputs.source_tag }}\` → \`${{ inputs.target }}\`"
+            echo "### Promoted \`${SOURCE_TAG}\` → \`${TARGET}\`"
             echo ""
-            echo "- Image: \`${IMAGE_NAME}@${{ steps.src.outputs.digest }}\`"
+            echo "- Image: \`${IMAGE_NAME}@${SOURCE_DIGEST}\`"
             echo "- Approved by: @${{ github.actor }}"
           } >> "$GITHUB_STEP_SUMMARY"
