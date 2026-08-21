@@ -8,6 +8,9 @@ jobs:
     uses: ALeonard9/.github/.github/workflows/security-reusable.yml@main
     with:
       stack: python
+      # trivy's pip analyzer only matches a file named requirements.txt;
+      # without this it scans zero dependencies and still reports green.
+      file_patterns: 'pip:requirements/.*\.txt'
       builds_image: true
       block: true            # enforced - findings resolved
       severity: "CRITICAL,HIGH"
