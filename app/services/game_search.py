@@ -73,9 +73,9 @@ def _access_token() -> str:
         response.raise_for_status()
         payload = response.json()
     except (requests.RequestException, ValueError) as exc:
-        # nosemgrep: python-logger-credential-disclosure
         # exc carries the status and URL only; the credentials travel in the
         # form body (above) and the issued token is never logged.
+        # nosemgrep: python-logger-credential-disclosure
         logger.error('Twitch OAuth token request failed: %s', exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

@@ -81,9 +81,9 @@ def _survivor_order(tracker: TrackerTable) -> str:
 
 def _dedupe_tracker(tracker: TrackerTable) -> None:
     """Delete every duplicate except the deterministic preferred survivor."""
-    # nosemgrep: avoid-sqlalchemy-text
     # table_name/fk_column come from the literal TRACKER_TABLES tuple above,
     # never user input; this is a one-time migration cleanup, not a request path.
+    # nosemgrep: avoid-sqlalchemy-text
     op.execute(sa.text(f"""
             WITH ordered_rows AS (
                 SELECT pk,
@@ -104,9 +104,9 @@ def _dedupe_tracker(tracker: TrackerTable) -> None:
 
 def _assert_no_duplicate_groups(tracker: TrackerTable) -> None:
     """Fail the migration before DDL if cleanup left any duplicate groups."""
-    # nosemgrep: avoid-sqlalchemy-text
     # table_name/fk_column come from the literal TRACKER_TABLES tuple above,
     # never user input; this is a one-time migration check, not a request path.
+    # nosemgrep: avoid-sqlalchemy-text
     duplicate_groups = op.get_bind().execute(sa.text(f"""
             SELECT COUNT(*)
               FROM (
