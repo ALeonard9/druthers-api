@@ -187,6 +187,28 @@ PRs follow `.github/PULL_REQUEST_TEMPLATE.md`:
 
 ## Testing
 
+Tests run in three tiers, and the tier decides where a new test goes. Putting
+a test in the wrong tier is how suites get slow enough that people stop
+running them.
+
+| Tier | When it runs | What it costs | What belongs in it |
+| --- | --- | --- | --- |
+| **0 - unit** | pre-commit / pre-push, and again in PR CI | milliseconds; no network, no stack | pure logic, route handlers with `fetch` mocked, anything that can assert on a value |
+| **1 - smoke** | PR CI, every push | seconds; a build, no backend | a page renders, a signed-out visitor is redirected, the CSP does not break the document |
+| **2 - authenticated** | on demand against local dev, and against QA after a merge | minutes; needs a real api and database | the multi-service flows: sign-in, session refresh, ranking, visibility, admin rules |
+
+**Tier 2 never runs in PR CI.** The web BFF calls the api server-side, so a
+browser test cannot mock it - it needs a real stack, which means real minutes
+and real flakiness on every PR. It runs from a developer's machine
+(`task e2e:local`, `task e2e:qa`) and against QA after the merge, which is the
+gate before cutting a release, not the gate before merging.
+
+Push each assertion to the cheapest tier that can make it. If a rule can be
+proved with a mocked `fetch` in Tier 0, it does not also need a browser in
+Tier 2; Tier 2 is for what only a real stack can show.
+
+### What a new change owes
+
 A new module needs a test file in the same PR that introduces it - not as
 follow-up work. This project's test debt (audited 2026-08-03, tracked in
 issues #290–293) came almost entirely from modules that shipped without one
@@ -205,6 +227,14 @@ and were never revisited.
   `<name>.test.tsx` alongside it once the React Testing Library setup from
   #136/#137 is in place. Pure logic still belongs in `src/lib/*.ts` with a
   `.test.ts` sibling, not inside the component.
+- **New user-facing flow** (a page you can reach, act on, and see change):
+  add a Tier 2 spec in `druthers-web/e2e/`, tagged `@authenticated`, and
+  **name the cast seat it runs from**. `druthers-api/docs/dev-cast.md` is the
+  roster. A flow demoed and tested only from the admin/target seat is the
+  single most common way a broken visibility or comparison rule ships green:
+  that seat is public, friendly with everyone, and holds the whole catalog.
+  If the change has a visibility, friendship, tier, admin or time-zone rule in
+  it, the spec must run from the seat that rule applies to.
 - **New MCP tool** (`druthers_mcp/server.py`): add a test in
   `tests/server_test.py` following the pattern of the nearest existing
   sibling tool (e.g. a new `set_*_note` tool mirrors `set_note`'s test).
