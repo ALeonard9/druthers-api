@@ -19,11 +19,48 @@ tasks:
       - GIT_SHA=$(git rev-parse HEAD) docker compose -f dc-{{.ENV}}.yml --env-file env/{{.ENV}}.env up -d --build
 
   dd:
-    desc: "Stop druthers Docker environment"
+    desc: "Stop druthers Docker environment, and reclaim what the last build orphaned."
     vars:
       ENV: '{{default "dev" .CLI_ARGS}}'
     cmds:
       - docker compose -f dc-{{.ENV}}.yml --env-file env/{{.ENV}}.env down
+      - task: dclean
+
+  dclean:
+    desc: "Reclaim Docker space left by local builds. Safe: keeps every tagged image."
+    # `task du` rebuilds the API image on every start, deliberately (api#232,
+    # so it can never serve stale code). Each rebuild retags the name onto a
+    # new image and leaves the previous one dangling, and nothing ever removed
+    # them: nine <none> images and 5.6 GB of build cache had accumulated over
+    # about 36 hours of normal use.
+    #
+    # Scoped on purpose. `docker image prune` without -a removes only
+    # dangling images, so the pulled tool images survive - `docker system
+    # prune -a` would take semgrep with it and cost a 1.12 GB re-pull the next
+    # time `task sast` runs.
+    #
+    # Build cache is deliberately NOT touched here. An `until=` filter looked
+    # obvious and reclaimed exactly 0 bytes: this project rebuilds often
+    # enough that all 5.6 GB of cache was under 36 hours old, so any window
+    # wide enough to be safe keeps everything. Age is the wrong axis when the
+    # cache churns daily - the right control is a size ceiling that keeps the
+    # newest layers and evicts the rest, which is the BuildKit GC in
+    # ~/.docker/daemon.json. If `defaultKeepStorage` is still "20GB" there it
+    # will never fire at this project's scale; 4GB is a ceiling that actually
+    # bites. Use `task dclean:cache` for a one-off, and expect a cold rebuild.
+    cmds:
+      - docker image prune -f
+      - docker system df
+
+  dclean:cache:
+    desc: "Drop the whole BuildKit cache. Opt-in: the next build is cold."
+    # Not wired into `dd`, because unlike dangling images this has a real
+    # cost - the next `task du` rebuilds every layer from scratch. Reach for
+    # it when the daemon GC ceiling has not been lowered and the cache has run
+    # away, not as routine hygiene.
+    cmds:
+      - docker builder prune -f
+      - docker system df
 
   dr:
     desc: "Rebuild druthers Docker environment"
