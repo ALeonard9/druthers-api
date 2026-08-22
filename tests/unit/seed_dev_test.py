@@ -1,4 +1,6 @@
 # pylint: disable=missing-module-docstring, missing-function-docstring, protected-access
+from datetime import datetime, timezone
+
 import pytest
 
 from app.config import Settings, get_settings
@@ -262,7 +264,7 @@ def test_seed_cast_creates_fixed_users_and_relationships(test_client):
     result = seed_dev._seed_cast(session, target)
     session.commit()
 
-    assert result['cast_users'] == 7
+    assert result['cast_users'] == 8
     # target 8 canon + friend 8 + follower 2 + followee 1 + public 3
     # + private 6 + stranger 4 non-canon + admin-two 0.
     assert result['ranked_rows'] == 32
@@ -399,6 +401,35 @@ def test_seed_cast_stocks_the_private_users_shelf(test_client):
     )
 
 
+def test_seed_cast_re_enables_only_the_disposable_seat(test_client):
+    """
+    The destructive admin specs disable the disposable seat on purpose, and a
+    spec that fails midway leaves it disabled. Without this the seat is
+    single-use and the next run fails for the previous run's reason.
+
+    Scoped to that one seat: silently re-enabling an account an operator
+    disabled by hand would be a surprise, and for the rest of the cast a
+    disabled seat is a bug rather than leftover state.
+    """
+    session = test_client.test_db_session
+    seed_dev._seed_cast(session, test_client.first_user)
+    session.commit()
+
+    disposable = _cast_user(session, 'e2e-disposable@gmail.com')
+    ordinary = _cast_user(session, 'follower@example.com')
+    disposable.disabled_at = datetime.now(timezone.utc)
+    ordinary.disabled_at = datetime.now(timezone.utc)
+    session.commit()
+
+    seed_dev._seed_cast(session, test_client.first_user)
+    session.commit()
+
+    assert _cast_user(session, 'e2e-disposable@gmail.com').disabled_at is None
+    assert (
+        _cast_user(session, 'follower@example.com').disabled_at is not None
+    ), 'a non-disposable seat must keep whatever disabled state it was given'
+
+
 def test_seed_cast_gives_every_member_a_distinct_time_zone(test_client):
     """The spread is the point: one zone for all of them demos nothing."""
     session = test_client.test_db_session
@@ -434,12 +465,12 @@ def test_seed_cast_is_idempotent(test_client):
     second = seed_dev._seed_cast(session, target)
     session.commit()
 
-    assert second == {'cast_users': 7, 'ranked_rows': 0}
+    assert second == {'cast_users': 8, 'ranked_rows': 0}
     assert (
         session.query(DbUser)
         .filter(DbUser.email.in_([s['email'] for s in seed_dev._CAST_USERS]))
         .count()
-        == 7
+        == 8
     )
     assert session.query(DbFriendship).count() == 1
     assert session.query(DbFollow).count() == 2

@@ -1,6 +1,6 @@
 # The dev cast
 
-Eight local accounts. Seven cover every relationship, visibility and
+Nine local accounts. Six cover every relationship, visibility and
 time-zone position the social features have; the eighth (`admin-two`) is
 unrelated to that matrix - it exists so admin-console rules that need a
 *second* admin (#341: an admin cannot impersonate or disable another admin)
@@ -27,6 +27,7 @@ is the seed admin from `env/dev.env` and keeps its own `ADMIN_PASSWORD`.
 | `private-user` | `private@example.com` | `change-me` | private | 6 | America/New_York |
 | `stranger` | `stranger@example.com` | `change-me` | public | 4 | UTC |
 | `admin-two` | `admin-two@gmail.com` | `change-me` | private | 0 | America/Chicago |
+| `disposable` | `e2e-disposable@gmail.com` | `change-me` | public | 0 | Pacific/Auckland |
 
 Read `$ADMIN_EMAIL` / `$ADMIN_PASSWORD` out of `env/dev.env` - they are
 per-clone, so never hardcode them into a script or a report. `admin-two`'s
@@ -43,6 +44,7 @@ account like the rest, just an admin one.
 | `public-user` | none | a stranger whose shelves are readable anyway |
 | `private-user` | none, private profile | a profile that 404s - with a stocked shelf behind it, so the 404 is the tier and not emptiness |
 | `stranger` | none | `not_enough_overlap`: a real shelf, still under the five shared titles alignment needs |
+| `disposable` | none | the seat destructive admin tests act on: disable, expire, impersonate. Holds nothing and is re-enabled by every `task seed:dev`, so a test may leave it in any state |
 | `admin-two` | none - both are `user_group='admin'` | the only seat that can demo an admin acting *on* another admin: sign in as `you` (or `admin-two`), try to disable or impersonate the other, and get refused. With one admin in the seed this rule was provable only by unit test. |
 
 **The movie counts are load-bearing.** Every title a cast member ranks is
