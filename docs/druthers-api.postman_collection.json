@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Druthers API",
-    "description": "API for druthers.io \u2014 track and rank the movies, TV, books, and games you actually care about.\n\n---\n\n**Auth:** most requests use the collection-level bearer token \u2014 set the `apiToken` variable to a personal API key (`drk_\u2026`), minted at https://www.druthers.io/settings, or a JWT from `POST /v1/auth/token`. `POST /v1/auth/token` and `POST /v1/users` are marked \"No Auth\" since you don't have a token yet when calling them.\n\n**Base URL:** the `baseUrl` variable defaults to production (`https://api.druthers.io`) \u2014 override it in a Postman environment to point at localhost (`http://localhost:8000`) or QA (`https://api-qa.druthers.io`) instead.\n\nGenerated from the checked-in OpenAPI schema by `scripts/generate_postman_collection.py` \u2014 see `docs/mcp-usage.md` for the MCP (Claude) integration instead of raw HTTP calls.",
+    "description": "API for druthers.io - track and rank the movies, TV, books, and games you actually care about.\n\n---\n\n**Auth:** most requests use the collection-level bearer token - set the `apiToken` variable to a personal API key (`drk_\u2026`), minted at https://www.druthers.io/settings, or a JWT from `POST /v1/auth/token`. `POST /v1/auth/token` and `POST /v1/users` are marked \"No Auth\" since you don't have a token yet when calling them.\n\n**Base URL:** the `baseUrl` variable defaults to production (`https://api.druthers.io`) - override it in a Postman environment to point at localhost (`http://localhost:8000`) or QA (`https://api-qa.druthers.io`) instead.\n\nGenerated from the checked-in OpenAPI schema by `scripts/generate_postman_collection.py` - see `docs/mcp-usage.md` for the MCP (Claude) integration instead of raw HTTP calls.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -62,7 +62,7 @@
                 }
               }
             },
-            "description": "Mint a new key. The plaintext secret is in this response and nowhere\nelse \u2014 it is never stored or shown again."
+            "description": "Mint a new key. The plaintext secret is in this response and nowhere\nelse - it is never stored or shown again."
           }
         },
         {
@@ -110,7 +110,7 @@
                 }
               ]
             },
-            "description": "Revocation is deletion \u2014 the hash is gone, the key can never auth again."
+            "description": "Revocation is deletion - the hash is gone, the key can never auth again."
           }
         }
       ]
@@ -179,6 +179,388 @@
               ]
             },
             "description": "Randomly pick one item off the user's watchlists/bucket lists, across\nevery domain. ``exclude`` (comma-separated entity ids) lets the client\nre-roll without repeating the item(s) it's already shown."
+          }
+        },
+        {
+          "name": "Get Social Activity",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/feed?limit=&cursor=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "feed"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Recent ranking and watchlist activity from friends and followed users.\n\nRelationships and the owner's current sharing tiers are joined into each\nshelf query. Nothing about visibility is copied onto a tracker row, so an\nunfriend, unfollow, opt-out, or tier reduction takes effect on old entries\nimmediately. Keyset paging avoids an increasingly expensive offset scan\nas a caller moves deeper into the feed."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "description": "Admin-only user directory and audit trail",
+      "item": [
+        {
+          "name": "Disable User",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/admin/users/:uuid/disable",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "users",
+                ":uuid",
+                "disable"
+              ],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Disable an account: blocks sign-in, kills every live credential, and\n(D2, per product decision) makes the user disappear everywhere a\ndeleted user would - see the read-path filters in router_visibility,\nrouter_comparison, router_friends, router_follows, router_activity, and\ndb_user.search_users.\n\nSelf-disable and disabling another admin are both refused outright\n(403) rather than merely discouraged: with a small operator pool,\neither one risks a lockout with nobody left to undo it. Both refusals\nare audited as denials, same as the router-level admin gate."
+          }
+        },
+        {
+          "name": "Enable User",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/admin/users/:uuid/enable",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "users",
+                ":uuid",
+                "enable"
+              ],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Re-enable an account. Restores sign-in only - the refresh tokens and\nAPI keys a disable revoked are gone for good (this is load-bearing for\nthe confirmation copy on the disable action: re-enabling is not\n\"undo,\" the user has to sign in again and reissue any API keys)."
+          }
+        },
+        {
+          "name": "Get Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/admin/reports/:report?from=&to=&bucket=&format=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "reports",
+                ":report"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "bucket",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "format",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                }
+              ],
+              "variable": [
+                {
+                  "key": "report",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Product-health report data, with one stable chart/table envelope."
+          }
+        },
+        {
+          "name": "Get User Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/admin/users/:uuid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "users",
+                ":uuid"
+              ],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Per-user aggregates: tracked counts, visibility tiers, social counts."
+          }
+        },
+        {
+          "name": "List Audit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/admin/audit?limit=&offset=&actor=&target=&action=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "audit"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "actor",
+                  "value": "",
+                  "description": "Match by handle, email, or id.",
+                  "disabled": true
+                },
+                {
+                  "key": "target",
+                  "value": "",
+                  "description": "Match by handle, email, or id.",
+                  "disabled": true
+                },
+                {
+                  "key": "action",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "The audit trail itself: every admin action, allowed or denied."
+          }
+        },
+        {
+          "name": "List Impersonation Sessions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/admin/impersonation",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "impersonation"
+              ]
+            },
+            "description": "Every live (unended, unexpired) view-as session, across every admin -\nnot scoped to the caller.\n\nScoped admin-wide rather than to \"my own sessions\", the same choice\n``GET /v1/admin/audit`` already made: that endpoint shows the whole\ntrail, not just the caller's own rows, on the theory that an admin\naction is everyone's business on this surface, not just the acting\nadmin's. A forgotten or abandoned session is exactly the case this\nendpoint exists to catch, and it has to be visible - and endable, see\n:func:`stop_impersonation_session` below - to an admin other than the\none who started it.\n\nNever returns the bearer token itself: this is a status/oversight view,\nnot a way to acquire someone else's live credential."
+          }
+        },
+        {
+          "name": "Search Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/admin/users?q=&status=&sort=&direction=&limit=&offset=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "sort",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "direction",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Search the directory by display name, handle, or email; paginated.\n\nSorted and filtered in SQL, not on the page already fetched:\n``last_tracked``/``tracked_total`` are corpus-wide aggregates\n(:func:`_last_tracked_sort_expr`/:func:`_tracked_total_sort_expr`), so\nsorting only the returned page would answer \"who joined this week\" or\n\"show me the disabled accounts\" correctly for the visible rows and\nsilently wrong for everyone else."
+          }
+        },
+        {
+          "name": "Start Impersonation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/admin/impersonation",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "impersonation"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"target_uuid\": \"string\",\n  \"reason\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Begin a read-only view-as session (#341).\n\nRead-only is a blanket denial with no override: the \"act on their behalf\"\ncriterion was cut from #341 on 2026-08-18, so there is no per-action flag\nto build. Enforcement lives in the auth resolver, not here, so a route\nadded later cannot opt out of it.\n\nImpersonating a DISABLED account is allowed on purpose. \"Why can't I sign\nin\" is exactly the question this tool exists to answer, and the write\nblock already covers the risk."
+          }
+        },
+        {
+          "name": "Stop Impersonation",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/admin/impersonation",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "impersonation"
+              ]
+            },
+            "description": "End every live view-as session this admin owns. Idempotent.\n\nReached with the admin's OWN token, not the impersonation one: the\nimpersonation credential cannot call this, because every ``/v1/admin/*``\nroute is behind ``require_admin`` and the swapped identity is not an\nadmin. The web client keeps the admin session in a separate cookie for\nexactly this reason, so \"Back to admin\" is one call plus a cookie delete."
+          }
+        },
+        {
+          "name": "Stop Impersonation Session",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/admin/impersonation/:session_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "impersonation",
+                ":session_id"
+              ],
+              "variable": [
+                {
+                  "key": "session_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "End one specific live view-as session by id, whichever admin started\nit - the console-oversight counterpart to :func:`list_impersonation_\nsessions` above: a listing nobody could act on would not be much of a\nrevoke capability. ``DELETE /v1/admin/impersonation`` (no id) still\nends every session the CALLER owns, for the web's existing \"back to\nadmin\" flow; this is for ending someone else's, or one of several of\nyour own, without taking down the rest.\n\nIdempotent: an unknown, already-ended, or already-expired session id is\na 200 with ``{\"ended\": 0}``, not an error - the caller asked for that\nsession to be gone, and it is, one way or another."
           }
         }
       ]
@@ -251,13 +633,39 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/v1/books",
+              "raw": "{{baseUrl}}/v1/books?googleid=&isbn=&limit=&offset=",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "v1",
                 "books"
+              ],
+              "query": [
+                {
+                  "key": "googleid",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "isbn",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                }
               ]
             },
             "description": "Get All Books"
@@ -287,6 +695,33 @@
               ]
             },
             "description": "Return one book's full detail, enriching from Open Library on first view."
+          }
+        },
+        {
+          "name": "Get Book Social",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/books/:book_id/social",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "books",
+                ":book_id",
+                "social"
+              ],
+              "variable": [
+                {
+                  "key": "book_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Return social context (friends and followees) for one book."
           }
         },
         {
@@ -323,7 +758,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/v1/users/me/books?on_rankings=&on_watchlist=&limit=&offset=",
+              "raw": "{{baseUrl}}/v1/users/me/books?on_rankings=&on_watchlist=&limit=&offset=&sort=&search=&include_total=",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -356,6 +791,24 @@
                   "key": "offset",
                   "value": "",
                   "description": "Entries to skip",
+                  "disabled": true
+                },
+                {
+                  "key": "sort",
+                  "value": "",
+                  "description": "Order by rank, title, or completed_at; prefix with - for descending",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Case-insensitive substring match against the title",
+                  "disabled": true
+                },
+                {
+                  "key": "include_total",
+                  "value": "",
+                  "description": "Return an {items, total, limit, offset} envelope instead of the legacy array response",
                   "disabled": true
                 }
               ]
@@ -402,7 +855,7 @@
                 }
               }
             },
-            "description": "Add a book to the user's lists (idempotent \u2014 merges list membership)."
+            "description": "Add a book to the user's lists (idempotent - merges list membership)."
           }
         },
         {
@@ -624,6 +1077,94 @@
       ]
     },
     {
+      "name": "Comparison",
+      "description": "",
+      "item": [
+        {
+          "name": "Compare With User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/comparison/:handle",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "comparison",
+                ":handle"
+              ],
+              "variable": [
+                {
+                  "key": "handle",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Return the four domain comparisons visible to this viewer."
+          }
+        },
+        {
+          "name": "Save Recommendation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/comparison/:handle/:category/:item_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "comparison",
+                ":handle",
+                ":category",
+                ":item_id"
+              ],
+              "variable": [
+                {
+                  "key": "handle",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "category",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "item_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destination\": \"watchlist\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Save a visible ranked recommendation and retain its first source."
+          }
+        }
+      ]
+    },
+    {
       "name": "Export",
       "description": "",
       "item": [
@@ -672,14 +1213,14 @@
                 "export"
               ]
             },
-            "description": "Full-fidelity JSON export of every domain, using the same schemas the\nAPI serves \u2014 anything the UI can show is in here."
+            "description": "Full-fidelity JSON export of every domain, using the same schemas the\nAPI serves - anything the UI can show is in here."
           }
         }
       ]
     },
     {
       "name": "Follows",
-      "description": "Asymmetric, unapproved follows \u2014 grants no extra visibility",
+      "description": "Asymmetric, unapproved follows - grants no extra visibility",
       "item": [
         {
           "name": "Follow User",
@@ -774,7 +1315,7 @@
                 }
               ]
             },
-            "description": "Stop following someone.\n\nDeliberately does not require the target to still be public \u2014 a follow\npersists through a followee tightening their profile (that's the whole\npoint of #276's \"grants nothing, persists anyway\" rule), and the follower\nmust still be able to unfollow after that happens."
+            "description": "Stop following someone.\n\nDeliberately does not require the target to still be public - a follow\npersists through a followee tightening their profile (that's the whole\npoint of #276's \"grants nothing, persists anyway\" rule), and the follower\nmust still be able to unfollow after that happens."
           }
         }
       ]
@@ -945,7 +1486,7 @@
                 }
               }
             },
-            "description": "Send a friend request to an exact handle.\n\nAlways 202 unless the caller is already a party to the relationship (or\nis the target) \u2014 see the module docstring for why the shape of the\nnon-answers matters as much as the answer."
+            "description": "Send a friend request to an exact handle.\n\nAlways 202 unless the caller is already a party to the relationship (or\nis the target) - see the module docstring for why the shape of the\nnon-answers matters as much as the answer."
           }
         },
         {
@@ -973,7 +1514,7 @@
                 }
               ]
             },
-            "description": "End a friendship. Symmetric: either side may do this, and one row going\naway ends it for both \u2014 there is no second row to leave behind."
+            "description": "End a friendship. Symmetric: either side may do this, and one row going\naway ends it for both - there is no second row to leave behind."
           }
         }
       ]
@@ -982,6 +1523,50 @@
       "name": "Import",
       "description": "",
       "item": [
+        {
+          "name": "Download Movie Csv Template",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/import/movies/template.csv",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "import",
+                "movies",
+                "template.csv"
+              ]
+            },
+            "description": "Download the movies CSV template.\n\nRequired columns are ``title`` (text, max 255 characters),\n``release_year`` (YYYY), ``tmdb_id`` (positive integer), and\n``watched_date`` (YYYY-MM-DD, not in the future). Every field is required;\ntitle and release year must agree with the referenced TMDB movie. Uploads\nare limited to 5 MiB and 5,000 movie rows."
+          }
+        },
+        {
+          "name": "Download Movie Xlsx Template",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/import/movies/template.xlsx",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "import",
+                "movies",
+                "template.xlsx"
+              ]
+            },
+            "description": "Download the movies XLSX template.\n\nThe Movies sheet has the required upload columns. The Instructions sheet\ndocuments accepted formats, examples, TMDB matching rules, and row limits."
+          }
+        },
         {
           "name": "Import Goodreads",
           "request": {
@@ -1010,7 +1595,38 @@
                 }
               ]
             },
-            "description": "Upload the standard Goodreads library export CSV. Idempotent \u2014 re-running\nthe same file updates rather than duplicates. Returns counts plus any\nskipped rows with reasons (nothing is dropped silently)."
+            "description": "Upload the standard Goodreads library export CSV. Idempotent - re-running\nthe same file updates rather than duplicates. Returns counts plus any\nskipped rows with reasons (nothing is dropped silently)."
+          }
+        },
+        {
+          "name": "Import Movies",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/import/movies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "import",
+                "movies"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "value": "string",
+                  "type": "text"
+                }
+              ]
+            },
+            "description": "Validate and atomically import a filled movies CSV or XLSX template.\n\nValidation checks the required columns and values, rejects duplicate TMDB\nIDs, resolves each reference against the local catalog or TMDB, and checks\nthat title and release year identify the same movie. A 422 returns every\nfield error with its source row and performs no writes.\n\nA valid file commits once and returns one outcome per row: ``imported``\nfor a new history tracker, ``matched`` when an existing tracker was\npromoted or completed, and ``skipped`` when it was already present.\nRe-importing the same file is therefore safe and creates no duplicates."
           }
         }
       ]
@@ -1083,13 +1699,33 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/v1/movies",
+              "raw": "{{baseUrl}}/v1/movies?tmdb=&limit=&offset=",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "v1",
                 "movies"
+              ],
+              "query": [
+                {
+                  "key": "tmdb",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                }
               ]
             },
             "description": "Get All Movies"
@@ -1119,6 +1755,33 @@
               ]
             },
             "description": "Return one movie's full detail, enriching from TMDB on first view."
+          }
+        },
+        {
+          "name": "Get Movie Social",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/movies/:movie_id/social",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "movies",
+                ":movie_id",
+                "social"
+              ],
+              "variable": [
+                {
+                  "key": "movie_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Return social context (friends and followees) for one movie."
           }
         },
         {
@@ -1153,7 +1816,7 @@
                 }
               ]
             },
-            "description": "Where this movie can be streamed, rented or bought in ``region`` (web#26).\n\nLive TMDB/JustWatch data, not catalog data, so nothing here is stored. A\nmovie with no availability \u2014 or one the backfill never keyed onto TMDB \u2014\nreturns empty buckets rather than an error; only an unknown movie 404s."
+            "description": "Where this movie can be streamed, rented or bought in ``region`` (web#26).\n\nLive TMDB/JustWatch data, not catalog data, so nothing here is stored. A\nmovie with no availability - or one the backfill never keyed onto TMDB -\nreturns empty buckets rather than an error; only an unknown movie 404s."
           }
         },
         {
@@ -1190,7 +1853,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/v1/users/me/movies?on_rankings=&on_watchlist=&limit=&offset=",
+              "raw": "{{baseUrl}}/v1/users/me/movies?on_rankings=&on_watchlist=&limit=&offset=&sort=&search=&include_total=",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1223,6 +1886,24 @@
                   "key": "offset",
                   "value": "",
                   "description": "Entries to skip",
+                  "disabled": true
+                },
+                {
+                  "key": "sort",
+                  "value": "",
+                  "description": "Order by rank, title, or completed_at; prefix with - for descending",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Case-insensitive substring match against the title",
+                  "disabled": true
+                },
+                {
+                  "key": "include_total",
+                  "value": "",
+                  "description": "Return an {items, total, limit, offset} envelope instead of the legacy array response",
                   "disabled": true
                 }
               ]
@@ -1269,7 +1950,7 @@
                 }
               }
             },
-            "description": "Add a movie to the user's lists (idempotent \u2014 merges list membership)."
+            "description": "Add a movie to the user's lists (idempotent - merges list membership)."
           }
         },
         {
@@ -1602,6 +2283,66 @@
       ]
     },
     {
+      "name": "Preferences",
+      "description": "",
+      "item": [
+        {
+          "name": "Get Preferences",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/preferences",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "preferences"
+              ]
+            },
+            "description": "Get Preferences"
+          }
+        },
+        {
+          "name": "Update Preferences",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/me/preferences",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "me",
+                "preferences"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ranked_list_length\": \"25\",\n  \"onboarding_completed\": true,\n  \"time_zone\": \"string\",\n  \"shelf_order\": [\n    \"string\"\n  ],\n  \"enabled_shelves\": [\n    \"string\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Update Preferences"
+          }
+        }
+      ]
+    },
+    {
       "name": "Search",
       "description": "Cross-domain global search",
       "item": [
@@ -1630,12 +2371,39 @@
             },
             "description": "Global Search"
           }
+        },
+        {
+          "name": "Search Users Route",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/search/users?q=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "search",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "",
+                  "description": "",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "Search Users Route"
+          }
         }
       ]
     },
     {
       "name": "Summary",
-      "description": "Home summary \u2014 per-shelf Top 5 and counts",
+      "description": "Home summary - per-shelf Top 5 and counts",
       "item": [
         {
           "name": "Get Summary",
@@ -1829,13 +2597,39 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/v1/tv-shows",
+              "raw": "{{baseUrl}}/v1/tv-shows?tvmaze=&imdb=&limit=&offset=",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "v1",
                 "tv-shows"
+              ],
+              "query": [
+                {
+                  "key": "tvmaze",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "imdb",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                }
               ]
             },
             "description": "Get All Tv Shows"
@@ -1866,7 +2660,7 @@
                 }
               ]
             },
-            "description": "What to watch: unwatched episodes airing within +/- ``window_days`` of\ntoday, everything overdue and unwatched (catch-up), and shows the user\nhas frozen (paused tracking on, so they're excluded from both)."
+            "description": "What to watch: unwatched episodes airing within +/- ``window_days`` of\ntoday, everything overdue and unwatched (catch-up), and shows the user\nhas frozen (paused tracking on, so they're excluded from both).\n\n\"Today\" is the caller's own calendar day (their ``time_zone``\npreference, falling back to the deployment's ``TIME_ZONE``), so the\nwindow turns over at their midnight rather than the server's."
           }
         },
         {
@@ -1893,6 +2687,33 @@
               ]
             },
             "description": "Return one show's full detail, enriching from TVMaze on first view."
+          }
+        },
+        {
+          "name": "Get Tv Social",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/tv/:tv_show_id/social",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "tv",
+                ":tv_show_id",
+                "social"
+              ],
+              "variable": [
+                {
+                  "key": "tv_show_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Return social context (friends and followees) for one TV show."
           }
         },
         {
@@ -1993,7 +2814,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/v1/users/me/tv-shows?on_rankings=&on_watchlist=&limit=&offset=",
+              "raw": "{{baseUrl}}/v1/users/me/tv-shows?on_rankings=&on_watchlist=&limit=&offset=&sort=&search=&include_total=",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2026,6 +2847,24 @@
                   "key": "offset",
                   "value": "",
                   "description": "Entries to skip",
+                  "disabled": true
+                },
+                {
+                  "key": "sort",
+                  "value": "",
+                  "description": "Order by rank, title, or completed_at; prefix with - for descending",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Case-insensitive substring match against the title",
+                  "disabled": true
+                },
+                {
+                  "key": "include_total",
+                  "value": "",
+                  "description": "Return an {items, total, limit, offset} envelope instead of the legacy array response",
                   "disabled": true
                 }
               ]
@@ -2167,7 +3006,7 @@
                 }
               }
             },
-            "description": "Add a show to the user's lists (idempotent \u2014 merges list membership)."
+            "description": "Add a show to the user's lists (idempotent - merges list membership)."
           }
         },
         {
@@ -2581,13 +3420,33 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/v1/games",
+              "raw": "{{baseUrl}}/v1/games?igdb=&limit=&offset=",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "v1",
                 "games"
+              ],
+              "query": [
+                {
+                  "key": "igdb",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                }
               ]
             },
             "description": "Get All Games"
@@ -2617,6 +3476,33 @@
               ]
             },
             "description": "Return one game's full detail, enriching from IGDB on first view."
+          }
+        },
+        {
+          "name": "Get Game Social",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/games/:game_id/social",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "games",
+                ":game_id",
+                "social"
+              ],
+              "variable": [
+                {
+                  "key": "game_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Return social context (friends and followees) for one game."
           }
         },
         {
@@ -2653,7 +3539,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/v1/users/me/games?on_rankings=&on_watchlist=&limit=&offset=",
+              "raw": "{{baseUrl}}/v1/users/me/games?on_rankings=&on_watchlist=&limit=&offset=&sort=&search=&include_total=",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2686,6 +3572,24 @@
                   "key": "offset",
                   "value": "",
                   "description": "Entries to skip",
+                  "disabled": true
+                },
+                {
+                  "key": "sort",
+                  "value": "",
+                  "description": "Order by rank, title, or completed_at; prefix with - for descending",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Case-insensitive substring match against the title",
+                  "disabled": true
+                },
+                {
+                  "key": "include_total",
+                  "value": "",
+                  "description": "Return an {items, total, limit, offset} envelope instead of the legacy array response",
                   "disabled": true
                 }
               ]
@@ -2732,7 +3636,7 @@
                 }
               }
             },
-            "description": "Add a game to the user's lists (idempotent \u2014 merges list membership)."
+            "description": "Add a game to the user's lists (idempotent - merges list membership)."
           }
         },
         {
@@ -2983,7 +3887,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/v1/public/:handle",
+              "raw": "{{baseUrl}}/v1/public/:handle?shelf=&kind=&limit=&offset=",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2991,6 +3895,32 @@
                 "v1",
                 "public",
                 ":handle"
+              ],
+              "query": [
+                {
+                  "key": "shelf",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "kind",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                }
               ],
               "variable": [
                 {
@@ -3000,7 +3930,7 @@
                 }
               ]
             },
-            "description": "Read-only profile: ranked lists of the categories the owner has opted in,\nbest first, filtered to what *this* caller may see.\n\nAuthentication is optional (#277). Anonymous callers and signed-in\nstrangers get ``public`` and nothing else; an accepted friend also gets\n``friends``; the owner gets everything of their own \u2014 including private\nshelves, and so never a 404 on their own handle \u2014 which is why the\nresponse carries ``viewer.relationship``: a client rendering this page has\nto be able to say *whose* view it is showing. ``viewer.following`` (#276)\nrides alongside it for the same reason \u2014 whether to render a Follow or\nFollowing button \u2014 and is computed only *after* every access decision\nabove has already been made: following is never part of the ceiling a\ncaller is served, only a fact about the payload once that's settled.\n\n**One ceiling, resolved once.** The caller's relationship is turned into a\nsingle tier ceiling before any shelf is read, and every shelf \u2014 ranked\nlist and watchlist alike \u2014 is then compared against that one value. The\nalternative, asking \"is this viewer a friend?\" per shelf, is what lets two\nshelves end up evaluated under different assumptions.\n\n**Nothing visible is indistinguishable from nothing there.** An unknown\nhandle, a profile whose tier is above this caller, and a profile with no\nshelf this caller may see all raise the *same* exception object: same\nstatus, same body, same headers. Since visibility is now\nviewer-dependent, so is the 404 \u2014 a profile a friend can see 404s for\neverybody else exactly as a handle nobody ever claimed does."
+            "description": "Read-only profile: ranked lists of the categories the owner has opted in,\nbest first, filtered to what *this* caller may see.\n\nAuthentication is optional (#277). Anonymous callers and signed-in\nstrangers get ``public`` and nothing else; an accepted friend also gets\n``friends``; the owner gets everything of their own - including private\nshelves, and so never a 404 on their own handle - which is why the\nresponse carries ``viewer.relationship``: a client rendering this page has\nto be able to say *whose* view it is showing. ``viewer.following`` (#276)\nand ``viewer.friend_request_state`` (#357) ride alongside it for the same\nreason - whether to render a Follow, Following, Add friend, or Request\nsent button - and are computed only *after* every access decision above\nhas already been made. Neither affects the ceiling a caller is served;\nthey are facts about the payload once that is settled.\n\n**One ceiling, resolved once.** The caller's relationship is turned into a\nsingle tier ceiling before any shelf is read, and every shelf - ranked\nlist and watchlist alike - is then compared against that one value. The\nalternative, asking \"is this viewer a friend?\" per shelf, is what lets two\nshelves end up evaluated under different assumptions.\n\n**Nothing visible is indistinguishable from nothing there.** An unknown\nhandle, a profile whose tier is above this caller, and a profile with no\nshelf this caller may see all raise the *same* exception object: same\nstatus, same body, same headers. Since visibility is now\nviewer-dependent, so is the 404 - a profile a friend can see 404s for\neverybody else exactly as a handle nobody ever claimed does. A named\n``shelf`` that doesn't exist, or that this ceiling doesn't admit, folds\ninto the same 404 rather than a distinct error - see #279.\n\n**Depth is viewer-controlled, not owner-controlled** (#279): the owner\npicks a tier, the viewer picks how much of an admitted shelf to read.\n``limit`` clamps to ``MAX_PUBLIC_SHELF_LIMIT`` rather than erroring - a\nshared link has to survive a hand-edited or scraped query string - and\nonly applies once a single ``shelf`` is named; the multi-shelf hub view\nalways gets the small preview size for every shelf."
           }
         },
         {
@@ -3027,14 +3957,14 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"handle\": \"string\",\n  \"visibility_profile\": \"private\",\n  \"visibility_movies\": \"private\",\n  \"visibility_tv\": \"private\",\n  \"visibility_books\": \"private\",\n  \"visibility_games\": \"private\",\n  \"visibility_watchlist_movies\": \"private\",\n  \"visibility_watchlist_tv\": \"private\",\n  \"visibility_watchlist_books\": \"private\",\n  \"visibility_watchlist_games\": \"private\"\n}",
+              "raw": "{\n  \"handle\": \"string\",\n  \"default_privacy\": \"private\",\n  \"visibility_profile\": \"private\",\n  \"visibility_movies\": \"private\",\n  \"visibility_tv\": \"private\",\n  \"visibility_books\": \"private\",\n  \"visibility_games\": \"private\",\n  \"visibility_watchlist_movies\": \"private\",\n  \"visibility_watchlist_tv\": \"private\",\n  \"visibility_watchlist_books\": \"private\",\n  \"visibility_watchlist_games\": \"private\",\n  \"visibility_notes_movies\": \"private\",\n  \"visibility_notes_tv\": \"private\",\n  \"visibility_notes_books\": \"private\",\n  \"visibility_notes_games\": \"private\",\n  \"share_activity\": true\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             },
-            "description": "Update the handle and/or any of the nine visibility tiers.\n\nOnly fields present in the body change. The result has to satisfy both\ninvariants \u2014 a handle for anything non-private, and a profile at least as\nopen as its most-open shelf \u2014 or the whole update is rejected. Both are\nchecked against the *resulting* state before anything is written, so a\nrejection leaves the row exactly as it was."
+            "description": "Update the handle, activity sharing, and/or any of the nine visibility tiers.\n\nOnly fields present in the body change. The result has to satisfy both\ninvariants - a handle for anything non-private, and a profile at least as\nopen as its most-open shelf - or the whole update is rejected. Both are\nchecked against the *resulting* state before anything is written, so a\nrejection leaves the row exactly as it was."
           }
         }
       ]
@@ -3120,7 +4050,7 @@
                 }
               }
             },
-            "description": "Sign in with a Google Identity Services ID token.\n\nVerifies the token against the configured Google client id, then upserts the\nuser (creating one on first sign-in) and returns a JWT \u2014 the same shape as\nthe password flow.",
+            "description": "Sign in with a Google Identity Services ID token.\n\nVerifies the token against the configured Google client id, then upserts the\nuser (creating one on first sign-in) and returns a JWT - the same shape as\nthe password flow.",
             "auth": {
               "type": "noauth"
             }
@@ -3156,7 +4086,7 @@
                 }
               }
             },
-            "description": "Sign out server-side: the refresh token and its family stop working.\n\nDeliberately 204 whether or not the token was recognised \u2014 sign-out must\nnot depend on the client still holding a valid credential, and the status\nshouldn't reveal whether a guessed token existed."
+            "description": "Sign out server-side: the refresh token and its family stop working.\n\nDeliberately 204 whether or not the token was recognised - sign-out must\nnot depend on the client still holding a valid credential, and the status\nshouldn't reveal whether a guessed token existed.\n\nSigning out also ends any view-as session the owner of that refresh token\nis running (#341). Otherwise an admin could sign out believing they had\nclosed everything down while a live impersonation token kept working\nuntil its own expiry."
           }
         },
         {

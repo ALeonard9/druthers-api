@@ -31,6 +31,14 @@ jobs:
           pip install --upgrade pip setuptools wheel
           pip install -r requirements/dev.txt
 
+    # A pre-commit hook can be skipped with --no-verify, and pre-commit.ci
+    # cannot run the venv-backed hooks at all, so the openapi-json hook alone
+    # is not enough to keep the spec honest. --check writes nothing.
+    - name: openapi.json is current
+      run: |
+          source .venv/bin/activate
+          python scripts/generate_openapi.py --check
+
     - name: Run Black
       run: |
           source .venv/bin/activate
