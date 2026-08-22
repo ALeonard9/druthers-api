@@ -181,7 +181,6 @@ database/data/*
 .testmondata
 
 # Local Claude Code artifacts (not checked in for this repo)
-CLAUDE.md
 graphify-out/
 # Fleet worker runtime artifacts
 WORKER_REPORT.md
