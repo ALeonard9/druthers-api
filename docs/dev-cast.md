@@ -54,6 +54,32 @@ size *is* shared-title count, and five shared titles is the line between
 a second `friend` and the `not_enough_overlap` state stops existing anywhere
 in the seed data.
 
+## Which environments the cast exists in
+
+| Environment | How it gets there | Notes |
+| --- | --- | --- |
+| local dev | `task seed:dev` (`app/migration/seed_dev.py`) | The full cast, plus randomized volume for the target |
+| QA | `app/migration/seed_qa_cast.py`, run by `deploy_qa.yaml` on every deploy | The cast only: accounts, tiers, the three relationship edges, and the canon titles the shelf sizes depend on. No randomized volume |
+| prod | never | Both seeders refuse: `seed_dev` only runs against the local dev Postgres, `seed_qa_cast` only when `ENV=qa` |
+
+Two things differ on QA and both are deliberate:
+
+- **The target is not the seed admin.** QA's database is a Neon branch reset
+  from prod, so the seed admin there is a real account with a real library.
+  The cast anchors to a dedicated account named by the `QA_E2E_TARGET_EMAIL`
+  repo variable, and `seed_qa_cast` refuses to create it: that account has
+  real credentials on an internet-facing host and an operator should have made
+  a deliberate decision about it.
+- **`admin-two` is opt-in.** It is an admin account, and a shared known
+  password on it is harmless locally (`seed_dev` refuses to run anywhere that
+  password unlocks something) but would be admin access to a prod-derived copy
+  on QA. It is seeded only when the `QA_ADMIN_TWO_PASSWORD` secret supplies a
+  real one; otherwise the seat is skipped and the admin-on-admin rule (#341)
+  stays covered locally.
+
+A Neon reset wipes the cast, which is why the seed runs on every deploy rather
+than once. It is idempotent, so a re-deploy changes nothing.
+
 ## Agent instructions: demoing with the cast
 
 Bring the stack up with the `druthers-up` skill first. Then, for whatever is

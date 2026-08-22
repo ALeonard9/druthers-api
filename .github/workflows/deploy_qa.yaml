@@ -63,6 +63,35 @@ jobs:
       # roll so QA exercises the same sequence prod will. If QA skipped these,
       # QA would show the unbackfilled state prod is specifically avoiding -
       # which is exactly the bug QA exists to catch.
+      # Seeds the dev cast so druthers-web's authenticated Playwright lane has
+      # seats to sign in as (#413). Runs on every deploy on purpose: QA's Neon
+      # branch is reset from prod on demand, which wipes anything seeded by
+      # hand, silently. Idempotent, so a re-deploy changes nothing.
+      #
+      # Skipped rather than failed when the target is unset: a QA deploy must
+      # not go red because the E2E fixtures are not configured yet.
+      - name: Seed the dev cast
+        if: steps.migrate.outputs.ran == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL_QA }}
+          QA_E2E_TARGET_EMAIL: ${{ vars.QA_E2E_TARGET_EMAIL }}
+          # Optional. Without it the second admin seat is skipped and the
+          # admin-on-admin rule (#341) stays covered locally only. Seeding an
+          # admin with a shared known password on an internet-facing host
+          # holding prod-derived data is a different proposition from doing it
+          # on a local database, so it is opt-in.
+          QA_ADMIN_TWO_PASSWORD: ${{ secrets.QA_ADMIN_TWO_PASSWORD }}
+          ENV: qa
+        run: |
+          set -euo pipefail
+          if [ -z "${QA_E2E_TARGET_EMAIL:-}" ]; then
+            echo "::warning::QA_E2E_TARGET_EMAIL not set - skipping the cast"
+            echo "::warning::seed. druthers-web's QA E2E lane will have no"
+            echo "::warning::seats to sign in as."
+            exit 0
+          fi
+          python -m app.migration.seed_qa_cast
+
       - name: Backfill catalog data
         if: steps.migrate.outputs.ran == 'true'
         env:
