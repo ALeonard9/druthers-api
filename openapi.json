@@ -1244,6 +1244,58 @@
         }
       }
     },
+    "/v1/movies/{movie_id}/social": {
+      "get": {
+        "tags": [
+          "Movies"
+        ],
+        "summary": "Get Movie Social",
+        "description": "Return social context (friends and followees) for one movie.",
+        "operationId": "get_movie_social_v1_movies__movie_id__social_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "movie_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Movie Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ItemSocialContext"
+                  },
+                  "title": "Response Get Movie Social V1 Movies  Movie Id  Social Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/games": {
       "get": {
         "tags": [
@@ -2011,6 +2063,58 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UserVideoGameResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/games/{game_id}/social": {
+      "get": {
+        "tags": [
+          "Video Games"
+        ],
+        "summary": "Get Game Social",
+        "description": "Return social context (friends and followees) for one game.",
+        "operationId": "get_game_social_v1_games__game_id__social_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ItemSocialContext"
+                  },
+                  "title": "Response Get Game Social V1 Games  Game Id  Social Get"
                 }
               }
             }
@@ -2811,6 +2915,58 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UserBookResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/books/{book_id}/social": {
+      "get": {
+        "tags": [
+          "Books"
+        ],
+        "summary": "Get Book Social",
+        "description": "Return social context (friends and followees) for one book.",
+        "operationId": "get_book_social_v1_books__book_id__social_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Book Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ItemSocialContext"
+                  },
+                  "title": "Response Get Book Social V1 Books  Book Id  Social Get"
                 }
               }
             }
@@ -4266,6 +4422,58 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tv/{tv_show_id}/social": {
+      "get": {
+        "tags": [
+          "TV"
+        ],
+        "summary": "Get Tv Social",
+        "description": "Return social context (friends and followees) for one TV show.",
+        "operationId": "get_tv_social_v1_tv__tv_show_id__social_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tv_show_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tv Show Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ItemSocialContext"
+                  },
+                  "title": "Response Get Tv Social V1 Tv  Tv Show Id  Social Get"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -6271,6 +6479,120 @@
         }
       }
     },
+    "/v1/admin/reports/{report}": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get Report",
+        "description": "Product-health report data, with one stable chart/table envelope.",
+        "operationId": "get_report_v1_admin_reports__report__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "report",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Report"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "bucket",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ],
+              "type": "string",
+              "default": "day",
+              "title": "Bucket"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "const": "csv",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Format"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutAdminReportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/admin/impersonation": {
       "get": {
         "tags": [
@@ -7752,6 +8074,46 @@
               }
             ]
           },
+          "visibility_notes_movies": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visibility_notes_tv": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visibility_notes_books": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visibility_notes_games": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "share_activity": {
             "anyOf": [
               {
@@ -7767,6 +8129,57 @@
         "type": "object",
         "title": "InVisibilityUpdate",
         "description": "Request body for visibility settings (#274) and activity sharing (#280).\nEvery shelf setting is a ``private``, ``friends`` or ``public`` tier;\n``share_activity`` is the independent whole-feed opt-out.\n\nOnly sent fields change; a null handle clears it (allowed only while\neverything is private). A null shelf tier clears its override and resumes\nusing ``default_privacy``; an omitted field is left alone."
+      },
+      "ItemSocialContext": {
+        "properties": {
+          "handle": {
+            "type": "string",
+            "title": "Handle"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "relationship": {
+            "type": "string",
+            "title": "Relationship"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "on_watchlist": {
+            "type": "boolean",
+            "title": "On Watchlist"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "handle",
+          "display_name",
+          "relationship",
+          "on_watchlist"
+        ],
+        "title": "ItemSocialContext"
       },
       "MovieCreate": {
         "properties": {
@@ -9000,6 +9413,124 @@
         ],
         "title": "OutAdminDomainCounts",
         "description": "Ranked/watchlist/total for one tracked domain."
+      },
+      "OutAdminReportPoint": {
+        "properties": {
+          "period": {
+            "type": "string",
+            "title": "Period"
+          },
+          "values": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Values"
+          }
+        },
+        "type": "object",
+        "required": [
+          "period",
+          "values"
+        ],
+        "title": "OutAdminReportPoint",
+        "description": "One dated report bucket, with report-specific values."
+      },
+      "OutAdminReportResponse": {
+        "properties": {
+          "report": {
+            "type": "string",
+            "title": "Report"
+          },
+          "bucket": {
+            "type": "string",
+            "title": "Bucket"
+          },
+          "from": {
+            "type": "string",
+            "title": "From"
+          },
+          "to": {
+            "type": "string",
+            "title": "To"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/OutAdminReportPoint"
+            },
+            "type": "array",
+            "title": "Series"
+          },
+          "totals": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Totals"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/OutAdminReportRow"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
+          "instrumented": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instrumented"
+          }
+        },
+        "type": "object",
+        "required": [
+          "report",
+          "bucket",
+          "from",
+          "to",
+          "series",
+          "totals"
+        ],
+        "title": "OutAdminReportResponse",
+        "description": "Shared envelope for every ``GET /v1/admin/reports/{report}``."
+      },
+      "OutAdminReportRow": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "count"
+        ],
+        "title": "OutAdminReportRow",
+        "description": "One unbucketed ranked report row."
       },
       "OutAdminSocialCounts": {
         "properties": {
@@ -10238,6 +10769,46 @@
             ]
           },
           "visibility_watchlist_games": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visibility_notes_movies": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visibility_notes_tv": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visibility_notes_books": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visibility_notes_games": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/VisibilityTier"

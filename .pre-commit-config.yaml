@@ -5,7 +5,7 @@ default_stages: [pre-commit]   # existing hooks run per-commit; tests run pre-pu
 # Skip hooks that need the local project venv - they can't run in the hosted CI.
 ci:
   autoupdate_schedule: weekly
-  skip: [pylint, pytest-changed]
+  skip: [pylint, pytest-changed, openapi-json]
 
 repos:
 - repo: https://github.com/gitleaks/gitleaks
@@ -39,6 +39,16 @@ repos:
       language_version: python3.14
 - repo: local
   hooks:
+  # Regenerate openapi.json whenever the app changes. openapi-spec-validator
+  # above only proves the file is well-formed - it validated a spec that was
+  # missing five real routes for months. This is the hook that keeps it true.
+  # Writes and fails, like black does, so the fresh file gets re-staged.
+  - id: openapi-json
+    name: openapi.json is current
+    entry: ./.venv/bin/python scripts/generate_openapi.py
+    language: system
+    pass_filenames: false
+    files: ^(app/|scripts/generate_openapi\.py)
   - id: pylint
     name: pylint
     entry: ./.venv/bin/pylint
