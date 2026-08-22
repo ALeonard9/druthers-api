@@ -98,4 +98,15 @@ jobs:
           gcloud run deploy druthers-api \
             --image "$IMAGE" \
             --region ${{ vars.GCP_REGION }} \
-            --project ${{ vars.GCP_PROJECT_ID_QA }}
+            --project ${{ vars.GCP_PROJECT_ID_QA }} \
+            --update-env-vars RATE_LIMIT_AUTH=50
+
+      # --update-env-vars, not --set-env-vars: this deploy deliberately does
+      # not own QA's environment (that is gcp/30-deploy.sh in druthers-infra),
+      # and --set would drop every variable it does not name, including
+      # DISABLE_PASSWORD_LOGIN and GOOGLE_CLIENT_ID.
+      #
+      # It has to be here at all because this workflow otherwise only swaps
+      # the image: setting RATE_LIMIT_AUTH in druthers-infra's env.qa.sh alone
+      # would never reach QA, since the manual deploy script is not what runs
+      # on a push to main.
