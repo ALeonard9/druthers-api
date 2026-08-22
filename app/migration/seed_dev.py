@@ -247,6 +247,38 @@ _CAST_USERS = (
         'time_zone': 'America/Chicago',
         'admin': True,
     },
+    {
+        # The disposable seat. Not a relationship position and not part of the
+        # visibility matrix: it exists so destructive admin rules can be
+        # *tested* rather than only described.
+        #
+        # Disabling an account, expiring its session and impersonating it are
+        # all one-way in a way the rest of the cast cannot absorb. Proving
+        # "an admin cannot disable another admin" by disabling ``admin-two``
+        # breaks every later run at exactly the moment the rule regresses,
+        # which is when the suite most needs to still work. So the destructive
+        # specs act on this seat instead, and nothing else reads it.
+        #
+        # Deliberately holds nothing: no canon movies, no friendships, no
+        # follows, so no other seat's assertions depend on its state. A test
+        # may leave it disabled; ``disposable`` below is what makes the next
+        # ``task seed:dev`` clear ``disabled_at`` again.
+        #
+        # ``gmail.com`` for the same reason as ``admin-two``: it authenticates
+        # through the normal app paths, which validate the email with an MX
+        # lookup, unlike this script's direct inserts.
+        'email': 'e2e-disposable@gmail.com',
+        'display_name': 'Disposable',
+        'handle': 'disposable',
+        'position': 'disposable',
+        'tiers': _cast_tiers('public'),
+        'canon_movies': 0,
+        # Its own zone, not UTC: ``stranger`` already holds UTC and the cast
+        # keeps one zone per seat, so a date rendered from the wrong seat is
+        # visibly wrong rather than plausible.
+        'time_zone': 'Pacific/Auckland',
+        'disposable': True,
+    },
 )
 
 
@@ -793,6 +825,14 @@ def _get_or_create_cast_user(session: Session, spec: dict) -> DbUser:
     user.time_zone = spec['time_zone']
     if spec.get('admin'):
         user.user_group = 'admin'
+    if spec.get('disposable'):
+        # Re-enable on every run. The destructive admin specs disable this
+        # seat on purpose, and a spec that fails midway leaves it disabled;
+        # without this the seat is single-use and the next run fails for the
+        # previous run's reason. Only the disposable seat gets this: silently
+        # re-enabling an account an operator disabled by hand would be a
+        # surprise, and for the rest of the cast a disabled seat is a bug.
+        user.disabled_at = None
     return user
 
 
