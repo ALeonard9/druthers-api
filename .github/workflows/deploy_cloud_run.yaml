@@ -125,3 +125,19 @@ jobs:
             --image "$IMAGE" \
             --region ${{ vars.GCP_REGION }} \
             --project ${{ vars.GCP_PROJECT_ID }}
+
+      # Tell the druthers super repo which tag is now deployed, so its pinned
+      # submodule stops describing the previous release. Last step on purpose:
+      # the pointer should only move once the roll above has succeeded.
+      # DRUTHERS_SUPER_TOKEN is a fine-grained PAT with contents:write on
+      # ALeonard9/druthers only; GITHUB_TOKEN cannot reach another repo.
+      - name: Notify super repo of release
+        if: success()
+        continue-on-error: true   # a missed pointer is caught by staleness.yml
+        env:
+          GH_TOKEN: ${{ secrets.DRUTHERS_SUPER_TOKEN }}
+        run: |
+          gh api repos/ALeonard9/druthers/dispatches \
+            -f event_type=release-published \
+            -F "client_payload[repo]=druthers-api" \
+            -F "client_payload[ref]=${{ github.event.release.tag_name }}"

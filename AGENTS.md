@@ -97,7 +97,7 @@ parentheses, a hyphen, or a rewrite instead.
 
 ### Working as a fleet worker
 
-When dispatched by `druthers-infra/fleet`, you are one of several agents
+When dispatched by `druthers-fleet`, you are one of several agents
 working in parallel, each in its own git worktree. Additional rules apply:
 
 - **Never start the local dev stack.** Ports 5432/8000/3000 and the Docker
