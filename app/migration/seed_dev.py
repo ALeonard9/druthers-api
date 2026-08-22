@@ -813,7 +813,11 @@ def _get_or_create_cast_user(session: Session, spec: dict) -> DbUser:
         user = DbUser(
             display_name=spec['display_name'],
             email=spec['email'],
-            password=Hash.hash_password(_CAST_PASSWORD),
+            # Per-spec override so a deployed environment can give a seat a
+            # real password. Locally every seat shares ``change-me``, which is
+            # harmless because ``_assert_local_dev`` means there is no
+            # environment it unlocks.
+            password=Hash.hash_password(spec.get('password') or _CAST_PASSWORD),
             handle=spec['handle'],
         )
         session.add(user)
@@ -937,7 +941,7 @@ def _ensure_follow(session: Session, follower: DbUser, followee: DbUser) -> None
         session.add(DbFollow(follower_id=follower.pk, followee_id=followee.pk))
 
 
-def _seed_cast(session: Session, target: DbUser) -> dict:
+def _seed_cast(session: Session, target: DbUser, specs=None) -> dict:
     """
     Create the fixed dev cast and wire their relationships (#313).
 
@@ -948,18 +952,20 @@ def _seed_cast(session: Session, target: DbUser) -> dict:
     each cast member, pinning the compare states; see the module docstring for
     the full matrix.
     """
+    specs = tuple(specs if specs is not None else _CAST_USERS)
     _claim_target_user(target)
-    users = {
-        spec['email']: _get_or_create_cast_user(session, spec) for spec in _CAST_USERS
-    }
+    users = {spec['email']: _get_or_create_cast_user(session, spec) for spec in specs}
 
+    # Anchors, and they are why a caller cannot drop a relationship seat: the
+    # matrix is defined by these three edges, so a subset that omits one of
+    # them is not a smaller cast, it is a different one.
     _ensure_friendship(session, target, users['friend@example.com'])
     _ensure_follow(session, users['follower@example.com'], target)
     _ensure_follow(session, target, users['followee@example.com'])
 
     canon = _cast_canon_movies()
     ranked = {target.pk: _rank_movies(session, target, canon)}
-    for spec in _CAST_USERS:
+    for spec in specs:
         user = users[spec['email']]
         count = _rank_movies(session, user, canon[: spec.get('canon_movies', 0)])
         count += _rank_movies(
