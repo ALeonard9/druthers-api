@@ -4,6 +4,7 @@ This module creates tokens for users.
 
 import secrets
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.param_functions import Depends
@@ -11,9 +12,10 @@ from fastapi.security.oauth2 import OAuth2PasswordRequestForm
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm.session import Session
 
-from app.auth import oauth2, refresh_tokens
+from app.auth import apple_identity, oauth2, refresh_tokens
 from app.services.rate_limit import auth_rate_limit, refresh_rate_limit
 from app.config import get_settings
 from app.db import models
@@ -28,6 +30,21 @@ class GoogleAuthRequest(BaseModel):
     """Payload carrying the Google Identity Services ID token (credential)."""
 
     credential: str
+
+
+class AppleAuthRequest(BaseModel):
+    """
+    Payload from Sign in with Apple.
+
+    ``nonce`` is the RAW nonce the client generated; the token carries its
+    SHA-256. ``full_name`` is here because Apple hands the name to the client
+    once, on the very first authorization, and never again - if we do not take
+    it now we cannot ask for it later.
+    """
+
+    identity_token: str
+    nonce: Optional[str] = None
+    full_name: Optional[str] = None
 
 
 def _token_response(user: models.DbUser, refresh_token: str) -> dict:
@@ -222,3 +239,142 @@ def logout(request: InRefreshToken, db: Session = Depends(get_db)):
             models.DbImpersonationSession.ended_at.is_(None),
         ).update({'ended_at': datetime.now(timezone.utc)}, synchronize_session=False)
         db.commit()
+
+
+def _check_oauth_allowlist(email: str) -> None:
+    """
+    Enforce the invite-only allowlist (#183) against a resolved email.
+
+    Applies to new AND existing accounts: during an invite-only phase the
+    allowlist is the single source of truth for who may sign in, not just who
+    may register.
+    """
+    allowlist = get_settings().oauth_allowlist_emails
+    if allowlist is not None and email.lower() not in allowlist:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                'This app is invite-only right now. Your account '
+                'isn’t on the access list - contact the administrator '
+                'if you believe this is a mistake.'
+            ),
+        )
+
+
+@router.post('/apple', response_model=OutToken, dependencies=[Depends(auth_rate_limit)])
+def apple_login(request: AppleAuthRequest, db: Session = Depends(get_db)):
+    """
+    Sign in with an Apple identity token.
+
+    Resolution order is deliberate, and it is the part with consequences:
+
+    1. **By Apple subject.** ``sub`` is stable for this Apple ID against our
+       developer team, and it survives the user turning off email relay or
+       changing their Apple ID address.
+    2. **By email, once, to link.** Someone who signed in with Google on the
+       web and then with Apple on the phone is one person, and must land in
+       one account. When Apple gives us a real, verified address that already
+       belongs to an account, we stamp the Apple subject onto it rather than
+       creating a second account. Splitting them here is cheap to prevent and
+       expensive to merge later.
+    3. **Otherwise create.** First sign-in with no matching account.
+
+    Linking by email is deliberately NOT done for Apple private relay
+    addresses. A relay is minted per app and will never equal the address on a
+    Google account, so matching on one could only ever produce a false link.
+    """
+    settings = get_settings()
+    client_ids = settings.apple_client_ids
+    if not client_ids:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail='Apple sign-in is not configured',
+        )
+
+    try:
+        identity = apple_identity.verify_identity_token(
+            request.identity_token, client_ids, request.nonce
+        )
+    except apple_identity.AppleIdentityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid Apple credential',
+        ) from exc
+
+    # Kept in Apple's casing for storage, lowercased only for comparison:
+    # existing rows carry mixed-case addresses (`Dylan.Obrien@...`), so an
+    # exact match would miss the very account we are trying to link to and
+    # silently create a duplicate.
+    email = (identity.email or '').strip() or None
+    email_key = email.lower() if email else None
+
+    user = (
+        db.query(models.DbUser)
+        .filter(models.DbUser.apple_sub == identity.subject)
+        .first()
+    )
+
+    if user is None and email and identity.email_verified:
+        if not identity.is_private_email:
+            existing = (
+                db.query(models.DbUser)
+                .filter(func.lower(models.DbUser.email) == email_key)
+                .first()
+            )
+            if existing is not None:
+                _check_oauth_allowlist(existing.email)
+                if existing.disabled_at is not None:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail='Account disabled',
+                    )
+                existing.apple_sub = identity.subject
+                db.commit()
+                db.refresh(existing)
+                user = existing
+
+    if user is None:
+        if not email:
+            # Apple omits the email claim in some re-authorization flows. With
+            # no subject match and no address there is nothing to key a new
+            # account on, and inventing a placeholder would create an account
+            # the user can never reach from any other client.
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail='Apple credential carries no email address',
+            )
+        _check_oauth_allowlist(email)
+        clash = (
+            db.query(models.DbUser)
+            .filter(func.lower(models.DbUser.email) == email_key)
+            .first()
+        )
+        if clash is not None:
+            # Only reachable when the address is a private relay that happens
+            # to equal an existing account's address, since a non-relay match
+            # would have linked above. Refusing beats inserting into a unique
+            # index and turning a policy decision into a 500.
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail='An account already exists for this email address',
+            )
+        user = models.DbUser(
+            email=email,
+            display_name=(request.full_name or '').strip()[:30] or email,
+            user_group='user',
+            apple_sub=identity.subject,
+            # Apple-authenticated users don't use a password; store an
+            # unusable one, matching the Google flow.
+            password=Hash.hash_password(secrets.token_hex(16)),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    else:
+        _check_oauth_allowlist(user.email)
+        if user.disabled_at is not None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail='Account disabled'
+            )
+
+    return _sign_in_response(user, db)

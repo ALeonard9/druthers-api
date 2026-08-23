@@ -7,9 +7,11 @@ from unittest.mock import patch
 from faker import Faker
 from fastapi.testclient import TestClient
 
+from app.auth.apple_identity import AppleIdentity, AppleIdentityError
 from app.config import Settings
 
 fake = Faker()
+APPLE_CLIENT = 'io.druthers.ios'
 
 
 @patch('app.auth.authentication.get_settings')
@@ -293,3 +295,176 @@ def test_google_login_unconfigured_returns_503(
 
     assert response.status_code == 503
     mock_verify.assert_not_called()
+
+
+# --- Sign in with Apple (#418) ---------------------------------------------
+#
+# Verification itself is covered in tests/unit/apple_identity_test.py against
+# real signatures. These stub it out and test what the route does with the
+# claims: which account you land in.
+
+
+def _apple_identity(**overrides):
+    """An AppleIdentity with sensible defaults, for stubbing verification."""
+    fields = {
+        'subject': '001234.abcdef.5678',
+        'email': f'{fake.user_name()}@example.com',
+        'is_private_email': False,
+        'email_verified': True,
+    }
+    fields.update(overrides)
+    return AppleIdentity(**fields)
+
+
+@patch('app.auth.authentication.get_settings')
+@patch('app.auth.authentication.apple_identity.verify_identity_token')
+def test_apple_login_creates_user(mock_verify, mock_settings, test_client: TestClient):
+    """A valid Apple credential signs in and creates the user on first use."""
+    mock_settings.return_value = Settings(apple_client_id=APPLE_CLIENT, env='github')
+    identity = _apple_identity()
+    mock_verify.return_value = identity
+
+    response = test_client.post(
+        '/v1/auth/apple',
+        json={'identity_token': 'fake-apple-token', 'full_name': 'Test Apple User'},
+    )
+
+    assert response.status_code == 200
+    assert response.json()['email'] == identity.email
+
+
+@patch('app.auth.authentication.get_settings')
+@patch('app.auth.authentication.apple_identity.verify_identity_token')
+def test_apple_login_links_to_an_existing_account_by_email(
+    mock_verify, mock_settings, test_client: TestClient, test_db_session
+):
+    """
+    Google on the web then Apple on the phone is ONE person, so it must be one
+    account. This is the case that is cheap to prevent and expensive to merge
+    after the fact.
+    """
+    existing = test_client.first_user
+    mock_settings.return_value = Settings(apple_client_id=APPLE_CLIENT, env='github')
+    mock_verify.return_value = _apple_identity(email=existing.email)
+
+    response = test_client.post(
+        '/v1/auth/apple', json={'identity_token': 'fake-apple-token'}
+    )
+
+    assert response.status_code == 200
+    assert response.json()['user_id'] == existing.id
+    test_db_session.refresh(existing)
+    assert existing.apple_sub == '001234.abcdef.5678'
+
+
+@patch('app.auth.authentication.get_settings')
+@patch('app.auth.authentication.apple_identity.verify_identity_token')
+def test_apple_login_does_not_link_a_private_relay_address(
+    mock_verify, mock_settings, test_client: TestClient
+):
+    """
+    A relay address is minted per app and can never equal the address on
+    someone's Google account, so matching on one could only ever be a false
+    link. It gets its own account.
+    """
+    existing = test_client.first_user
+    mock_settings.return_value = Settings(apple_client_id=APPLE_CLIENT, env='github')
+    mock_verify.return_value = _apple_identity(
+        email=existing.email, is_private_email=True
+    )
+
+    response = test_client.post(
+        '/v1/auth/apple', json={'identity_token': 'fake-apple-token'}
+    )
+
+    # Refused outright rather than silently taking over that account, and
+    # never a 500 from the unique index.
+    assert response.status_code == 409
+
+
+@patch('app.auth.authentication.get_settings')
+@patch('app.auth.authentication.apple_identity.verify_identity_token')
+def test_apple_login_finds_the_account_by_subject_when_email_changes(
+    mock_verify, mock_settings, test_client: TestClient
+):
+    """
+    The subject is the stable key. A user who turns off email relay, or whose
+    token stops carrying an address, must land back in the same account.
+    """
+    mock_settings.return_value = Settings(apple_client_id=APPLE_CLIENT, env='github')
+    mock_verify.return_value = _apple_identity()
+    first = test_client.post(
+        '/v1/auth/apple', json={'identity_token': 'fake-apple-token'}
+    )
+    assert first.status_code == 200
+
+    # Same subject, no email at all this time.
+    mock_verify.return_value = _apple_identity(email=None)
+    second = test_client.post(
+        '/v1/auth/apple', json={'identity_token': 'fake-apple-token'}
+    )
+
+    assert second.status_code == 200
+    assert second.json()['user_id'] == first.json()['user_id']
+
+
+@patch('app.auth.authentication.get_settings')
+@patch('app.auth.authentication.apple_identity.verify_identity_token')
+def test_apple_login_rejects_an_unknown_subject_with_no_email(
+    mock_verify, mock_settings, test_client: TestClient
+):
+    """Nothing to key an account on, and a placeholder would be unreachable."""
+    mock_settings.return_value = Settings(apple_client_id=APPLE_CLIENT, env='github')
+    mock_verify.return_value = _apple_identity(subject='001234.never.seen', email=None)
+
+    response = test_client.post(
+        '/v1/auth/apple', json={'identity_token': 'fake-apple-token'}
+    )
+
+    assert response.status_code == 401
+
+
+@patch('app.auth.authentication.get_settings')
+@patch('app.auth.authentication.apple_identity.verify_identity_token')
+def test_apple_login_rejects_an_invalid_credential(
+    mock_verify, mock_settings, test_client: TestClient
+):
+    """A verification failure is a 401, never a 500."""
+    mock_settings.return_value = Settings(apple_client_id=APPLE_CLIENT, env='github')
+    mock_verify.side_effect = AppleIdentityError('Invalid Apple credential')
+
+    response = test_client.post('/v1/auth/apple', json={'identity_token': 'forged'})
+
+    assert response.status_code == 401
+
+
+@patch('app.auth.authentication.get_settings')
+def test_apple_login_is_503_when_not_configured(mock_settings, test_client: TestClient):
+    """An environment with no Apple client id says so, rather than 401ing."""
+    mock_settings.return_value = Settings(env='github')
+
+    response = test_client.post(
+        '/v1/auth/apple', json={'identity_token': 'fake-apple-token'}
+    )
+
+    assert response.status_code == 503
+
+
+@patch('app.auth.authentication.get_settings')
+@patch('app.auth.authentication.apple_identity.verify_identity_token')
+def test_apple_login_respects_the_invite_allowlist(
+    mock_verify, mock_settings, test_client: TestClient
+):
+    """The allowlist gates Apple sign-in the same way it gates Google."""
+    mock_settings.return_value = Settings(
+        apple_client_id=APPLE_CLIENT,
+        env='github',
+        oauth_allowlist='someone-else@example.com',
+    )
+    mock_verify.return_value = _apple_identity()
+
+    response = test_client.post(
+        '/v1/auth/apple', json={'identity_token': 'fake-apple-token'}
+    )
+
+    assert response.status_code == 403
