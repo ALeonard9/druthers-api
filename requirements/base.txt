@@ -20,7 +20,11 @@ PyJWT==2.13.0
 # signatures on Apple identity tokens (#418), and it was only present here
 # by way of google-auth. A dependency that signature verification rests on
 # should not be able to disappear when an unrelated package drops it.
-cryptography==49.0.0
+#
+# 50.0.0, not 49.x: CVE-2026-69247 (HIGH) is fixed in 50.0.0. The transitive
+# install was already sitting on the vulnerable 49.0.0; pinning it here is
+# what made the exposure visible to Trivy, which only scans this file.
+cryptography==50.0.0
 google-auth==2.56.3
 requests>=2.34.2 # not directly required, pinned to avoid a vulnerability
 urllib3>=2.7.0 # not directly required, pinned to avoid a vulnerability
