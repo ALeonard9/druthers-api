@@ -14,6 +14,25 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def _split_client_ids(*sources: Optional[str]) -> List[str]:
+    """
+    Flatten comma-separated OAuth client id settings into an ordered list.
+
+    Shared by the Google and Apple audience lists. Order is preserved and
+    duplicates are dropped, so a client id named in both the primary and the
+    additional setting is not sent to the verifier twice.
+    """
+    ids: List[str] = []
+    for raw in sources:
+        if not raw:
+            continue
+        for client_id in raw.split(','):
+            client_id = client_id.strip()
+            if client_id and client_id not in ids:
+                ids.append(client_id)
+    return ids
+
+
 class Settings(BaseSettings):
     """
     Application settings, populated from the process environment.
@@ -80,6 +99,14 @@ class Settings(BaseSettings):
     # that id as its audience. Additive: deployments setting only
     # GOOGLE_CLIENT_ID are unaffected.
     google_additional_client_ids: Optional[str] = None
+
+    # Sign in with Apple (#418). Separate from the Google ids above because
+    # Apple tokens verify against Apple's issuer and key set, not Google's, so
+    # they are not interchangeable audiences. For a native app the client id
+    # is the bundle id (io.druthers.ios); a web Services ID would go in the
+    # additional list.
+    apple_client_id: Optional[str] = None
+    apple_additional_client_ids: Optional[str] = None
 
     # --- Abuse resistance (#148, threat model H1/H2) ---
     # Kill switch for /v1/auth/token: prod is Google + API keys only.
@@ -229,6 +256,18 @@ class Settings(BaseSettings):
         )
 
     @property
+    def apple_client_ids(self) -> List[str]:
+        """
+        Every Apple client id whose tokens we accept, primary first.
+
+        Same contract as ``google_client_ids``: PyJWT requires the token's
+        ``aud`` to match one entry, so widening this adds accepted issuing
+        clients without weakening verification of any of them. Empty list
+        means Apple sign-in is not configured.
+        """
+        return _split_client_ids(self.apple_client_id, self.apple_additional_client_ids)
+
+    @property
     def google_client_ids(self) -> List[str]:
         """
         Every OAuth client id whose tokens we accept, primary first.
@@ -238,17 +277,9 @@ class Settings(BaseSettings):
         clients without weakening verification of any of them. Empty list means
         Google sign-in is not configured.
         """
-        ids = []
-        for raw in (self.google_client_id, self.google_additional_client_ids):
-            if not raw:
-                continue
-            for client_id in raw.split(','):
-                client_id = client_id.strip()
-                # Preserve order and drop duplicates: a client id listed in
-                # both settings should not be sent twice.
-                if client_id and client_id not in ids:
-                    ids.append(client_id)
-        return ids
+        return _split_client_ids(
+            self.google_client_id, self.google_additional_client_ids
+        )
 
     @property
     def argon2_params(self) -> dict:

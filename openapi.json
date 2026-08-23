@@ -185,6 +185,48 @@
         }
       }
     },
+    "/v1/auth/apple": {
+      "post": {
+        "tags": [
+          "authentication"
+        ],
+        "summary": "Apple Login",
+        "description": "Sign in with an Apple identity token.\n\nResolution order is deliberate, and it is the part with consequences:\n\n1. **By Apple subject.** ``sub`` is stable for this Apple ID against our\n   developer team, and it survives the user turning off email relay or\n   changing their Apple ID address.\n2. **By email, once, to link.** Someone who signed in with Google on the\n   web and then with Apple on the phone is one person, and must land in\n   one account. When Apple gives us a real, verified address that already\n   belongs to an account, we stamp the Apple subject onto it rather than\n   creating a second account. Splitting them here is cheap to prevent and\n   expensive to merge later.\n3. **Otherwise create.** First sign-in with no matching account.\n\nLinking by email is deliberately NOT done for Apple private relay\naddresses. A relay is minted per app and will never equal the address on a\nGoogle account, so matching on one could only ever produce a false link.",
+        "operationId": "apple_login_v1_auth_apple_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppleAuthRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutToken"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/users": {
       "get": {
         "tags": [
@@ -6863,6 +6905,42 @@
         ],
         "title": "ActivityItem",
         "description": "One inferred user action, unified across all four tracker domains. Most\ntrackers only carry their latest touch (created_at/updated_at) rather\nthan a full history, so one tracker row = one entry here, dated by its\nlast update and with its action inferred from current list state.\nTV episodes are the exception (a real per-watch row exists), so each\nwatched episode appears individually rather than being collapsed into\nits show's row."
+      },
+      "AppleAuthRequest": {
+        "properties": {
+          "identity_token": {
+            "type": "string",
+            "title": "Identity Token"
+          },
+          "nonce": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nonce"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "identity_token"
+        ],
+        "title": "AppleAuthRequest",
+        "description": "Payload from Sign in with Apple.\n\n``nonce`` is the RAW nonce the client generated; the token carries its\nSHA-256. ``full_name`` is here because Apple hands the name to the client\nonce, on the very first authorization, and never again - if we do not take\nit now we cannot ask for it later."
       },
       "Body_get_token_v1_auth_token_post": {
         "properties": {

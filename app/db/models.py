@@ -97,6 +97,13 @@ class DbUser(DBBaseModel):
     user_group = Column(String, default='user')
     password = Column(String)
 
+    # Sign in with Apple (#418). Apple's `sub` is the only stable identifier
+    # across sign-ins: `email` may be a private relay address, and a relay can
+    # be turned off by the user, so keying identity on email would strand the
+    # account. Nullable because every account that predates Apple sign-in, and
+    # every Google-only account, has no Apple subject.
+    apple_sub = Column(String, unique=True, index=True, nullable=True)
+
     # --- Visibility (#143, tiered in #274): everything is private by
     # default. Anything non-private needs a handle (druthers.io/u/<handle>);
     # only ranked lists and opted-in watchlists are ever exposed.

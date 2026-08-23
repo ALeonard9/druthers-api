@@ -3974,6 +3974,39 @@
       "description": "Auth operations",
       "item": [
         {
+          "name": "Apple Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/apple",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "apple"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identity_token\": \"string\",\n  \"nonce\": \"string\",\n  \"full_name\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Sign in with an Apple identity token.\n\nResolution order is deliberate, and it is the part with consequences:\n\n1. **By Apple subject.** ``sub`` is stable for this Apple ID against our\n   developer team, and it survives the user turning off email relay or\n   changing their Apple ID address.\n2. **By email, once, to link.** Someone who signed in with Google on the\n   web and then with Apple on the phone is one person, and must land in\n   one account. When Apple gives us a real, verified address that already\n   belongs to an account, we stamp the Apple subject onto it rather than\n   creating a second account. Splitting them here is cheap to prevent and\n   expensive to merge later.\n3. **Otherwise create.** First sign-in with no matching account.\n\nLinking by email is deliberately NOT done for Apple private relay\naddresses. A relay is minted per app and will never equal the address on a\nGoogle account, so matching on one could only ever produce a false link."
+          }
+        },
+        {
           "name": "Get Token",
           "request": {
             "method": "POST",

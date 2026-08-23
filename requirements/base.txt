@@ -16,6 +16,11 @@ python-logging-loki==0.3.1
 tzdata==2026.3
 click>=8.4.2 # not directly required, pinned to avoid a vulnerability
 PyJWT==2.13.0
+# Explicit, not transitive: PyJWT needs cryptography to verify the RS256
+# signatures on Apple identity tokens (#418), and it was only present here
+# by way of google-auth. A dependency that signature verification rests on
+# should not be able to disappear when an unrelated package drops it.
+cryptography==49.0.0
 google-auth==2.56.3
 requests>=2.34.2 # not directly required, pinned to avoid a vulnerability
 urllib3>=2.7.0 # not directly required, pinned to avoid a vulnerability
