@@ -1,5 +1,5 @@
 fastapi==0.141.1
-uvicorn==0.52.3
+uvicorn==0.52.4
 h11>=0.16.0 # Pinned to fix HTTP Request Smuggling vulnerability
 starlette>=1.6.0 # not directly required, pinned to avoid a vulnerability
 SQLAlchemy==2.0.52
@@ -9,7 +9,7 @@ pydantic-settings==2.15.0
 pwdlib[argon2]
 python-multipart==0.0.32
 email-validator==2.3.0
-idna>=3.18 # not directly required, pinned to avoid a vulnerability
+idna>=3.19 # not directly required, pinned to avoid a vulnerability
 psycopg2-binary==2.9.12
 python-dotenv==1.2.3
 python-logging-loki==0.3.1
