@@ -97,7 +97,7 @@ def _search_by_imdb_id(imdb_id: str) -> List[dict]:
     return [hit]
 
 
-def search_movies(query: str) -> List[dict]:
+def search_movies(query: str, filters: dict = None) -> List[dict]:
     """
     Search TMDB for movies matching ``query``.
 
@@ -125,9 +125,10 @@ def search_movies(query: str) -> List[dict]:
         return _search_by_imdb_id(query)
 
     try:
-        payload = tmdb.request(
-            '/search/movie', {'query': query, 'include_adult': 'false'}
-        )
+        params = {'query': query, 'include_adult': 'false'}
+        if filters:
+            params.update(filters)
+        payload = tmdb.request('/search/movie', params)
     except tmdb.TmdbUnconfigured as exc:  # pragma: no cover - guarded above
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

@@ -381,7 +381,7 @@ def _canonical_score(doc: dict) -> tuple:
     )
 
 
-def search_books(query: str) -> List[dict]:
+def search_books(query: str, filters: dict = None) -> List[dict]:
     """
     Search Open Library for books matching ``query``.
 
@@ -403,17 +403,22 @@ def search_books(query: str) -> List[dict]:
         return _search_by_isbn(normalized_isbn)
 
     try:
+        params = {
+            'limit': 20,
+            'fields': _SEARCH_FIELDS,
+            # Restrict to works that have an English edition. This is an
+            # English-language catalog, and unfiltered title searches
+            # surface translations ahead of the edition the user means.
+            'language': 'eng',
+        }
+        if query:
+            params['q'] = query
+        if filters:
+            params.update(filters)
+
         response = requests.get(
             f'{OPENLIBRARY_URL}/search.json',
-            params={
-                'q': query,
-                'limit': 20,
-                'fields': _SEARCH_FIELDS,
-                # Restrict to works that have an English edition. This is an
-                # English-language catalog, and unfiltered title searches
-                # surface translations ahead of the edition the user means.
-                'language': 'eng',
-            },
+            params=params,
             headers=OPENLIBRARY_HEADERS,
             timeout=REQUEST_TIMEOUT,
         )

@@ -117,7 +117,7 @@ def _lookup_show(params: dict) -> List[dict]:
     return [_normalize_show(payload)]
 
 
-def search_tv_shows(query: str) -> List[dict]:
+def search_tv_shows(query: str, filters: dict = None) -> List[dict]:
     """
     Search TVMaze for shows matching ``query``.
 
@@ -143,9 +143,12 @@ def search_tv_shows(query: str) -> List[dict]:
         return _lookup_show({'thetvdb': query})
 
     try:
+        params = {'q': query}
+        if filters:
+            params.update(filters)
         response = requests.get(
             f'{TVMAZE_URL}/search/shows',
-            params={'q': query},
+            params=params,
             timeout=REQUEST_TIMEOUT,
             headers=TVMAZE_HEADERS,
         )

@@ -182,7 +182,7 @@ def _search_games_by_id(igdb_id: int) -> List[dict]:
     return [_search_hit(payload[0])]
 
 
-def search_games(query: str) -> List[dict]:
+def search_games(query: str, filters: dict = None) -> List[dict]:
     """
     Search IGDB for games matching ``query``.
 
@@ -203,13 +203,33 @@ def search_games(query: str) -> List[dict]:
     # Escape backslashes first, then quotes - otherwise a trailing backslash
     # (or crafted \" sequence) breaks out of the APIcalypse string literal.
     escaped = query.replace('\\', '\\\\').replace('"', '\\"')
+
+    query_parts = []
+    if escaped:
+        query_parts.append(f'search "{escaped}";')
+
+    query_parts.append(
+        'fields name,slug,first_release_date,platforms.abbreviation,cover.image_id,total_rating_count;'
+    )
+
+    where_clauses = []
+    if filters:
+        for k, v in filters.items():
+            if k == 'genre':
+                where_clauses.append(f'genres.name ~ *"{v}"*')
+            elif k == 'platform':
+                where_clauses.append(f'platforms.name ~ *"{v}"*')
+            elif k == 'theme':
+                where_clauses.append(f'themes.name ~ *"{v}"*')
+
+    if where_clauses:
+        query_parts.append(f'where {" & ".join(where_clauses)};')
+
+    query_parts.append('limit 20;')
+    body = ' '.join(query_parts)
+
     try:
-        payload = _igdb_query(
-            'games',
-            f'search "{escaped}"; fields name,slug,first_release_date,'
-            'platforms.abbreviation,cover.image_id,total_rating_count; '
-            'limit 20;',
-        )
+        payload = _igdb_query('games', body)
     except requests.HTTPError as exc:
         if is_bad_query_error(exc):
             logger.info('IGDB rejected game search query %r: %s', query, exc)

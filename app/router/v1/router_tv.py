@@ -125,8 +125,16 @@ async def search_tv_shows_endpoint(
 ):
     user_pk = current_user[0].pk
     db.close()
+
+    from app.services.search_parser import parse_provider_query
+
+    parsed_q, filters = parse_provider_query(q, 'tv_shows')
+
     results = await run_search_provider(
-        search_with_correction, tvmaze_search_shows, correct_query, q
+        search_with_correction,
+        lambda txt: tvmaze_search_shows(txt, filters=filters),
+        correct_query,
+        parsed_q,
     )
     return await run_in_threadpool(
         attach_tracked_status, db, user_pk, results, 'tv_shows'
