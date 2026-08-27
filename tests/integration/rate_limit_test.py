@@ -54,6 +54,40 @@ def test_auth_attempts_are_rate_limited_per_ip(mock_settings, test_client: TestC
 
 
 @patch('app.services.rate_limit.get_settings')
+def test_refresh_attempts_use_the_auth_rate_limit(
+    mock_settings, test_client: TestClient
+):
+    """Unknown refresh-token guesses are rejected by the pre-auth IP cap."""
+    rate_limit.reset()
+    mock_settings.return_value = Settings(**ENABLED, rate_limit_auth=0)
+
+    response = test_client.post(
+        '/v1/auth/refresh', json={'refresh_token': 'drr_made-up-token'}
+    )
+
+    assert response.status_code == 429
+    assert response.headers['retry-after'] == '300'
+    rate_limit.reset()
+
+
+@patch('app.services.rate_limit.get_settings')
+def test_logout_attempts_use_the_auth_rate_limit(
+    mock_settings, test_client: TestClient
+):
+    """Logout writes are rejected when the pre-auth IP cap is exhausted."""
+    rate_limit.reset()
+    mock_settings.return_value = Settings(**ENABLED, rate_limit_auth=0)
+
+    response = test_client.post(
+        '/v1/auth/logout', json={'refresh_token': 'drr_made-up-token'}
+    )
+
+    assert response.status_code == 429
+    assert response.headers['retry-after'] == '300'
+    rate_limit.reset()
+
+
+@patch('app.services.rate_limit.get_settings')
 def test_auth_limit_uses_cloud_runs_rightmost_xff_hop(mock_settings, test_client):
     """
     Forging a different leftmost XFF value does not create a new auth bucket.
