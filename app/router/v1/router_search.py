@@ -50,9 +50,9 @@ def _providers() -> Dict[str, Callable[[str], List[dict]]]:
 
 
 def _fan_out(q: str, only: Optional[List[str]] = None) -> Dict[str, List[dict]]:
-    def run(fn: Callable[[str], List[dict]]) -> List[dict]:
+    def run(fn: Callable, query: str, filters: dict) -> List[dict]:
         try:
-            return fn(q)
+            return fn(query, filters=filters)
         except HTTPException:
             # Unconfigured/unavailable provider: skip its domain, keep the rest.
             return []
@@ -60,8 +60,15 @@ def _fan_out(q: str, only: Optional[List[str]] = None) -> Dict[str, List[dict]]:
     providers = _providers()
     if only is not None:
         providers = {name: fn for name, fn in providers.items() if name in only}
+
+    from app.services.search_parser import parse_provider_query
+
     with ThreadPoolExecutor(max_workers=max(len(providers), 1)) as pool:
-        futures = {name: pool.submit(run, fn) for name, fn in providers.items()}
+        futures = {}
+        for name, fn in providers.items():
+            parsed_q, filters = parse_provider_query(q, name)
+            futures[name] = pool.submit(run, fn, parsed_q, filters)
+
         return {name: future.result() for name, future in futures.items()}
 
 
@@ -69,12 +76,20 @@ def _global_provider_search(q: str):
     """Run both provider rounds and ranking under one search deadline."""
     results = _fan_out(q)
     corrected = None
+
+    from app.services.search_parser import parse_provider_query
+
     # Track which query actually produced each domain's hits, so ranking
     # (below) scores against the right string.
-    query_by_domain = dict.fromkeys(results, q)
+    query_by_domain = {name: parse_provider_query(q, name)[0] for name in results}
+
     # Some providers fuzzy-match and some don't, so retry only the domains
     # that came back empty with a spell-corrected query.
     empty = [name for name, hits in results.items() if not hits]
+
+    # We only correct the remaining query text, not the entire original query.
+    # We'll just correct `q` globally and then re-parse, since correcting `q` might
+    # mess up the structured filters? Actually, correcting `q` should be fine.
     if empty and len(q.strip()) >= MIN_CORRECTION_QUERY_LENGTH:
         respelled = correct_query(q)
         if respelled:
@@ -83,7 +98,7 @@ def _global_provider_search(q: str):
                 corrected = respelled
                 results.update(retried)
                 for name in empty:
-                    query_by_domain[name] = respelled
+                    query_by_domain[name] = parse_provider_query(respelled, name)[0]
     # Cap to the top DEFAULT_DOMAIN_CAP per domain, best match first (see
     # search_ranking for the exact-match/partial-match/popularity
     # heuristic), before the tracked-status lookup so it only does DB work

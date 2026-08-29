@@ -260,6 +260,65 @@ def test_search_tv_shows_reaches_tvmaze_for_a_two_character_query(mock_get):
 
 
 @patch('app.services.tv_search.requests.get')
+def test_search_tv_shows_network_filter_excludes_other_networks(mock_get):
+    # api#385 shipped these as raw TVMaze params, which the API silently
+    # ignores - every result came back regardless of the filter. Confirms
+    # the post-filter (using the network already on each hit) actually
+    # narrows the results, and that the filter never reaches TVMaze itself.
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    resp.json.return_value = [
+        {'show': _tvmaze_show(id=1, name='Severance', network={'name': 'Apple TV+'})},
+        {'show': _tvmaze_show(id=2, name='Community', network={'name': 'NBC'})},
+    ]
+    mock_get.return_value = resp
+
+    results = tv_search.search_tv_shows('a show', filters={'network': 'NBC'})
+
+    mock_get.assert_called_once_with(
+        'https://api.tvmaze.com/search/shows',
+        params={'q': 'a show'},
+        timeout=tv_search.REQUEST_TIMEOUT,
+        headers=tv_search.TVMAZE_HEADERS,
+    )
+    assert [r['title'] for r in results] == ['Community']
+
+
+@patch('app.services.tv_search.requests.get')
+def test_search_tv_shows_genre_filter_matches_any_genre(mock_get):
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    resp.json.return_value = [
+        {
+            'show': _tvmaze_show(
+                id=1, name='Severance', genres=['Drama', 'Science-Fiction']
+            )
+        },
+        {'show': _tvmaze_show(id=2, name='Community', genres=['Comedy'])},
+    ]
+    mock_get.return_value = resp
+
+    results = tv_search.search_tv_shows('a show', filters={'genre': 'comedy'})
+
+    assert [r['title'] for r in results] == ['Community']
+
+
+@patch('app.services.tv_search.requests.get')
+def test_search_tv_shows_status_filter_is_exact(mock_get):
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    resp.json.return_value = [
+        {'show': _tvmaze_show(id=1, name='Severance', status='Running')},
+        {'show': _tvmaze_show(id=2, name='Firefly', status='Ended')},
+    ]
+    mock_get.return_value = resp
+
+    results = tv_search.search_tv_shows('a show', filters={'status': 'Ended'})
+
+    assert [r['title'] for r in results] == ['Firefly']
+
+
+@patch('app.services.tv_search.requests.get')
 def test_search_tv_shows_empty_query_returns_empty_without_http(mock_get):
     assert not tv_search.search_tv_shows('   ')
     mock_get.assert_not_called()

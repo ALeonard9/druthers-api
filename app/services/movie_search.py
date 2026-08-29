@@ -21,6 +21,8 @@ Two TMDB quirks shape this module:
 """
 
 import re
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import List, Optional
 
@@ -31,6 +33,119 @@ from app.services import tmdb
 from app.services.search_policy import normalized_search_query
 
 _IMDB_ID_RE = re.compile(r'^tt\d+$', re.IGNORECASE)
+
+# TMDB's /search/movie only accepts year/primary_release_year as real query
+# params (api#385 shipped director/genre as passthrough params too, but TMDB
+# silently ignores unknown ones - the filter chip rendered while every result
+# stayed unfiltered). Both are post-filtered here instead: genre against the
+# genre_ids search hits already carry, director against a per-candidate
+# credits lookup, since /search/movie has no director field at all.
+_PASSTHROUGH_FILTER_KEYS = {'year', 'primary_release_year'}
+_DIRECTOR_LOOKUP_WORKERS = 8
+
+_genre_map_lock = threading.Lock()
+_genre_name_to_id: Optional[dict] = None
+
+
+def _normalize_genre_key(name: str) -> str:
+    return re.sub(r'[^a-z0-9]', '', (name or '').lower())
+
+
+def _movie_genre_map() -> dict:
+    """
+    TMDB genre name (raw, e.g. 'Science Fiction') -> id, fetched once and
+    cached for the process lifetime - the list changes rarely enough that a
+    request-scoped fetch would only add latency. Returns {} when TMDB is
+    unreachable so callers can degrade to "don't filter" rather than
+    mistaking an outage for "no such genre".
+    """
+    global _genre_name_to_id  # pylint: disable=global-statement
+    with _genre_map_lock:
+        if _genre_name_to_id is None:
+            payload = tmdb.try_request('/genre/movie/list') or {}
+            _genre_name_to_id = {
+                g['name']: g['id']
+                for g in payload.get('genres') or []
+                if g.get('name') and g.get('id') is not None
+            }
+        return _genre_name_to_id
+
+
+def _filter_by_genre(raw_results: List[dict], wanted: str) -> List[dict]:
+    genre_map = _movie_genre_map()
+    if not genre_map:
+        return raw_results
+    key = _normalize_genre_key(wanted)
+    genre_id = next(
+        (
+            gid
+            for name, gid in genre_map.items()
+            if key and key in _normalize_genre_key(name)
+        ),
+        None,
+    )
+    if genre_id is None:
+        return []
+    return [r for r in raw_results if genre_id in (r.get('genre_ids') or [])]
+
+
+def _movies_directed_by(name: str) -> List[dict]:
+    """
+    Raw TMDB movie objects for a director's filmography - resolves the person
+    by name via ``/search/person``, then reads their directing credits off
+    ``/person/{id}/movie_credits``. Both are best-effort: an unresolvable
+    name or an upstream hiccup returns ``[]`` rather than raising, since this
+    only fires for a filter-only ("browse everything by X") query.
+    """
+    people = (tmdb.try_request('/search/person', {'query': name}) or {}).get(
+        'results'
+    ) or []
+    if not people:
+        return []
+    person_id = people[0]['id']
+    credits_payload = tmdb.try_request(f'/person/{person_id}/movie_credits') or {}
+    crew = credits_payload.get('crew') or []
+    return [c for c in crew if c.get('job') == 'Director']
+
+
+def _movies_by_genre(name: str, passthrough: dict) -> List[dict]:
+    """
+    Raw TMDB movie objects for a genre-only ("browse everything sci-fi")
+    query, via ``/discover/movie``.
+    """
+    genre_id = next(
+        (
+            gid
+            for genre_name, gid in _movie_genre_map().items()
+            if _normalize_genre_key(name)
+            and _normalize_genre_key(name) in _normalize_genre_key(genre_name)
+        ),
+        None,
+    )
+    if genre_id is None:
+        return []
+    payload = (
+        tmdb.try_request('/discover/movie', {'with_genres': genre_id, **passthrough})
+        or {}
+    )
+    return payload.get('results') or []
+
+
+def _filter_by_director(results: List[dict], wanted: str) -> List[dict]:
+    if not results:
+        return results
+    with ThreadPoolExecutor(max_workers=_DIRECTOR_LOOKUP_WORKERS) as pool:
+        directors = list(
+            pool.map(
+                lambda r: (get_movie_detail(r['tmdb']) or {}).get('director') or '',
+                results,
+            )
+        )
+    wanted_lower = wanted.lower()
+    return [
+        r for r, director in zip(results, directors) if wanted_lower in director.lower()
+    ]
+
 
 # OMDb returned 4 principal cast members; match that so the detail page's
 # "Actors" line stays a short list rather than a full credit roll.
@@ -97,7 +212,7 @@ def _search_by_imdb_id(imdb_id: str) -> List[dict]:
     return [hit]
 
 
-def search_movies(query: str) -> List[dict]:
+def search_movies(query: str, filters: dict = None) -> List[dict]:
     """
     Search TMDB for movies matching ``query``.
 
@@ -110,9 +225,24 @@ def search_movies(query: str) -> List[dict]:
     API key is not configured and 502 when the upstream call fails. Queries
     below TMDB's one-character floor and provider query rejections return
     ``[]``.
+
+    ``filters`` may carry ``year``/``primary_release_year`` (forwarded to
+    TMDB directly - both are real ``/search/movie`` params) and
+    ``director``/``genre`` (post-filtered locally, since TMDB's search
+    endpoint has no such params).
+
+    A ``director``/``genre`` filter with no other query text ("browse
+    everything by this director") is honored too - via the person's
+    filmography / ``/discover`` rather than a title search, since
+    ``/search/movie`` requires a non-empty ``query``.
     """
-    query = normalized_search_query(query, 'Movie')
-    if query is None:
+    filters = dict(filters or {})
+    director_wanted = filters.pop('director', None)
+    genre_wanted = filters.pop('genre', None)
+    passthrough = {k: v for k, v in filters.items() if k in _PASSTHROUGH_FILTER_KEYS}
+
+    normalized_query = normalized_search_query(query, 'Movie')
+    if normalized_query is None and not director_wanted and not genre_wanted:
         return []
 
     if not tmdb.is_configured():
@@ -121,13 +251,22 @@ def search_movies(query: str) -> List[dict]:
             detail='Movie search is not configured (TMDB_API_KEY missing)',
         )
 
+    if normalized_query is None:
+        if director_wanted:
+            raw_results = _movies_directed_by(director_wanted)
+        else:
+            raw_results = _movies_by_genre(genre_wanted, passthrough)
+        if genre_wanted and director_wanted:
+            raw_results = _filter_by_genre(raw_results, genre_wanted)
+        return [_normalize_hit(item) for item in raw_results]
+    query = normalized_query
+
     if _IMDB_ID_RE.match(query):
         return _search_by_imdb_id(query)
 
     try:
-        payload = tmdb.request(
-            '/search/movie', {'query': query, 'include_adult': 'false'}
-        )
+        params = {'query': query, 'include_adult': 'false', **passthrough}
+        payload = tmdb.request('/search/movie', params)
     except tmdb.TmdbUnconfigured as exc:  # pragma: no cover - guarded above
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -142,7 +281,14 @@ def search_movies(query: str) -> List[dict]:
             detail='Upstream movie search failed',
         ) from exc
 
-    return [_normalize_hit(item) for item in payload.get('results') or []]
+    raw_results = payload.get('results') or []
+    if genre_wanted:
+        raw_results = _filter_by_genre(raw_results, genre_wanted)
+
+    results = [_normalize_hit(item) for item in raw_results]
+    if director_wanted:
+        results = _filter_by_director(results, director_wanted)
+    return results
 
 
 # Max lengths for the bounded catalog columns (see models_sandbox.DbMovie).

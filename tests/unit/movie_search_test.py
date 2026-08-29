@@ -244,6 +244,158 @@ def test_search_movies_empty_query_returns_empty_without_http(mock_get):
     mock_get.assert_not_called()
 
 
+@patch('app.services.tmdb.get_settings')
+@patch('app.services.tmdb.requests.get')
+def test_search_movies_year_filter_reaches_tmdb_directly(mock_get, mock_settings):
+    # year/primary_release_year are real TMDB search params - unlike
+    # director/genre below, these should be forwarded as-is.
+    mock_settings.return_value = Settings(tmdb_api_key='k', env='github')
+    mock_get.return_value = _response({'results': []})
+
+    movie_search.search_movies('Dune', filters={'year': '2021'})
+
+    kwargs = mock_get.call_args.kwargs
+    assert kwargs['params']['year'] == '2021'
+    assert 'director' not in kwargs['params']
+    assert 'genre' not in kwargs['params']
+
+
+@patch('app.services.tmdb.get_settings')
+@patch('app.services.tmdb.requests.get')
+def test_search_movies_director_filter_excludes_uncredited_results(
+    mock_get, mock_settings
+):
+    # api#385 shipped `director` as a raw TMDB param, which TMDB silently
+    # ignores - every result came back regardless of the filter. This
+    # confirms the post-filter (fetching each candidate's credits) actually
+    # narrows the results instead.
+    mock_settings.return_value = Settings(tmdb_api_key='k', env='github')
+
+    def fake_get(url, **_kwargs):
+        if url.endswith('/search/movie'):
+            return _response(
+                {
+                    'results': [
+                        {
+                            'id': 603,
+                            'title': 'The Matrix',
+                            'release_date': '1999-03-30',
+                        },
+                        {
+                            'id': 999,
+                            'title': 'Other Movie',
+                            'release_date': '2001-01-01',
+                        },
+                    ]
+                }
+            )
+        if url.endswith('/movie/603'):
+            return _response(
+                {
+                    'id': 603,
+                    'title': 'The Matrix',
+                    'credits': {
+                        'crew': [{'job': 'Director', 'name': 'Lana Wachowski'}]
+                    },
+                }
+            )
+        if url.endswith('/movie/999'):
+            return _response(
+                {
+                    'id': 999,
+                    'title': 'Other Movie',
+                    'credits': {'crew': [{'job': 'Director', 'name': 'Someone Else'}]},
+                }
+            )
+        raise AssertionError(f'unexpected TMDB call: {url}')
+
+    mock_get.side_effect = fake_get
+
+    results = movie_search.search_movies('matrix', filters={'director': 'Wachowski'})
+
+    assert [r['tmdb'] for r in results] == [603]
+
+
+@patch('app.services.tmdb.get_settings')
+@patch('app.services.tmdb.requests.get')
+def test_search_movies_genre_filter_matches_by_genre_id(mock_get, mock_settings):
+    movie_search._genre_name_to_id = None  # module-level cache; start clean
+    mock_settings.return_value = Settings(tmdb_api_key='k', env='github')
+
+    def fake_get(url, **_kwargs):
+        if url.endswith('/genre/movie/list'):
+            return _response({'genres': [{'id': 878, 'name': 'Science Fiction'}]})
+        if url.endswith('/search/movie'):
+            return _response(
+                {
+                    'results': [
+                        {'id': 603, 'title': 'The Matrix', 'genre_ids': [878, 28]},
+                        {'id': 5, 'title': 'A Romance', 'genre_ids': [10749]},
+                    ]
+                }
+            )
+        raise AssertionError(f'unexpected TMDB call: {url}')
+
+    mock_get.side_effect = fake_get
+
+    results = movie_search.search_movies('matrix', filters={'genre': 'Science Fiction'})
+
+    assert [r['tmdb'] for r in results] == [603]
+    movie_search._genre_name_to_id = None  # don't leak into other tests
+
+
+@patch('app.services.tmdb.get_settings')
+@patch('app.services.tmdb.requests.get')
+def test_search_movies_director_only_browses_their_filmography(mock_get, mock_settings):
+    # "director:Lucas" with no other text - browse everything Lucas
+    # directed, via /search/person + /person/{id}/movie_credits, since
+    # /search/movie has no query to run at all.
+    mock_settings.return_value = Settings(tmdb_api_key='k', env='github')
+
+    def fake_get(url, **kwargs):
+        if url.endswith('/search/person'):
+            assert kwargs['params']['query'] == 'Lucas'
+            return _response({'results': [{'id': 1, 'name': 'George Lucas'}]})
+        if url.endswith('/person/1/movie_credits'):
+            return _response(
+                {
+                    'crew': [
+                        {'id': 11, 'title': 'Star Wars', 'job': 'Director'},
+                        {'id': 12, 'title': 'THX 1138', 'job': 'Director'},
+                        {
+                            'id': 13,
+                            'title': 'The Empire Strikes Back',
+                            'job': 'Producer',
+                        },
+                    ]
+                }
+            )
+        raise AssertionError(f'unexpected TMDB call: {url}')
+
+    mock_get.side_effect = fake_get
+
+    results = movie_search.search_movies('', filters={'director': 'Lucas'})
+
+    assert [r['tmdb'] for r in results] == [11, 12]
+
+
+@patch('app.services.tmdb.get_settings')
+@patch('app.services.tmdb.requests.get')
+def test_search_movies_director_only_unresolvable_name_returns_empty(
+    mock_get, mock_settings
+):
+    mock_settings.return_value = Settings(tmdb_api_key='k', env='github')
+    mock_get.return_value = _response({'results': []})
+
+    assert movie_search.search_movies('   ', filters={'director': 'Nobody Real'}) == []
+
+
+def test_search_movies_no_query_and_no_filters_returns_empty_without_http():
+    with patch('app.services.tmdb.requests.get') as mock_get:
+        assert movie_search.search_movies('   ', filters={'year': '2021'}) == []
+        mock_get.assert_not_called()
+
+
 @pytest.mark.parametrize('status_code', [422, 404])
 @patch('app.services.tmdb.get_settings')
 @patch('app.services.tmdb.requests.get')

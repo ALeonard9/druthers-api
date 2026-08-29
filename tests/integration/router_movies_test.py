@@ -521,7 +521,7 @@ def test_search_releases_db_connection_before_provider(mock_search, mock_attach)
     db = MagicMock()
     user = SimpleNamespace(pk=7)
 
-    def provider(_query):
+    def provider(_query, filters=None):
         db.close.assert_called_once_with()
         return [{'tmdb': 1, 'title': 'Matrix'}]
 
@@ -553,7 +553,7 @@ def test_concurrent_searches_above_pool_capacity_do_not_time_out(
     provider_barrier = threading.Barrier(request_count)
     provider_release = threading.Barrier(request_count)
 
-    def provider(_query):
+    def provider(_query, filters=None):
         provider_barrier.wait(timeout=5)
         assert engine.pool.checkedout() == 0
         provider_release.wait(timeout=5)
@@ -589,7 +589,7 @@ def test_concurrent_searches_above_pool_capacity_do_not_time_out(
 
 @patch('app.router.v1.router_movies.tmdb_search_movies')
 def test_search_handler_timeout_returns_clear_504(mock_search, test_client):
-    mock_search.side_effect = lambda _query: time.sleep(0.5) or []
+    mock_search.side_effect = lambda *args, **kwargs: time.sleep(0.5) or []
     headers = {'Authorization': f'Bearer {test_client.first_user.token}'}
 
     started = time.monotonic()

@@ -98,8 +98,16 @@ async def search_movies_endpoint(
 ):
     user_pk = current_user[0].pk
     db.close()
+
+    from app.services.search_parser import parse_provider_query
+
+    parsed_q, filters = parse_provider_query(q, 'movies')
+
     results = await run_search_provider(
-        search_with_correction, tmdb_search_movies, correct_query, q
+        search_with_correction,
+        lambda txt: tmdb_search_movies(txt, filters=filters),
+        correct_query,
+        parsed_q,
     )
     return await run_in_threadpool(
         attach_tracked_status, db, user_pk, results, 'movies'
