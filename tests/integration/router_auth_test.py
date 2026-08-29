@@ -439,15 +439,45 @@ def test_apple_login_rejects_an_invalid_credential(
 
 
 @patch('app.auth.authentication.get_settings')
-def test_apple_login_is_503_when_not_configured(mock_settings, test_client: TestClient):
-    """An environment with no Apple client id says so, rather than 401ing."""
-    mock_settings.return_value = Settings(env='github')
+@patch('app.auth.authentication.apple_identity.verify_identity_token')
+def test_apple_login_is_503_only_when_client_id_list_is_empty(
+    mock_verify, mock_settings, test_client: TestClient
+):
+    """Blank client id settings leave no audience and stop before verification."""
+    mock_settings.return_value = Settings(
+        apple_client_id=' , ',
+        apple_additional_client_ids=' , ',
+        env='github',
+    )
 
     response = test_client.post(
         '/v1/auth/apple', json={'identity_token': 'fake-apple-token'}
     )
 
     assert response.status_code == 503
+    assert response.json()['message'] == 'Apple sign-in is not configured'
+    mock_verify.assert_not_called()
+
+
+@patch('app.auth.authentication.get_settings')
+@patch('app.auth.authentication.apple_identity.verify_identity_token')
+def test_apple_login_accepts_an_additional_client_id_without_a_primary(
+    mock_verify, mock_settings, test_client: TestClient
+):
+    """A non-empty audience list is configured even when its primary is unset."""
+    mock_settings.return_value = Settings(
+        apple_client_id=None,
+        apple_additional_client_ids=APPLE_CLIENT,
+        env='github',
+    )
+    mock_verify.side_effect = AppleIdentityError('Invalid Apple credential')
+
+    response = test_client.post(
+        '/v1/auth/apple', json={'identity_token': 'fake-apple-token'}
+    )
+
+    assert response.status_code == 401
+    mock_verify.assert_called_once_with('fake-apple-token', [APPLE_CLIENT], None)
 
 
 @patch('app.auth.authentication.get_settings')
