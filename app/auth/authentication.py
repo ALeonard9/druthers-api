@@ -187,7 +187,9 @@ def google_login(request: GoogleAuthRequest, db: Session = Depends(get_db)):
     return _sign_in_response(user, db)
 
 
-@router.post('/refresh', response_model=OutToken)
+@router.post(
+    '/refresh', response_model=OutToken, dependencies=[Depends(auth_rate_limit)]
+)
 def refresh(request: InRefreshToken, db: Session = Depends(get_db)):
     """
     Trade a refresh token for a new access token, and a new refresh token.
@@ -217,7 +219,11 @@ def refresh(request: InRefreshToken, db: Session = Depends(get_db)):
     return _token_response(user, new_refresh_token)
 
 
-@router.post('/logout', status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    '/logout',
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(auth_rate_limit)],
+)
 def logout(request: InRefreshToken, db: Session = Depends(get_db)):
     """
     Sign out server-side: the refresh token and its family stop working.
