@@ -54,6 +54,34 @@ def _network_name(show: dict) -> Optional[str]:
     return network.get('name')
 
 
+# TVMaze's /search/shows only accepts ``q`` (api#385 shipped these four as
+# passthrough params too, but TVMaze silently ignores unknown ones - the
+# filter chip rendered while every result stayed unfiltered). Each show hit
+# already carries genres/network/language/status, so filtering post-search
+# needs no extra request.
+def _matches_filters(show: dict, filters: dict) -> bool:
+    for key, wanted in filters.items():
+        wanted_lower = (wanted or '').strip().lower()
+        if not wanted_lower:
+            continue
+        if key == 'genre':
+            genres = [g.lower() for g in (show.get('genres') or [])]
+            if not any(wanted_lower in g for g in genres):
+                return False
+        elif key == 'network':
+            network = (_network_name(show) or '').lower()
+            if wanted_lower not in network:
+                return False
+        elif key == 'language':
+            language = (show.get('language') or '').lower()
+            if wanted_lower not in language:
+                return False
+        elif key == 'status':
+            if wanted_lower != (show.get('status') or '').lower():
+                return False
+    return True
+
+
 def _normalize_show(show: dict) -> dict:
     """Map a raw TVMaze show object to the shape callers expect."""
     premiered = show.get('premiered') or ''
@@ -131,6 +159,10 @@ def search_tv_shows(query: str, filters: dict = None) -> List[dict]:
     ``year``, ``status``, ``network``, ``poster_url``). Queries shorter than
     three characters and provider query rejections return ``[]``; upstream
     failures raise 502.
+
+    ``filters`` (``genre``/``network``/``language``/``status``) are
+    post-filtered against each hit locally - TVMaze's search endpoint has no
+    matching query params.
     """
     query = normalized_search_query(query, 'TV')
     if query is None:
@@ -144,8 +176,6 @@ def search_tv_shows(query: str, filters: dict = None) -> List[dict]:
 
     try:
         params = {'q': query}
-        if filters:
-            params.update(filters)
         response = requests.get(
             f'{TVMAZE_URL}/search/shows',
             params=params,
@@ -173,6 +203,8 @@ def search_tv_shows(query: str, filters: dict = None) -> List[dict]:
     results = []
     for item in payload or []:
         show = item.get('show') or {}
+        if filters and not _matches_filters(show, filters):
+            continue
         results.append(_normalize_show(show))
     return results
 
