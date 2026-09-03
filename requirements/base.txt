@@ -1,5 +1,5 @@
 fastapi==0.141.1
-uvicorn==0.52.3
+uvicorn==0.52.4
 h11>=0.16.0 # Pinned to fix HTTP Request Smuggling vulnerability
 starlette>=1.6.0 # not directly required, pinned to avoid a vulnerability
 SQLAlchemy==2.0.52
@@ -9,12 +9,12 @@ pydantic-settings==2.15.0
 pwdlib[argon2]
 python-multipart==0.0.32
 email-validator==2.3.0
-idna>=3.18 # not directly required, pinned to avoid a vulnerability
+idna>=3.19 # not directly required, pinned to avoid a vulnerability
 psycopg2-binary==2.9.12
 python-dotenv==1.2.3
 python-logging-loki==0.3.1
 tzdata==2026.3
-click>=8.4.2 # not directly required, pinned to avoid a vulnerability
+click>=8.5.0 # not directly required, pinned to avoid a vulnerability
 PyJWT==2.13.0
 # Explicit, not transitive: PyJWT needs cryptography to verify the RS256
 # signatures on Apple identity tokens (#418), and it was only present here
@@ -24,8 +24,8 @@ PyJWT==2.13.0
 # 50.0.0, not 49.x: CVE-2026-69247 (HIGH) is fixed in 50.0.0. The transitive
 # install was already sitting on the vulnerable 49.0.0; pinning it here is
 # what made the exposure visible to Trivy, which only scans this file.
-cryptography==50.0.0
-google-auth==2.56.3
+cryptography==50.0.1
+google-auth==2.57.0
 requests>=2.34.2 # not directly required, pinned to avoid a vulnerability
 urllib3>=2.7.0 # not directly required, pinned to avoid a vulnerability
 zipp>=4.1.0 # not directly required, pinned to avoid a vulnerability
